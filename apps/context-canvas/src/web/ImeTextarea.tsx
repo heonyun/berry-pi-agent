@@ -19,6 +19,8 @@ export interface ImeTextareaProps
   /** Optional passthrough for native change events. */
   onChange?: TextareaHTMLAttributes<HTMLTextAreaElement>["onChange"];
   value: string;
+  /** Clears this exact starter value on focus without committing immediately. */
+  clearOnFocusValue?: string;
   /** Fires on every edit, including during IME composition (for reading latest draft). */
   onLocalChange?: (value: string) => void;
   /** Fires when a committed value should sync to persistent state. */
@@ -32,10 +34,12 @@ export interface ImeTextareaProps
  */
 export const ImeTextarea = memo(function ImeTextarea({
   value,
+  clearOnFocusValue,
   onLocalChange,
   onValueChange,
   onCommit,
   onBlur,
+  onFocus,
   onCompositionStart,
   onCompositionEnd,
   onChange: onChangeProp,
@@ -105,11 +109,25 @@ export const ImeTextarea = memo(function ImeTextarea({
     [commit, onBlur],
   );
 
+  const handleFocus = useCallback(
+    (event: FocusEvent<HTMLTextAreaElement>) => {
+      onFocus?.(event);
+      if (clearOnFocusValue === undefined || draftRef.current !== clearOnFocusValue) {
+        return;
+      }
+      setDraft("");
+      draftRef.current = "";
+      onLocalChange?.("");
+    },
+    [clearOnFocusValue, onFocus, onLocalChange],
+  );
+
   return (
     <textarea
       {...rest}
       value={draft}
       onChange={handleChange}
+      onFocus={handleFocus}
       onCompositionStart={handleCompositionStart}
       onCompositionEnd={handleCompositionEnd}
       onBlur={handleBlur}

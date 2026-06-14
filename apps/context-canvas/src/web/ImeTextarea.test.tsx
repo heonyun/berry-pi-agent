@@ -51,4 +51,48 @@ describe("ImeTextarea", () => {
     expect(onValueChange).toHaveBeenCalledTimes(1);
     expect(onValueChange).toHaveBeenCalledWith("hello");
   });
+
+  it("clears the configured starter text on focus without committing immediately", () => {
+    const onLocalChange = vi.fn();
+    const onValueChange = vi.fn();
+
+    render(
+      <ImeTextarea
+        value="starter prompt"
+        clearOnFocusValue="starter prompt"
+        onLocalChange={onLocalChange}
+        onValueChange={onValueChange}
+        aria-label="prompt"
+      />,
+    );
+
+    const textarea = screen.getByLabelText("prompt") as HTMLTextAreaElement;
+    fireEvent.focus(textarea);
+
+    expect(textarea.value).toBe("");
+    expect(onLocalChange).toHaveBeenCalledWith("");
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it("does not clear user-authored text on focus", () => {
+    const onLocalChange = vi.fn();
+    const onValueChange = vi.fn();
+
+    render(
+      <ImeTextarea
+        value="user prompt"
+        clearOnFocusValue="starter prompt"
+        onLocalChange={onLocalChange}
+        onValueChange={onValueChange}
+        aria-label="prompt"
+      />,
+    );
+
+    const textarea = screen.getByLabelText("prompt") as HTMLTextAreaElement;
+    fireEvent.focus(textarea);
+
+    expect(textarea.value).toBe("user prompt");
+    expect(onLocalChange).not.toHaveBeenCalled();
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
 });

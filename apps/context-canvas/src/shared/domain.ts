@@ -1,4 +1,5 @@
 export const VERTICAL_GAP = 240;
+export const INITIAL_PROMPT_TEXT = "What should we explore on this canvas?";
 
 export type StanceBand = "critical" | "neutral" | "constructive";
 export type FeedbackState = "agree" | "disagree" | "unsure" | "needs_retry";
@@ -126,7 +127,7 @@ export function createInitialDocument(): ContextCanvasDocument {
         id: "prompt-1",
         kind: "prompt_input",
         groupId: "group-1",
-        text: "What should we explore on this canvas?",
+        text: INITIAL_PROMPT_TEXT,
         position: { x: 0, y: 0 },
         metadata: { stance: "neutral" },
       },

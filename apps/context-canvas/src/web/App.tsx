@@ -17,6 +17,7 @@ import "@xyflow/react/dist/style.css";
 import { ImeTextarea, stopNodeKeyPropagation } from "./ImeTextarea.tsx";
 import { compilePromptContext } from "../shared/compiler.ts";
 import {
+  INITIAL_PROMPT_TEXT,
   VERTICAL_GAP,
   appendAnswerVersion,
   createInitialDocument,
@@ -93,6 +94,7 @@ const PromptInputNode = memo(function PromptInputNode({ data }: NodeProps<Node<P
       <ImeTextarea
         className="nodrag nopan nowheel"
         value={text}
+        clearOnFocusValue={INITIAL_PROMPT_TEXT}
         onLocalChange={handleLocalChange}
         onValueChange={handleCommit}
         onKeyDown={stopNodeKeyPropagation}
@@ -341,14 +343,16 @@ function CanvasApp() {
   const [selectedNodeId, setSelectedNodeId] = useState<string>("prompt-1");
   const [runningPromptId, setRunningPromptId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("Ready");
+  const nodeCount = document.nodes.length;
+  const edgeCount = document.edges.length;
 
   useEffect(() => {
     documentRef.current = document;
   }, [document]);
 
   useEffect(() => {
-    void fitView({ padding: 0.2 });
-  }, [fitView]);
+    void fitView({ padding: 0.2, duration: 180 });
+  }, [edgeCount, fitView, nodeCount]);
 
   const updatePromptText = useCallback((nodeId: string, text: string) => {
     setDocument((current) =>
