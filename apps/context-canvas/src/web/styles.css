@@ -76,12 +76,27 @@ body,
 }
 
 .node-card {
-  min-width: 260px;
+  position: relative;
+  width: 320px;
+  min-width: 320px;
   max-width: 320px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  animation: node-pop 260ms cubic-bezier(0.2, 1.35, 0.35, 1);
+  cursor: grab;
+  transition:
+    box-shadow 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease;
+}
+
+.node-card.dragging {
+  border-color: var(--accent);
+  box-shadow: 0 14px 36px rgba(110, 168, 254, 0.35);
+  cursor: grabbing;
+  transform: scale(1.02);
 }
 
 .node-card.prompt {
@@ -113,10 +128,45 @@ body,
 }
 
 .node-card .answer-text {
-  min-height: 72px;
+  min-height: 88px;
   white-space: pre-wrap;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.branch-button {
+  position: absolute;
+  top: 50%;
+  width: 74px;
+  height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  font-weight: 700;
+  background: #202838;
+  z-index: 2;
+}
+
+.branch-left {
+  left: -42px;
+  border-color: var(--critical);
+  color: var(--critical);
+}
+
+.branch-right {
+  right: -42px;
+  border-color: var(--constructive);
+  color: var(--constructive);
+}
+
+.streaming-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin: 28px 0 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  animation: answer-dot 850ms ease-in-out infinite;
 }
 
 .node-actions,
@@ -166,4 +216,29 @@ button.active {
 .status-line {
   font-size: 12px;
   color: var(--muted);
+}
+
+@keyframes node-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.22);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes answer-dot {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translateY(0) scale(0.85);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.25);
+  }
 }

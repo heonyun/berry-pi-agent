@@ -22,6 +22,12 @@ const STANCE_LABELS: Record<StanceBand, string> = {
   constructive: "constructive",
 };
 
+const STANCE_INTENT: Record<StanceBand, string> = {
+  critical: "treat the next prompt as skeptical, corrective, or challenging feedback",
+  neutral: "treat the next prompt as a balanced continuation",
+  constructive: "treat the next prompt as supportive, additive, or positive feedback",
+};
+
 export function compilePromptContext(
   document: ContextCanvasDocument,
   promptNodeId: string,
@@ -96,6 +102,7 @@ function findReferenceNodes(document: ContextCanvasDocument, promptNodeId: strin
 
 function renderContextText(references: ContextNode[], stance: StanceBand): string {
   const lines = [`stance: ${STANCE_LABELS[stance]}`];
+  lines.push(`stance_intent: ${STANCE_INTENT[stance]}`);
   for (const node of references) {
     lines.push(`reference: ${node.id}`);
     lines.push(`kind: ${node.kind}`);

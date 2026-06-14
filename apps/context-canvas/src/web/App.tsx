@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import {
   Background,
   Controls,
@@ -12,6 +12,7 @@ import {
   type Edge,
   type Node,
   type NodeProps,
+  type XYPosition,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { ImeTextarea, stopNodeKeyPropagation } from "./ImeTextarea.tsx";
@@ -49,6 +50,7 @@ type AnswerNodeData = {
   versionCount: number;
   running: boolean;
   onFeedback: (nodeId: string, feedback: FeedbackState) => void;
+  onBranch: (nodeId: string, direction: "critical" | "constructive") => void;
   onRetry: (nodeId: string) => void;
 };
 
@@ -58,7 +60,7 @@ function stanceClass(stance: StanceBand): string {
   return `stance-${stance}`;
 }
 
-const PromptInputNode = memo(function PromptInputNode({ data }: NodeProps<Node<PromptNodeData>>) {
+const PromptInputNode = memo(function PromptInputNode({ data, dragging }: NodeProps<Node<PromptNodeData>>) {
   const { nodeId, text, stance, running, onTextChange, onRun } = data;
   const latestTextRef = useRef(text);
 
@@ -85,7 +87,7 @@ const PromptInputNode = memo(function PromptInputNode({ data }: NodeProps<Node<P
   }, [nodeId, onRun, onTextChange]);
 
   return (
-    <div className="node-card prompt">
+    <div className={`node-card prompt ${dragging ? "dragging" : ""}`}>
       <Handle type="target" position={Position.Bottom} />
       <header>
         <span>Prompt</span>
@@ -117,17 +119,43 @@ const PromptInputNode = memo(function PromptInputNode({ data }: NodeProps<Node<P
   );
 });
 
-const AIAnswerNode = memo(function AIAnswerNode({ data }: NodeProps<Node<AnswerNodeData>>) {
+const AIAnswerNode = memo(function AIAnswerNode({ data, dragging }: NodeProps<Node<AnswerNodeData>>) {
   return (
-    <div className="node-card answer">
+    <div className={`node-card answer ${dragging ? "dragging" : ""}`}>
       <Handle type="target" position={Position.Bottom} />
+      <button
+        type="button"
+        className="branch-button branch-left nodrag nopan"
+        title="Create a critical follow-up prompt"
+        onKeyDown={stopNodeKeyPropagation}
+        onClick={(event) => {
+          event.stopPropagation();
+          data.onBranch(data.nodeId, "critical");
+        }}
+      >
+        Critique
+      </button>
+      <button
+        type="button"
+        className="branch-button branch-right nodrag nopan"
+        title="Create a constructive follow-up prompt"
+        onKeyDown={stopNodeKeyPropagation}
+        onClick={(event) => {
+          event.stopPropagation();
+          data.onBranch(data.nodeId, "constructive");
+        }}
+      >
+        Build
+      </button>
       <header>
         <span>AI Answer</span>
         <span className={stanceClass(data.stance)}>{data.stance}</span>
       </header>
-      <div className="answer-text">{data.text || (data.running ? "Streaming..." : "No answer yet.")}</div>
+      <div className="answer-text">
+        {data.text || (data.running ? <span className="streaming-dot" aria-label="Streaming answer" /> : "No answer yet.")}
+      </div>
       <div className="feedback-row nodrag nopan">
-        {(["agree", "disagree", "unsure", "needs_retry"] as FeedbackState[]).map((feedback) => (
+        {(["agree", "disagree", "unsure"] as FeedbackState[]).map((feedback) => (
           <button
             key={feedback}
             type="button"
@@ -147,7 +175,7 @@ const AIAnswerNode = memo(function AIAnswerNode({ data }: NodeProps<Node<AnswerN
           onKeyDown={stopNodeKeyPropagation}
           onClick={() => data.onRetry(data.nodeId)}
         >
-          Retry (v{data.versionCount + 1})
+          Regenerate answer (v{data.versionCount + 1})
         </button>
       </div>
       <Handle type="source" position={Position.Top} />
@@ -181,6 +209,10 @@ function nextId(prefix: string): string {
       ? globalThis.crypto.randomUUID().slice(0, 8)
       : Math.random().toString(36).slice(2, 10);
   return `${prefix}-${id}`;
+}
+
+function roundedPosition(position: XYPosition): XYPosition {
+  return { x: Math.round(position.x), y: Math.round(position.y) };
 }
 
 async function streamPrompt(
@@ -298,10 +330,18 @@ function ensureNextPrompt(document: ContextCanvasDocument, answerId: string): Co
     return document;
   }
 
-  const existing = document.edges.find(
-    (edge) => edge.source === answerId && edge.meaning === "lineage",
-  );
-  if (existing) {
+  const autoPromptPosition = {
+    x: answer.position.x,
+    y: answer.position.y - VERTICAL_GAP,
+  };
+  const existingAutoPrompt = document.edges.some((edge) => {
+    if (edge.source !== answerId || edge.meaning !== "lineage") {
+      return false;
+    }
+    const target = findNode(document, edge.target);
+    return target.position.x === autoPromptPosition.x && target.position.y === autoPromptPosition.y;
+  });
+  if (existingAutoPrompt) {
     return document;
   }
 
@@ -311,7 +351,7 @@ function ensureNextPrompt(document: ContextCanvasDocument, answerId: string): Co
     kind: "prompt_input",
     groupId: answer.groupId,
     text: "",
-    position: { x: answer.position.x, y: answer.position.y - VERTICAL_GAP },
+    position: autoPromptPosition,
     metadata: { stance: "neutral" },
   };
 
@@ -336,8 +376,44 @@ function ensureNextPrompt(document: ContextCanvasDocument, answerId: string): Co
   };
 }
 
+function createPromptAt(
+  document: ContextCanvasDocument,
+  position: XYPosition,
+  parentAnswerId?: string,
+): { document: ContextCanvasDocument; promptId: string } {
+  const promptId = nextId("prompt");
+  const parentAnswer = parentAnswerId ? findNode(document, parentAnswerId) : undefined;
+  const prompt: PromptInputNode = {
+    id: promptId,
+    kind: "prompt_input",
+    groupId: parentAnswer?.groupId ?? document.groups[0]?.id ?? "group-1",
+    text: "",
+    position: roundedPosition(position),
+    metadata: { stance: "neutral" },
+  };
+  const nodes = [...document.nodes, prompt];
+  const edges: ContextEdge[] = [...document.edges];
+
+  if (parentAnswer?.kind === "ai_answer") {
+    edges.push({
+      id: `edge-${parentAnswer.id}-${promptId}`,
+      source: parentAnswer.id,
+      target: promptId,
+      meaning: "lineage",
+    });
+    edges.push({
+      id: `edge-ref-${parentAnswer.id}-${promptId}`,
+      source: parentAnswer.id,
+      target: promptId,
+      meaning: "context_reference",
+    });
+  }
+
+  return { document: { ...document, nodes, edges }, promptId };
+}
+
 function CanvasApp() {
-  const { fitView } = useReactFlow();
+  const { fitView, screenToFlowPosition } = useReactFlow();
   const [document, setDocument] = useState<ContextCanvasDocument>(() => createInitialDocument());
   const documentRef = useRef(document);
   const [selectedNodeId, setSelectedNodeId] = useState<string>("prompt-1");
@@ -426,12 +502,19 @@ function CanvasApp() {
           setAnswerText(answerId!, streamed);
         });
 
-        setDocument((current) => {
-          const next = ensureNextPrompt(current, answerId!);
+        setStatus("Answer complete. Next prompt will appear...");
+        window.setTimeout(() => {
+          const next = ensureNextPrompt(documentRef.current, answerId!);
+          const nextPrompt = next.edges.find(
+            (edge) => edge.source === answerId && edge.meaning === "lineage",
+          );
           documentRef.current = next;
-          return next;
-        });
-        setStatus("Run complete");
+          setDocument(next);
+          if (nextPrompt) {
+            setSelectedNodeId(nextPrompt.target);
+          }
+          setStatus("Run complete");
+        }, 3000);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         setStatus(`Error: ${message}`);
@@ -469,14 +552,48 @@ function CanvasApp() {
     [document, runPrompt],
   );
 
-  const onNodeDragStop = useCallback((_: unknown, node: CanvasNode) => {
-    setDocument((current) =>
-      updateNode(current, node.id, (entry) => ({
+  const updateDraggedNodePosition = useCallback((node: CanvasNode) => {
+    setDocument((current) => {
+      const next = updateNode(current, node.id, (entry) => ({
         ...entry,
-        position: { x: node.position.x, y: node.position.y },
-      })),
-    );
+        position: roundedPosition(node.position),
+      }));
+      documentRef.current = next;
+      return next;
+    });
   }, []);
+
+  const onBranch = useCallback((answerId: string, direction: "critical" | "constructive") => {
+    const answer = findNode(documentRef.current, answerId);
+    if (answer.kind !== "ai_answer") {
+      return;
+    }
+    const xOffset = direction === "critical" ? -360 : 360;
+    const created = createPromptAt(
+      documentRef.current,
+      { x: answer.position.x + xOffset, y: answer.position.y },
+      answerId,
+    );
+    documentRef.current = created.document;
+    setDocument(created.document);
+    setSelectedNodeId(created.promptId);
+    setStatus(direction === "critical" ? "Critical follow-up prompt created" : "Constructive follow-up prompt created");
+  }, []);
+
+  const onPaneClick = useCallback(
+    (event: MouseEvent) => {
+      if (event.detail !== 2) {
+        return;
+      }
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const created = createPromptAt(documentRef.current, position);
+      documentRef.current = created.document;
+      setDocument(created.document);
+      setSelectedNodeId(created.promptId);
+      setStatus("New prompt created");
+    },
+    [screenToFlowPosition],
+  );
 
   const onConnect = useCallback((connection: Connection) => {
     if (!connection.source || !connection.target) {
@@ -541,11 +658,12 @@ function CanvasApp() {
             versionCount: node.stack?.versions.length ?? 1,
             running: runningPromptId !== null && node.text === "" && node.stack?.versions.at(-1)?.text === "",
             onFeedback,
+            onBranch,
             onRetry,
           },
         } satisfies CanvasNode;
       }),
-    [document, onFeedback, onRetry, runPromptById, runningPromptId, updatePromptText],
+    [document, onBranch, onFeedback, onRetry, runPromptById, runningPromptId, updatePromptText],
   );
 
   const flowEdges: Edge[] = useMemo(
@@ -593,8 +711,11 @@ function CanvasApp() {
           deleteKeyCode={null}
           panOnScroll={false}
           zoomOnScroll
+          zoomOnDoubleClick={false}
           onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-          onNodeDragStop={onNodeDragStop}
+          onNodeDrag={(_, node) => updateDraggedNodePosition(node)}
+          onNodeDragStop={(_, node) => updateDraggedNodePosition(node)}
+          onPaneClick={onPaneClick}
           onConnect={onConnect}
         >
           <Background gap={18} color="#2a3140" />
