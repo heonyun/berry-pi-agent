@@ -31,7 +31,7 @@ function isComposingEvent(event: ChangeEvent<HTMLTextAreaElement>): boolean {
 }
 
 /**
- * Controlled textarea that defers parent commits until IME composition ends.
+ * Draft-controlled textarea that defers parent commits until editing is done.
  * See: https://github.com/langflow-ai/langflow/issues/12376
  */
 export const ImeTextarea = memo(function ImeTextarea({
@@ -79,10 +79,8 @@ export const ImeTextarea = memo(function ImeTextarea({
       if (composingRef.current || isComposingEvent(event)) {
         return;
       }
-
-      commit(next);
     },
-    [commit, onChangeProp, onLocalChange],
+    [onChangeProp, onLocalChange],
   );
 
   const handleCompositionStart = useCallback(
@@ -101,9 +99,8 @@ export const ImeTextarea = memo(function ImeTextarea({
       setDraft(next);
       draftRef.current = next;
       onLocalChange?.(next);
-      commit(next);
     },
-    [commit, onCompositionEnd, onLocalChange],
+    [onCompositionEnd, onLocalChange],
   );
 
   const handleBlur = useCallback(

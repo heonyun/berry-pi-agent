@@ -9,7 +9,7 @@ afterEach(() => {
 });
 
 describe("ImeTextarea", () => {
-  it("does not commit parent updates while IME composition is active", () => {
+  it("does not commit parent updates until blur after IME composition", () => {
     const onValueChange = vi.fn();
 
     render(
@@ -28,11 +28,15 @@ describe("ImeTextarea", () => {
     fireEvent.compositionEnd(textarea, { data: "안녕", target: { value: "안녕" } });
 
     expect(textarea.value).toBe("안녕");
+    expect(onValueChange).not.toHaveBeenCalled();
+
+    fireEvent.blur(textarea);
+
     expect(onValueChange).toHaveBeenCalledTimes(1);
     expect(onValueChange).toHaveBeenCalledWith("안녕");
   });
 
-  it("commits latin input immediately when not composing", () => {
+  it("keeps latin input local until blur", () => {
     const onValueChange = vi.fn();
 
     render(<ImeTextarea value="" onValueChange={onValueChange} aria-label="prompt" />);
@@ -40,6 +44,11 @@ describe("ImeTextarea", () => {
     const textarea = screen.getByLabelText("prompt");
     fireEvent.change(textarea, { target: { value: "hello" } });
 
+    expect(onValueChange).not.toHaveBeenCalled();
+
+    fireEvent.blur(textarea);
+
+    expect(onValueChange).toHaveBeenCalledTimes(1);
     expect(onValueChange).toHaveBeenCalledWith("hello");
   });
 });
