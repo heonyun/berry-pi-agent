@@ -65,14 +65,13 @@ export function compilePromptContext(
 export function formatPromptForPi(compiled: CompiledPromptContext): string {
   const stanceLabel = STANCE_LABELS[compiled.stance];
   const system = compiled.messages.find((message) => message.role === "system")?.content ?? "";
+  const user = compiled.messages.find((message) => message.role === "user")?.content ?? "";
   return [
     system,
     "",
     `Stance band: ${stanceLabel}`,
     "",
-    compiled.contextText,
-    "",
-    compiled.messages.find((message) => message.role === "user")?.content ?? "",
+    user,
   ]
     .join("\n")
     .trim();

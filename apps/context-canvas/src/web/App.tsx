@@ -174,7 +174,11 @@ function stanceForNode(document: ContextCanvasDocument, node: ContextNode): Stan
 }
 
 function nextId(prefix: string): string {
-  return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
+  const id =
+    typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID().slice(0, 8)
+      : Math.random().toString(36).slice(2, 10);
+  return `${prefix}-${id}`;
 }
 
 async function streamPrompt(
@@ -333,9 +337,14 @@ function ensureNextPrompt(document: ContextCanvasDocument, answerId: string): Co
 function CanvasApp() {
   const { fitView } = useReactFlow();
   const [document, setDocument] = useState<ContextCanvasDocument>(() => createInitialDocument());
+  const documentRef = useRef(document);
   const [selectedNodeId, setSelectedNodeId] = useState<string>("prompt-1");
   const [runningPromptId, setRunningPromptId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("Ready");
+
+  useEffect(() => {
+    documentRef.current = document;
+  }, [document]);
 
   useEffect(() => {
     void fitView({ padding: 0.2 });
@@ -379,8 +388,8 @@ function CanvasApp() {
 
       let workingDocument =
         promptTextOverride === undefined
-          ? document
-          : updateNode(document, promptNodeId, (node) =>
+          ? documentRef.current
+          : updateNode(documentRef.current, promptNodeId, (node) =>
               node.kind === "prompt_input" ? { ...node, text: promptTextOverride } : node,
             );
       let answerId = retryAnswerId;
@@ -390,6 +399,7 @@ function CanvasApp() {
           const prepared = ensureAnswerForPrompt(workingDocument, promptNodeId);
           workingDocument = prepared.document;
           answerId = prepared.answerId;
+          documentRef.current = workingDocument;
           setDocument(workingDocument);
           setAnswerText(answerId, "");
         } else {
@@ -402,6 +412,7 @@ function CanvasApp() {
             feedback: "needs_retry",
           });
           workingDocument = updateNode(workingDocument, answerId, () => updatedAnswer);
+          documentRef.current = workingDocument;
           setDocument(workingDocument);
         }
 
@@ -411,7 +422,11 @@ function CanvasApp() {
           setAnswerText(answerId!, streamed);
         });
 
-        setDocument((current) => ensureNextPrompt(current, answerId!));
+        setDocument((current) => {
+          const next = ensureNextPrompt(current, answerId!);
+          documentRef.current = next;
+          return next;
+        });
         setStatus("Run complete");
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
@@ -420,7 +435,7 @@ function CanvasApp() {
         setRunningPromptId(null);
       }
     },
-    [document, setAnswerText],
+    [setAnswerText],
   );
 
   const onFeedback = useCallback((nodeId: string, feedback: FeedbackState) => {

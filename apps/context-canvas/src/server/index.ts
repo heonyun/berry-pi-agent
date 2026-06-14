@@ -7,6 +7,7 @@ import { compilePromptContext, formatPromptForPi } from "../shared/compiler.ts";
 import type { ContextCanvasDocument } from "../shared/domain.ts";
 
 const PORT = 3001;
+const MAX_REQUEST_BODY_BYTES = 5 * 1024 * 1024;
 const monorepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 
 type SseEvent =
@@ -18,20 +19,32 @@ type SseEvent =
 
 let sessionPromise: Promise<AgentSession> | undefined;
 
+class RequestBodyTooLargeError extends Error {
+  constructor() {
+    super(`Request body exceeds ${MAX_REQUEST_BODY_BYTES} bytes.`);
+    this.name = "RequestBodyTooLargeError";
+  }
+}
+
 async function getSession(): Promise<AgentSession> {
   if (!sessionPromise) {
     sessionPromise = (async () => {
-      const model = getModel("openai-codex", "gpt-5.4-mini");
-      if (!model) {
-        throw new Error("Model openai-codex/gpt-5.4-mini is not available.");
+      try {
+        const model = getModel("openai-codex", "gpt-5.4-mini");
+        if (!model) {
+          throw new Error("Model openai-codex/gpt-5.4-mini is not available.");
+        }
+        const { session } = await createAgentSession({
+          cwd: monorepoRoot,
+          model,
+          tools: ["read", "bash", "edit", "write"],
+          sessionManager: SessionManager.inMemory(monorepoRoot),
+        });
+        return session;
+      } catch (error) {
+        sessionPromise = undefined;
+        throw error;
       }
-      const { session } = await createAgentSession({
-        cwd: monorepoRoot,
-        model,
-        tools: ["read", "bash", "edit", "write"],
-        sessionManager: SessionManager.inMemory(monorepoRoot),
-      });
-      return session;
     })();
   }
   return sessionPromise;
@@ -49,8 +62,14 @@ function writeSse(res: ServerResponse, event: SseEvent): void {
 
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = [];
+  let totalLength = 0;
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalLength += buffer.length;
+    if (totalLength > MAX_REQUEST_BODY_BYTES) {
+      throw new RequestBodyTooLargeError();
+    }
+    chunks.push(buffer);
   }
   const raw = Buffer.concat(chunks).toString("utf8");
   return JSON.parse(raw) as T;
@@ -145,7 +164,8 @@ const server = createServer(async (req, res) => {
       await handlePrompt(body, res);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      res.writeHead(400, { "Content-Type": "application/json" });
+      const statusCode = error instanceof RequestBodyTooLargeError ? 413 : 400;
+      res.writeHead(statusCode, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: message }));
     }
     return;

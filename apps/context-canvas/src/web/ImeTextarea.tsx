@@ -26,10 +26,6 @@ export interface ImeTextareaProps
   onCommit?: (value: string) => void;
 }
 
-function isComposingEvent(event: ChangeEvent<HTMLTextAreaElement>): boolean {
-  return Boolean((event.nativeEvent as InputEvent).isComposing);
-}
-
 /**
  * Draft-controlled textarea that defers parent commits until editing is done.
  * See: https://github.com/langflow-ai/langflow/issues/12376
@@ -75,10 +71,6 @@ export const ImeTextarea = memo(function ImeTextarea({
       setDraft(next);
       draftRef.current = next;
       onLocalChange?.(next);
-
-      if (composingRef.current || isComposingEvent(event)) {
-        return;
-      }
     },
     [onChangeProp, onLocalChange],
   );
