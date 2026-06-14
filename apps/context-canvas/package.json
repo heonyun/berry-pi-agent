@@ -1,0 +1,31 @@
+{
+	"name": "@berry-pi/context-canvas",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "tsc -p tsconfig.json --noEmit && vite build",
+		"dev": "node scripts/dev.mjs",
+		"server": "tsx src/server/index.ts",
+		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@earendil-works/pi-ai": "0.79.3",
+		"@earendil-works/pi-coding-agent": "0.79.3",
+		"@xyflow/react": "12.11.0",
+		"react": "19.1.0",
+		"react-dom": "19.1.0"
+	},
+	"devDependencies": {
+		"@testing-library/dom": "10.4.0",
+		"@testing-library/react": "16.3.0",
+		"@types/react": "19.1.8",
+		"@types/react-dom": "19.1.6",
+		"@vitejs/plugin-react": "4.5.2",
+		"jsdom": "26.1.0",
+		"typescript": "5.9.3",
+		"vite": "6.3.5",
+		"vitest": "3.2.4"
+	}
+}

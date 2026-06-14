@@ -3,6 +3,7 @@
 	"private": true,
 	"type": "module",
 	"workspaces": [
+		"apps/*",
 		"packages/*",
 		"packages/coding-agent/examples/extensions/with-deps",
 		"packages/coding-agent/examples/extensions/custom-provider-anthropic",
@@ -34,6 +35,8 @@
 		"release:minor": "node scripts/release.mjs minor",
 		"release:major": "node scripts/release.mjs major",
 		"release:fix-links": "node scripts/release-notes.mjs fix-github-releases",
+		"context-canvas:dev": "npm run dev --workspace=@berry-pi/context-canvas",
+		"context-canvas:build": "npm run build --workspace=@berry-pi/context-canvas",
 		"prepare": "husky"
 	},
 	"devDependencies": {
