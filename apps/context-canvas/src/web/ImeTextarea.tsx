@@ -48,6 +48,8 @@ export const ImeTextarea = memo(function ImeTextarea({
   const [draft, setDraft] = useState(value);
   const composingRef = useRef(false);
   const draftRef = useRef(value);
+  const focusedRef = useRef(false);
+  const blurDuringCompositionRef = useRef(false);
 
   useEffect(() => {
     draftRef.current = draft;
@@ -82,6 +84,8 @@ export const ImeTextarea = memo(function ImeTextarea({
   const handleCompositionStart = useCallback(
     (event: CompositionEvent<HTMLTextAreaElement>) => {
       composingRef.current = true;
+      focusedRef.current = true;
+      blurDuringCompositionRef.current = false;
       onCompositionStart?.(event);
     },
     [onCompositionStart],
@@ -95,16 +99,23 @@ export const ImeTextarea = memo(function ImeTextarea({
       setDraft(next);
       draftRef.current = next;
       onLocalChange?.(next);
+      if (blurDuringCompositionRef.current || !focusedRef.current) {
+        blurDuringCompositionRef.current = false;
+        commit(next);
+      }
     },
-    [onCompositionEnd, onLocalChange],
+    [commit, onCompositionEnd, onLocalChange],
   );
 
   const handleBlur = useCallback(
     (event: FocusEvent<HTMLTextAreaElement>) => {
       onBlur?.(event);
-      if (!composingRef.current) {
-        commit(draftRef.current);
+      focusedRef.current = false;
+      if (composingRef.current) {
+        blurDuringCompositionRef.current = true;
+        return;
       }
+      commit(draftRef.current);
     },
     [commit, onBlur],
   );
@@ -112,6 +123,7 @@ export const ImeTextarea = memo(function ImeTextarea({
   const handleFocus = useCallback(
     (event: FocusEvent<HTMLTextAreaElement>) => {
       onFocus?.(event);
+      focusedRef.current = true;
       if (clearOnFocusValue === undefined || draftRef.current !== clearOnFocusValue) {
         return;
       }

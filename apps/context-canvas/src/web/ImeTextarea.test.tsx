@@ -52,6 +52,27 @@ describe("ImeTextarea", () => {
     expect(onValueChange).toHaveBeenCalledWith("hello");
   });
 
+  it("commits once if blur happens while IME composition is active", () => {
+    const onValueChange = vi.fn();
+
+    render(<ImeTextarea value="" onValueChange={onValueChange} aria-label="prompt" />);
+
+    const textarea = screen.getByLabelText("prompt") as HTMLTextAreaElement;
+    fireEvent.focus(textarea);
+    fireEvent.compositionStart(textarea);
+    fireEvent.change(textarea, { target: { value: "안ㄴ" } });
+
+    fireEvent.blur(textarea);
+
+    expect(onValueChange).not.toHaveBeenCalled();
+
+    fireEvent.compositionEnd(textarea, { data: "안녕", target: { value: "안녕" } });
+
+    expect(textarea.value).toBe("안녕");
+    expect(onValueChange).toHaveBeenCalledTimes(1);
+    expect(onValueChange).toHaveBeenCalledWith("안녕");
+  });
+
   it("clears the configured starter text on focus without committing immediately", () => {
     const onLocalChange = vi.fn();
     const onValueChange = vi.fn();

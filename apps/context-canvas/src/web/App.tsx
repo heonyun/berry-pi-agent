@@ -38,6 +38,7 @@ type PromptNodeData = {
   text: string;
   stance: StanceBand;
   running: boolean;
+  onDraftChange: (nodeId: string, text: string) => void;
   onTextChange: (nodeId: string, text: string) => void;
   onRun: (nodeId: string, text?: string) => void;
 };
@@ -61,7 +62,7 @@ function stanceClass(stance: StanceBand): string {
 }
 
 const PromptInputNode = memo(function PromptInputNode({ data, dragging }: NodeProps<Node<PromptNodeData>>) {
-  const { nodeId, text, stance, running, onTextChange, onRun } = data;
+  const { nodeId, text, stance, running, onDraftChange, onTextChange, onRun } = data;
   const latestTextRef = useRef(text);
 
   useEffect(() => {
@@ -71,20 +72,26 @@ const PromptInputNode = memo(function PromptInputNode({ data, dragging }: NodePr
   const handleCommit = useCallback(
     (value: string) => {
       latestTextRef.current = value;
+      onDraftChange(nodeId, value);
       onTextChange(nodeId, value);
     },
-    [nodeId, onTextChange],
+    [nodeId, onDraftChange, onTextChange],
   );
 
-  const handleLocalChange = useCallback((value: string) => {
-    latestTextRef.current = value;
-  }, []);
+  const handleLocalChange = useCallback(
+    (value: string) => {
+      latestTextRef.current = value;
+      onDraftChange(nodeId, value);
+    },
+    [nodeId, onDraftChange],
+  );
 
   const handleRun = useCallback(() => {
     const latest = latestTextRef.current;
+    onDraftChange(nodeId, latest);
     onTextChange(nodeId, latest);
     onRun(nodeId, latest);
-  }, [nodeId, onRun, onTextChange]);
+  }, [nodeId, onDraftChange, onRun, onTextChange]);
 
   return (
     <div className={`node-card prompt ${dragging ? "dragging" : ""}`}>
@@ -416,6 +423,8 @@ function CanvasApp() {
   const { fitView, screenToFlowPosition } = useReactFlow();
   const [document, setDocument] = useState<ContextCanvasDocument>(() => createInitialDocument());
   const documentRef = useRef(document);
+  const promptDraftsRef = useRef(new Map<string, string>());
+  const fitViewOnLayoutRef = useRef(true);
   const [selectedNodeId, setSelectedNodeId] = useState<string>("prompt-1");
   const [runningPromptId, setRunningPromptId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("Ready");
@@ -427,10 +436,19 @@ function CanvasApp() {
   }, [document]);
 
   useEffect(() => {
+    if (!fitViewOnLayoutRef.current) {
+      return;
+    }
+    fitViewOnLayoutRef.current = false;
     void fitView({ padding: 0.2, duration: 180 });
   }, [edgeCount, fitView, nodeCount]);
 
+  const updatePromptDraft = useCallback((nodeId: string, text: string) => {
+    promptDraftsRef.current.set(nodeId, text);
+  }, []);
+
   const updatePromptText = useCallback((nodeId: string, text: string) => {
+    promptDraftsRef.current.set(nodeId, text);
     setDocument((current) =>
       updateNode(current, nodeId, (node) =>
         node.kind === "prompt_input" ? { ...node, text } : node,
@@ -466,11 +484,12 @@ function CanvasApp() {
       setRunningPromptId(promptNodeId);
       setStatus("Running agent...");
 
+      const latestPromptText = promptTextOverride ?? promptDraftsRef.current.get(promptNodeId);
       let workingDocument =
-        promptTextOverride === undefined
+        latestPromptText === undefined
           ? documentRef.current
           : updateNode(documentRef.current, promptNodeId, (node) =>
-              node.kind === "prompt_input" ? { ...node, text: promptTextOverride } : node,
+              node.kind === "prompt_input" ? { ...node, text: latestPromptText } : node,
             );
       let answerId = retryAnswerId;
 
@@ -480,6 +499,9 @@ function CanvasApp() {
           workingDocument = prepared.document;
           answerId = prepared.answerId;
           documentRef.current = workingDocument;
+          if (prepared.created) {
+            fitViewOnLayoutRef.current = true;
+          }
           setDocument(workingDocument);
           setAnswerText(answerId, "");
         } else {
@@ -547,7 +569,7 @@ function CanvasApp() {
         setStatus("Cannot retry: parent is not a prompt.");
         return;
       }
-      void runPrompt(parent.id, answerId);
+      void runPrompt(parent.id, answerId, promptDraftsRef.current.get(parent.id));
     },
     [document, runPrompt],
   );
@@ -640,6 +662,7 @@ function CanvasApp() {
               text: node.text,
               stance,
               running: runningPromptId === node.id,
+              onDraftChange: updatePromptDraft,
               onTextChange: updatePromptText,
               onRun: runPromptById,
             },
@@ -663,7 +686,7 @@ function CanvasApp() {
           },
         } satisfies CanvasNode;
       }),
-    [document, onBranch, onFeedback, onRetry, runPromptById, runningPromptId, updatePromptText],
+    [document, onBranch, onFeedback, onRetry, runPromptById, runningPromptId, updatePromptDraft, updatePromptText],
   );
 
   const flowEdges: Edge[] = useMemo(
