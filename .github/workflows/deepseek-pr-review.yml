@@ -19,36 +19,82 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: write
+  issues: write
+  pull-requests: read
 
 jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.route.outputs.should_run }}
+      pr_number: ${{ steps.route.outputs.pr_number }}
+      additional_context: ${{ steps.route.outputs.additional_context }}
+    steps:
+      - name: Route event
+        id: route
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+          IS_PULL_REQUEST_COMMENT: ${{ github.event.issue.pull_request != null }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
+        run: |
+          set -euo pipefail
+          should_run=false
+          pr_number=""
+          additional_context=""
+
+          if [[ "${EVENT_NAME}" == "pull_request_target" ]]; then
+            if [[ "${PR_HEAD_REPO}" == "${REPOSITORY}" ]]; then
+              should_run=true
+              pr_number="${PR_NUMBER}"
+            fi
+          elif [[ "${EVENT_NAME}" == "issue_comment" ]]; then
+            if [[ "${IS_PULL_REQUEST_COMMENT}" == "true" ]] &&
+               [[ "${COMMENT_BODY}" == *"@deepseek-review"* ]] &&
+               [[ "${COMMENT_ASSOCIATION}" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]]; then
+              should_run=true
+              pr_number="${ISSUE_NUMBER}"
+              additional_context="${COMMENT_BODY#*@deepseek-review}"
+              additional_context="${additional_context# }"
+            fi
+          fi
+
+          echo "should_run=${should_run}" >> "${GITHUB_OUTPUT}"
+          echo "pr_number=${pr_number}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "additional_context<<EOF"
+            echo "${additional_context}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
   review:
-    if: |
-      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@deepseek-review') &&
-        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    needs: dispatch
+    if: needs.dispatch.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      - name: Checkout
+      - name: Checkout workflow scripts
         uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
-      - name: DeepSeek code review
-        uses: hustcer/deepseek-review@v1
-        with:
-          chat-token: ${{ secrets.DEEPSEEK_V4 }}
-          model: ${{ vars.DEEPSEEK_V4 || 'deepseek-v4-flash' }}
-          base-url: https://api.deepseek.com
-          github-token: ${{ github.token }}
-          watch-mention: "@deepseek-review"
-          allowed-associations: "OWNER,MEMBER,COLLABORATOR"
-          sys-prompt: |
-            You are a professional code review assistant for the berry-pi-agent repository
-            (pi-agent: TypeScript AI agent context-canvas workspace plus PowerShell orchestration scripts).
-            Review pull request diffs for correctness, regression risk, security, privacy, workflow reliability,
-            and frontend/product behavior when relevant.
-            List actionable findings with file paths when possible. Prefer concise Korean when the PR description is Korean.
-          user-prompt: Please review the following code changes
+      - name: Post DeepSeek PR review comment
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_V4 }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_V4 || 'deepseek-v4-flash' }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.dispatch.outputs.pr_number }}
+          PR_TITLE: ${{ github.event.pull_request.title || github.event.issue.title }}
+          PR_BODY: ${{ github.event.pull_request.body || github.event.issue.body }}
+          ADDITIONAL_CONTEXT: ${{ needs.dispatch.outputs.additional_context }}
+        run: |
+          chmod +x .github/scripts/deepseek-pr-comment.sh
+          .github/scripts/deepseek-pr-comment.sh \
+            "${PR_NUMBER}" \
+            "${PR_TITLE}" \
+            "${PR_BODY}" \
+            "${ADDITIONAL_CONTEXT}"
