@@ -6,7 +6,13 @@ on:
 
 jobs:
   approve:
-    if: ${{ !github.event.issue.pull_request }}
+    if: >
+      !github.event.issue.pull_request &&
+      (
+        !endsWith(github.actor, '[bot]') &&
+        github.actor != 'github-actions[bot]' &&
+        !contains(github.event.comment.body, '<!-- pi-agent:workflow:')
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: write

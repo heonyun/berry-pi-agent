@@ -24,12 +24,22 @@ permissions:
 
 jobs:
   dispatch:
+    if: >
+      github.event_name != 'issue_comment' ||
+      (
+        !endsWith(github.actor, '[bot]') &&
+        github.actor != 'github-actions[bot]' &&
+        !contains(github.event.comment.body, '<!-- pi-agent:workflow:')
+      )
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.route.outputs.should_run }}
       pr_number: ${{ steps.route.outputs.pr_number }}
       additional_context: ${{ steps.route.outputs.additional_context }}
     steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@v5
+
       - name: Route event
         id: route
         env:
@@ -42,8 +52,12 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
+          COMMENT_ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
+          # shellcheck source=agent-lib.sh
+          source .github/scripts/agent-lib.sh
+
           should_run=false
           pr_number=""
           additional_context=""
@@ -54,9 +68,11 @@ jobs:
               pr_number="${PR_NUMBER}"
             fi
           elif [[ "${EVENT_NAME}" == "issue_comment" ]]; then
-            if [[ "${IS_PULL_REQUEST_COMMENT}" == "true" ]] &&
-               [[ "${COMMENT_BODY}" == *"@deepseek-review"* ]] &&
-               [[ "${COMMENT_ASSOCIATION}" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]]; then
+            if agent_should_skip_comment "${COMMENT_ACTOR}" "${COMMENT_BODY}"; then
+              echo "Skipping bot or agent-marked comment"
+            elif [[ "${IS_PULL_REQUEST_COMMENT}" == "true" ]] &&
+                 [[ "${COMMENT_BODY}" == *"@deepseek-review"* ]] &&
+                 [[ "${COMMENT_ASSOCIATION}" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]]; then
               should_run=true
               pr_number="${ISSUE_NUMBER}"
               additional_context="${COMMENT_BODY#*@deepseek-review}"

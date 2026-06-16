@@ -11,9 +11,20 @@ on:
   issue_comment:
     types:
       - created
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Issue number to post a planning comment on
+        required: true
+        type: string
+      additional_context:
+        description: Optional extra context for DeepSeek
+        required: false
+        type: string
+        default: ""
 
 concurrency:
-  group: deepseek-issue-${{ github.event.issue.number }}
+  group: deepseek-issue-${{ github.event.issue.number || github.event.inputs.issue_number }}
   cancel-in-progress: false
 
 permissions:
@@ -22,25 +33,58 @@ permissions:
 
 jobs:
   dispatch:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name != 'issue_comment' ||
+      (
+        !endsWith(github.actor, '[bot]') &&
+        github.actor != 'github-actions[bot]' &&
+        !contains(github.event.comment.body, '<!-- pi-agent:workflow:')
+      )
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.route.outputs.should_run }}
       mode: ${{ steps.route.outputs.mode }}
       additional_context: ${{ steps.route.outputs.additional_context }}
+      issue_number: ${{ steps.route.outputs.issue_number }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
       - name: Route event
         id: route
         env:
+          EVENT_NAME: ${{ github.event_name }}
           EVENT: ${{ github.event_name }}.${{ github.event.action }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
+          COMMENT_ACTOR: ${{ github.actor }}
           ISSUE_ASSOCIATION: ${{ github.event.issue.author_association }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
           IS_PULL_REQUEST: ${{ github.event.issue.pull_request != null }}
+          DISPATCH_ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+          DISPATCH_CONTEXT: ${{ github.event.inputs.additional_context }}
         run: |
           set -euo pipefail
+          # shellcheck source=agent-lib.sh
+          source .github/scripts/agent-lib.sh
+
           should_run=false
           mode=""
           additional_context=""
+
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            echo "should_run=true" >> "${GITHUB_OUTPUT}"
+            echo "mode=invoke" >> "${GITHUB_OUTPUT}"
+            {
+              echo "additional_context<<EOF"
+              echo "${DISPATCH_CONTEXT}"
+              echo "EOF"
+            } >> "${GITHUB_OUTPUT}"
+            echo "issue_number=${DISPATCH_ISSUE_NUMBER}" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
 
           if [[ "${IS_PULL_REQUEST}" == "true" ]]; then
             echo "should_run=false" >> "${GITHUB_OUTPUT}"
@@ -50,16 +94,20 @@ jobs:
           fi
 
           if [[ "${EVENT}" == "issues.opened" || "${EVENT}" == "issues.reopened" ]]; then
-            if [[ ! "${ISSUE_ASSOCIATION}" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]]; then
+            if agent_issue_eligible_for_auto_plan "${ISSUE_AUTHOR}" "${ISSUE_ASSOCIATION}" "${ISSUE_BODY}"; then
+              should_run=true
+              mode="plan"
+            else
+              echo "Skipping issue: untrusted author without Antigravity marker"
               echo "should_run=false" >> "${GITHUB_OUTPUT}"
-              echo "mode=skip-untrusted-issue-author" >> "${GITHUB_OUTPUT}"
+              echo "mode=skip-ineligible-issue" >> "${GITHUB_OUTPUT}"
               echo "additional_context=" >> "${GITHUB_OUTPUT}"
               exit 0
             fi
-            should_run=true
-            mode="plan"
           elif [[ "${EVENT}" == "issue_comment.created" ]]; then
-            if [[ "${COMMENT_BODY}" == @deepseek* ]] && [[ "${COMMENT_ASSOCIATION}" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]]; then
+            if agent_should_skip_comment "${COMMENT_ACTOR}" "${COMMENT_BODY}"; then
+              echo "Skipping bot or agent-marked comment"
+            elif [[ "${COMMENT_BODY}" == @deepseek* ]] && [[ "${COMMENT_ASSOCIATION}" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]]; then
               should_run=true
               mode="invoke"
               additional_context="${COMMENT_BODY#@deepseek}"
@@ -69,6 +117,7 @@ jobs:
 
           echo "should_run=${should_run}" >> "${GITHUB_OUTPUT}"
           echo "mode=${mode}" >> "${GITHUB_OUTPUT}"
+          echo "issue_number=${{ github.event.issue.number }}" >> "${GITHUB_OUTPUT}"
           {
             echo "additional_context<<EOF"
             echo "${additional_context}"
@@ -89,16 +138,18 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_V4 }}
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_V4 || 'deepseek-v4-flash' }}
           GH_TOKEN: ${{ github.token }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NUMBER: ${{ needs.dispatch.outputs.issue_number }}
           MODE: ${{ needs.dispatch.outputs.mode }}
           ADDITIONAL_CONTEXT: ${{ needs.dispatch.outputs.additional_context }}
         run: |
+          set -euo pipefail
+          issue_json="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${ISSUE_NUMBER}")"
+          issue_title="$(jq -r '.title // ""' <<<"${issue_json}")"
+          issue_body="$(jq -r '.body // ""' <<<"${issue_json}")"
           chmod +x .github/scripts/deepseek-issue-comment.sh
           .github/scripts/deepseek-issue-comment.sh \
             "${MODE}" \
             "${ISSUE_NUMBER}" \
-            "${ISSUE_TITLE}" \
-            "${ISSUE_BODY}" \
+            "${issue_title}" \
+            "${issue_body}" \
             "${ADDITIONAL_CONTEXT}"

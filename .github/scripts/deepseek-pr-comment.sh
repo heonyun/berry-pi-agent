@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=agent-lib.sh
+source "${SCRIPT_DIR}/agent-lib.sh"
+
 PR_NUMBER="${1:?PR number required}"
 TITLE="${2:-}"
 BODY="${3:-}"
 EXTRA="${4:-}"
 MODEL="${DEEPSEEK_MODEL:-deepseek-v4-flash}"
 REPO="${GITHUB_REPOSITORY:?}"
+WORKFLOW_ID="deepseek-pr-review"
 MAX_DIFF_CHARS="${MAX_DIFF_CHARS:-60000}"
+OUTPUT_SECTIONS="$(agent_output_sections_prompt)"
 
 if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
   echo "DEEPSEEK_API_KEY is not set" >&2
@@ -43,10 +49,8 @@ ${EXTRA}
 ${truncated_note}
 
 Review the PR diff for correctness, regression risk, security/privacy issues, workflow reliability, and missing tests.
-Return concise markdown sections:
-## Summary
-## Findings
-## Suggested next steps
+
+${OUTPUT_SECTIONS}
 
 Diff:
 ${diff_text}
@@ -90,13 +94,13 @@ fi
 
 {
   echo "${comment_body}"
-  echo ""
-  echo "---"
-  echo "_Automated PR review note via DeepSeek (${MODEL}) · workflow: deepseek-pr-review_"
+  agent_footer "${WORKFLOW_ID}" "${MODEL}"
 } > "${response_file}"
 
 gh api \
   "repos/${REPO}/issues/${PR_NUMBER}/comments" \
   -f body="$(cat "${response_file}")"
+
+agent_apply_labels "${PR_NUMBER}" "agent:reviewed"
 
 echo "Posted DeepSeek PR review comment on PR #${PR_NUMBER}"

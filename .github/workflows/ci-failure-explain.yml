@@ -1,0 +1,129 @@
+# Post CI failure analysis comments when the Verify workflow fails on a PR.
+# Secret: DEEPSEEK_V4 (API key). Variable: DEEPSEEK_V4 (model name).
+
+name: CI Failure Explain
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+  actions: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    outputs:
+      should_explain: ${{ steps.route.outputs.should_explain }}
+      should_cleanup: ${{ steps.route.outputs.should_cleanup }}
+      pr_number: ${{ steps.route.outputs.pr_number }}
+      run_id: ${{ steps.route.outputs.run_id }}
+      head_sha: ${{ steps.route.outputs.head_sha }}
+    steps:
+      - name: Route workflow run
+        id: route
+        env:
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          EVENT: ${{ github.event.workflow_run.event }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBERS_JSON: ${{ toJson(github.event.workflow_run.pull_requests) }}
+        run: |
+          set -euo pipefail
+          should_explain=false
+          should_cleanup=false
+          pr_number=""
+          run_id="${RUN_ID}"
+          head_sha="${HEAD_SHA}"
+
+          if [[ "${EVENT}" != "pull_request" ]]; then
+            echo "Not a pull_request workflow run; skipping"
+          elif [[ "${CONCLUSION}" == "failure" ]]; then
+            should_explain=true
+          elif [[ "${CONCLUSION}" == "success" ]]; then
+            should_cleanup=true
+          fi
+
+          if [[ "${should_explain}" == "true" || "${should_cleanup}" == "true" ]]; then
+            pr_number="$(echo "${PR_NUMBERS_JSON}" | jq -r '.[0].number // empty')"
+          fi
+
+          echo "should_explain=${should_explain}" >> "${GITHUB_OUTPUT}"
+          echo "should_cleanup=${should_cleanup}" >> "${GITHUB_OUTPUT}"
+          echo "pr_number=${pr_number}" >> "${GITHUB_OUTPUT}"
+          echo "run_id=${run_id}" >> "${GITHUB_OUTPUT}"
+          echo "head_sha=${head_sha}" >> "${GITHUB_OUTPUT}"
+
+  explain:
+    needs: dispatch
+    if: needs.dispatch.outputs.should_explain == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+      actions: read
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@v5
+
+      - name: Post CI failure explanation
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_V4 }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_V4 || 'deepseek-v4-flash' }}
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_RUN_ID: ${{ needs.dispatch.outputs.run_id }}
+          WORKFLOW_RUN_HEAD_SHA: ${{ needs.dispatch.outputs.head_sha }}
+          PR_NUMBER: ${{ needs.dispatch.outputs.pr_number }}
+        run: |
+          chmod +x .github/scripts/ci-failure-explain-run.sh .github/scripts/deepseek-ci-explain.sh .github/scripts/agent-lib.sh
+          .github/scripts/ci-failure-explain-run.sh "${PR_NUMBER}"
+
+  cleanup:
+    needs: dispatch
+    if: needs.dispatch.outputs.should_cleanup == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+    steps:
+      - name: Checkout workflow scripts
+        uses: actions/checkout@v5
+
+      - name: Remove ci:failed label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ needs.dispatch.outputs.head_sha }}
+          PR_NUMBER: ${{ needs.dispatch.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+          # shellcheck source=agent-lib.sh
+          source .github/scripts/agent-lib.sh
+
+          pr_number="${PR_NUMBER}"
+          if [[ -z "${pr_number}" ]]; then
+            pr_number="$(gh pr list --repo "${GITHUB_REPOSITORY}" --search "${HEAD_SHA}" --state open --json number,headRepository --limit 20 | jq -r --arg repo "${GITHUB_REPOSITORY}" '
+              [.[] | select(.headRepository.nameWithOwner == $repo)] | .[0].number // empty
+            ')"
+          fi
+
+          if [[ -z "${pr_number}" ]]; then
+            echo "No PR found for successful CI run; skipping label cleanup"
+            exit 0
+          fi
+
+          head_repo="$(gh pr view "${pr_number}" --repo "${GITHUB_REPOSITORY}" --json headRepository -q '.headRepository.nameWithOwner')"
+          if [[ "${head_repo}" != "${GITHUB_REPOSITORY}" ]]; then
+            echo "Skipping fork PR #${pr_number}"
+            exit 0
+          fi
+
+          agent_remove_label "${pr_number}" "ci:failed"
+          echo "Removed ci:failed from PR #${pr_number}"
