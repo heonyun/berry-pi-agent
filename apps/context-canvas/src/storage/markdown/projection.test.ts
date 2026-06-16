@@ -127,3 +127,25 @@ describe("loadBundleToDocument", () => {
     expect(loaded.warnings.some((warning) => warning.includes(CANVAS_SIDECAR))).toBe(true);
   });
 });
+
+describe("bundle path safety", () => {
+  it("rejects unsafe node ids during export", () => {
+    const bundleRoot = makeTempDir();
+    const document = {
+      ...sampleDocument(),
+      nodes: [
+        {
+          id: "../evil",
+          kind: "prompt_input" as const,
+          groupId: "group-1",
+          text: "bad",
+          position: { x: 0, y: 0 },
+          metadata: { stance: "neutral" as const },
+        },
+      ],
+      edges: [],
+    };
+
+    expect(() => projectDocumentToBundle(document, bundleRoot)).toThrow(/Invalid nodeId/);
+  });
+});

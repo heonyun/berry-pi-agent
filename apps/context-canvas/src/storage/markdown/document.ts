@@ -124,9 +124,13 @@ function serializeSimpleYaml(frontmatter: Record<string, unknown>): string {
       continue;
     }
     if (Array.isArray(value)) {
-      lines.push(`${key}:`);
-      for (const item of value) {
-        lines.push(`  - ${formatScalar(item)}`);
+      if (value.length === 0) {
+        lines.push(`${key}: []`);
+      } else {
+        lines.push(`${key}:`);
+        for (const item of value) {
+          lines.push(`  - ${formatScalar(item)}`);
+        }
       }
       continue;
     }
@@ -150,6 +154,12 @@ function parseScalar(raw: string): unknown {
   const value = unquote(raw.trim());
   if (value === "null") {
     return null;
+  }
+  if (value === "[]") {
+    return [];
+  }
+  if (value === "{}") {
+    return {};
   }
   if (value === "true") {
     return true;

@@ -12,7 +12,7 @@ import type {
   StanceBand,
   Vec2,
 } from "../../shared/domain.ts";
-import { parse } from "./document.ts";
+import { parse, validate, type MarkdownDocument } from "./document.ts";
 import { readBodyMainText } from "./helpers.ts";
 import {
   CANVAS_SIDECAR,
@@ -21,6 +21,12 @@ import {
 } from "./paths.ts";
 import { readBundleDocument } from "./sidecar.ts";
 import type { LoadResult } from "./types.ts";
+
+interface ParsedNodeFile {
+  filePath: string;
+  nodeId: string;
+  markdown: MarkdownDocument;
+}
 
 export function loadBundleToDocument(bundleRoot: string): LoadResult {
   const warnings: string[] = [];
@@ -41,23 +47,40 @@ export function loadBundleToDocument(bundleRoot: string): LoadResult {
     };
   }
 
-  warnings.push(`Missing ${CANVAS_SIDECAR}; loading best-effort from node markdown files.`);
+  warnings.push(`Missing or invalid ${CANVAS_SIDECAR}; loading best-effort from node markdown files.`);
 
   const nodeFiles = listNodeFiles(bundleRoot);
   if (nodeFiles.length === 0) {
     return { warnings, errors: ["No node markdown files found."] };
   }
 
-  const nodes: ContextNode[] = [];
+  const parsedFiles: ParsedNodeFile[] = [];
   for (const filePath of nodeFiles) {
+    const nodeId = pathToNodeId(bundleRoot, filePath);
+    if (!nodeId) {
+      warnings.push(`Skipping unrecognized node path: ${filePath}`);
+      continue;
+    }
     try {
-      const node = parseNodeFile(filePath, bundleRoot, warnings);
-      if (node) {
-        nodes.push(node);
+      const markdown = parse(fs.readFileSync(filePath, "utf8"));
+      try {
+        validate(markdown);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        warnings.push(`${path.relative(bundleRoot, filePath)}: ${message}`);
       }
+      parsedFiles.push({ filePath, nodeId, markdown });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`${path.relative(bundleRoot, filePath)}: ${message}`);
+    }
+  }
+
+  const nodes: ContextNode[] = [];
+  for (const entry of parsedFiles) {
+    const node = nodeFromMarkdown(entry, warnings);
+    if (node) {
+      nodes.push(node);
     }
   }
 
@@ -65,9 +88,9 @@ export function loadBundleToDocument(bundleRoot: string): LoadResult {
     return { warnings, errors: errors.length ? errors : ["No nodes could be loaded."] };
   }
 
-  const edges = buildEdgesFromFrontmatter(nodes, nodeFiles, bundleRoot, warnings);
+  const edges = buildEdgesFromFrontmatter(nodes, parsedFiles, warnings);
   const groups = buildGroups(nodes, warnings);
-  const canvasId = readCanvasId(nodeFiles, bundleRoot, warnings);
+  const canvasId = readCanvasId(parsedFiles, warnings);
   const document: ContextCanvasDocument = {
     schemaVersion: 1,
     canvas: {
@@ -94,14 +117,8 @@ function listNodeFiles(bundleRoot: string): string[] {
     .sort();
 }
 
-function parseNodeFile(filePath: string, bundleRoot: string, warnings: string[]): ContextNode | undefined {
-  const nodeId = pathToNodeId(bundleRoot, filePath);
-  if (!nodeId) {
-    warnings.push(`Skipping unrecognized node path: ${filePath}`);
-    return undefined;
-  }
-
-  const markdown = parse(fs.readFileSync(filePath, "utf8"));
+function nodeFromMarkdown(entry: ParsedNodeFile, warnings: string[]): ContextNode | undefined {
+  const { nodeId, markdown } = entry;
   const kind = readNodeKind(markdown.frontmatter.type, nodeId, warnings);
   if (!kind) {
     return undefined;
@@ -153,20 +170,15 @@ function parseNodeFile(filePath: string, bundleRoot: string, warnings: string[])
 
 function buildEdgesFromFrontmatter(
   nodes: ContextNode[],
-  nodeFiles: string[],
-  bundleRoot: string,
+  parsedFiles: ParsedNodeFile[],
   warnings: string[],
 ): ContextEdge[] {
   const nodeIds = new Set(nodes.map((node) => node.id));
   const edges: ContextEdge[] = [];
   const seen = new Set<string>();
 
-  for (const filePath of nodeFiles) {
-    const nodeId = pathToNodeId(bundleRoot, filePath);
-    if (!nodeId) {
-      continue;
-    }
-    const markdown = parse(fs.readFileSync(filePath, "utf8"));
+  for (const entry of parsedFiles) {
+    const { nodeId, markdown } = entry;
     const lineageParent = markdown.frontmatter.lineage_parent;
     if (typeof lineageParent === "string" && lineageParent.length > 0) {
       if (!nodeIds.has(lineageParent)) {
@@ -261,17 +273,13 @@ function readFeedback(value: unknown): FeedbackState | undefined {
   return undefined;
 }
 
-function readCanvasId(nodeFiles: string[], bundleRoot: string, warnings: string[]): string {
-  for (const filePath of nodeFiles) {
-    try {
-      const markdown = parse(fs.readFileSync(filePath, "utf8"));
-      const canvas = markdown.frontmatter.canvas;
-      if (typeof canvas === "string" && canvas.length > 0) {
-        return canvas;
-      }
-    } catch {
-      warnings.push(`Could not read canvas id from ${path.relative(bundleRoot, filePath)}`);
+function readCanvasId(parsedFiles: ParsedNodeFile[], warnings: string[]): string {
+  for (const entry of parsedFiles) {
+    const canvas = entry.markdown.frontmatter.canvas;
+    if (typeof canvas === "string" && canvas.length > 0) {
+      return canvas;
     }
   }
+  warnings.push("Could not read canvas id from node frontmatter; defaulting to canvas-1.");
   return "canvas-1";
 }

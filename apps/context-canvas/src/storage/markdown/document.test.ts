@@ -27,6 +27,24 @@ describe("markdown document", () => {
     expect(parsed.body).toContain("# Lineage");
   });
 
+  it("round-trips empty arrays and null lineage", () => {
+    const source = {
+      frontmatter: {
+        type: "prompt_input",
+        canvas: "canvas-1",
+        group: "group-1",
+        position: { x: 0, y: 0 },
+        context_refs: [],
+        lineage_parent: null,
+      },
+      body: "Empty refs\n",
+    };
+
+    const parsed = parse(serialize(source));
+    expect(parsed.frontmatter.context_refs).toEqual([]);
+    expect(parsed.frontmatter.lineage_parent).toBeNull();
+  });
+
   it("validates required frontmatter keys", () => {
     expect(() => validate({ frontmatter: { type: "prompt_input" }, body: "" })).toThrow(
       MarkdownDocumentError,
