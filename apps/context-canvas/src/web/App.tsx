@@ -15,6 +15,7 @@ import {
   type XYPosition,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { buildPromptRequestHeaders } from "./api.ts";
 import { ImeTextarea, stopNodeKeyPropagation } from "./ImeTextarea.tsx";
 import { compilePromptContext } from "../shared/compiler.ts";
 import {
@@ -229,7 +230,7 @@ async function streamPrompt(
 ): Promise<void> {
   const response = await fetch("/api/prompt", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: buildPromptRequestHeaders(import.meta.env.VITE_CONTEXT_CANVAS_TOKEN),
     body: JSON.stringify({ document, promptNodeId }),
   });
 

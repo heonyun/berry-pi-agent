@@ -5,7 +5,9 @@
 	"type": "module",
 	"scripts": {
 		"build": "tsc -p tsconfig.json --noEmit && vite build",
+		"build:deps": "tsgo -p ../../packages/tui/tsconfig.build.json && tsgo -p ../../packages/ai/tsconfig.build.json && tsgo -p ../../packages/agent/tsconfig.build.json && npm run build --workspace=@earendil-works/pi-coding-agent",
 		"dev": "node scripts/dev.mjs",
+		"prebuild": "npm run build:deps",
 		"server": "tsx src/server/index.ts",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
 		"test": "vitest run"

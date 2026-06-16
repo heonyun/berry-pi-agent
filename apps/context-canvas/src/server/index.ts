@@ -1,14 +1,23 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
+import { pathToFileURL } from "node:url";
 import path from "node:path";
-import { getModel } from "@earendil-works/pi-ai";
+import { getModel, type KnownProvider } from "@earendil-works/pi-ai";
 import { createAgentSession, SessionManager, type AgentSession } from "@earendil-works/pi-coding-agent";
 import { compilePromptContext, formatPromptForPi } from "../shared/compiler.ts";
 import type { ContextCanvasDocument } from "../shared/domain.ts";
+import {
+  buildCorsHeaders,
+  resolveAgentTools,
+  resolveContextCanvasServerConfig,
+  verifyRequestAccess,
+  type ContextCanvasServerConfig,
+} from "./security.ts";
 
-const PORT = 3001;
 const MAX_REQUEST_BODY_BYTES = 5 * 1024 * 1024;
 const monorepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+const serverConfig = resolveContextCanvasServerConfig(process.env);
 
 type SseEvent =
   | { type: "text_delta"; delta: string }
@@ -30,14 +39,14 @@ async function getSession(): Promise<AgentSession> {
   if (!sessionPromise) {
     sessionPromise = (async () => {
       try {
-        const model = getModel("openai-codex", "gpt-5.4-mini");
+        const model = getModel(serverConfig.provider as KnownProvider, serverConfig.model as never);
         if (!model) {
-          throw new Error("Model openai-codex/gpt-5.4-mini is not available.");
+          throw new Error(`Model ${serverConfig.provider}/${serverConfig.model} is not available.`);
         }
         const { session } = await createAgentSession({
           cwd: monorepoRoot,
           model,
-          tools: ["read", "bash", "edit", "write"],
+          tools: resolveAgentTools(serverConfig),
           sessionManager: SessionManager.inMemory(monorepoRoot),
         });
         return session;
@@ -50,10 +59,20 @@ async function getSession(): Promise<AgentSession> {
   return sessionPromise;
 }
 
-function setCors(res: ServerResponse): void {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+function requestOrigin(req: IncomingMessage): string | undefined {
+  const origin = req.headers.origin;
+  return Array.isArray(origin) ? origin[0] : origin;
+}
+
+function requestToken(req: IncomingMessage): string | undefined {
+  const token = req.headers["x-context-canvas-token"];
+  return Array.isArray(token) ? token[0] : token;
+}
+
+function setCors(res: ServerResponse, origin: string | undefined, config = serverConfig): void {
+  for (const [key, value] of Object.entries(buildCorsHeaders(origin, config))) {
+    res.setHeader(key, value);
+  }
 }
 
 function writeSse(res: ServerResponse, event: SseEvent): void {
@@ -79,7 +98,6 @@ async function handlePrompt(
   body: { document: ContextCanvasDocument; promptNodeId: string },
   res: ServerResponse,
 ): Promise<void> {
-  setCors(res);
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -107,7 +125,7 @@ async function handlePrompt(
         }
       };
 
-      unsubscribe = session.subscribe((event) => {
+      unsubscribe = session.subscribe((event: Parameters<Parameters<AgentSession["subscribe"]>[0]>[0]) => {
         if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
           writeSse(res, { type: "text_delta", delta: event.assistantMessageEvent.delta });
         } else if (event.type === "tool_execution_start") {
@@ -143,39 +161,62 @@ async function handlePrompt(
   }
 }
 
-const server = createServer(async (req, res) => {
-  setCors(res);
+export function createContextCanvasServer(config: ContextCanvasServerConfig = serverConfig) {
+  return createServer(async (req, res) => {
+    const origin = requestOrigin(req);
+    setCors(res, origin, config);
 
-  if (req.method === "OPTIONS") {
-    res.writeHead(204);
-    res.end();
-    return;
-  }
-
-  if (req.method === "GET" && req.url === "/api/health") {
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ok: true, cwd: monorepoRoot }));
-    return;
-  }
-
-  if (req.method === "POST" && req.url === "/api/prompt") {
-    try {
-      const body = await readJsonBody<{ document: ContextCanvasDocument; promptNodeId: string }>(req);
-      await handlePrompt(body, res);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      const statusCode = error instanceof RequestBodyTooLargeError ? 413 : 400;
-      res.writeHead(statusCode, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: message }));
+    const access = verifyRequestAccess(
+      { method: req.method, origin, token: requestToken(req), url: req.url },
+      config,
+    );
+    if (!access.ok) {
+      res.writeHead(access.statusCode, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: access.message }));
+      return;
     }
-    return;
-  }
 
-  res.writeHead(404, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ error: "Not found" }));
-});
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
 
-server.listen(PORT, () => {
-  console.log(`Context Canvas API listening on http://127.0.0.1:${PORT}`);
-  console.log(`Agent cwd: ${monorepoRoot}`);
-});
+    if (req.method === "GET" && req.url === "/api/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/api/prompt") {
+      try {
+        const body = await readJsonBody<{ document: ContextCanvasDocument; promptNodeId: string }>(req);
+        await handlePrompt(body, res);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        const statusCode = error instanceof RequestBodyTooLargeError ? 413 : 400;
+        res.writeHead(statusCode, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: message }));
+      }
+      return;
+    }
+
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Not found" }));
+  });
+}
+
+export function startContextCanvasServer(config: ContextCanvasServerConfig = serverConfig): void {
+  const server = createContextCanvasServer(config);
+  server.listen(config.port, config.bindHost, () => {
+    const address = server.address() as AddressInfo;
+    console.log(`Context Canvas API listening on http://${config.bindHost}:${address.port}`);
+    console.log(`Agent cwd: ${monorepoRoot}`);
+    console.log(`Agent tools: ${resolveAgentTools(config).join(", ")}`);
+    console.log(`Agent model: ${config.provider}/${config.model}`);
+  });
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  startContextCanvasServer();
+}
