@@ -1,6 +1,17 @@
 # GitHub Agent Commands
 
-Triggers for automated GitHub workflows in berry-pi-agent.
+Triggers for automated GitHub workflows in **berry-pi-agent only** (`heonyun/berry-pi-agent`).
+
+## Repository scope (important)
+
+| Repository | Agent workflows | What happens on new issues |
+| --- | --- | --- |
+| `heonyun/berry-pi-agent` | `deepseek-issue-assistant`, `deepseek-pr-review`, `ci-failure-explain` | Trusted author → DeepSeek planning comment; `@deepseek` follow-ups |
+| `earendil-works/pi` (upstream) | **None** for pi-agent | `issue-gate` may **auto-close** with a static template (no DeepSeek, no LLM cost) |
+
+Antigravity, Codex, and other delegators must open pi-agent issues/PRs on **`heonyun/berry-pi-agent`**, not upstream. If an issue lands on the wrong repo, copy or recreate it on berry-pi-agent (example: upstream `#5800` → berry-pi-agent `#6`).
+
+Do not interpret upstream auto-close text as a DeepSeek refusal. It is maintainer gate policy, not an AI review result.
 
 ## For agents (handoff)
 
