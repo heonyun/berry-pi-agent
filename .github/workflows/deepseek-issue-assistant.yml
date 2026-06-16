@@ -1,0 +1,104 @@
+# Planning / idea review on issues via DeepSeek API.
+# Secret: DEEPSEEK_V4 (API key). Variable: DEEPSEEK_V4 (model name).
+
+name: DeepSeek Issue Assistant
+
+on:
+  issues:
+    types:
+      - opened
+      - reopened
+  issue_comment:
+    types:
+      - created
+
+concurrency:
+  group: deepseek-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.route.outputs.should_run }}
+      mode: ${{ steps.route.outputs.mode }}
+      additional_context: ${{ steps.route.outputs.additional_context }}
+    steps:
+      - name: Route event
+        id: route
+        env:
+          EVENT: ${{ github.event_name }}.${{ github.event.action }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
+          ISSUE_ASSOCIATION: ${{ github.event.issue.author_association }}
+          IS_PULL_REQUEST: ${{ github.event.issue.pull_request != null }}
+        run: |
+          set -euo pipefail
+          should_run=false
+          mode=""
+          additional_context=""
+
+          if [[ "${IS_PULL_REQUEST}" == "true" ]]; then
+            echo "should_run=false" >> "${GITHUB_OUTPUT}"
+            echo "mode=skip-pr" >> "${GITHUB_OUTPUT}"
+            echo "additional_context=" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [[ "${EVENT}" == "issues.opened" || "${EVENT}" == "issues.reopened" ]]; then
+            if [[ ! "${ISSUE_ASSOCIATION}" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]]; then
+              echo "should_run=false" >> "${GITHUB_OUTPUT}"
+              echo "mode=skip-untrusted-issue-author" >> "${GITHUB_OUTPUT}"
+              echo "additional_context=" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+            should_run=true
+            mode="plan"
+          elif [[ "${EVENT}" == "issue_comment.created" ]]; then
+            if [[ "${COMMENT_BODY}" == @deepseek* ]] && [[ "${COMMENT_ASSOCIATION}" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]]; then
+              should_run=true
+              mode="invoke"
+              additional_context="${COMMENT_BODY#@deepseek}"
+              additional_context="${additional_context# }"
+            fi
+          fi
+
+          echo "should_run=${should_run}" >> "${GITHUB_OUTPUT}"
+          echo "mode=${mode}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "additional_context<<EOF"
+            echo "${additional_context}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+  assist:
+    needs: dispatch
+    if: needs.dispatch.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Post DeepSeek planning comment
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_V4 }}
+          DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_V4 || 'deepseek-v4-flash' }}
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          MODE: ${{ needs.dispatch.outputs.mode }}
+          ADDITIONAL_CONTEXT: ${{ needs.dispatch.outputs.additional_context }}
+        run: |
+          chmod +x .github/scripts/deepseek-issue-comment.sh
+          .github/scripts/deepseek-issue-comment.sh \
+            "${MODE}" \
+            "${ISSUE_NUMBER}" \
+            "${ISSUE_TITLE}" \
+            "${ISSUE_BODY}" \
+            "${ADDITIONAL_CONTEXT}"

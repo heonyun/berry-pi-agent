@@ -1,0 +1,49 @@
+# Automated PR code review via DeepSeek API.
+# Secret: DEEPSEEK_V4 (API key). Variable: DEEPSEEK_V4 (model, e.g. deepseek-v4-flash).
+
+name: DeepSeek PR Review
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+  issue_comment:
+    types:
+      - created
+
+concurrency:
+  group: deepseek-pr-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    if: |
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@deepseek-review') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: DeepSeek code review
+        uses: hustcer/deepseek-review@v1
+        with:
+          chat-token: ${{ secrets.DEEPSEEK_V4 }}
+          model: ${{ vars.DEEPSEEK_V4 || 'deepseek-v4-flash' }}
+          base-url: https://api.deepseek.com
+          github-token: ${{ github.token }}
+          watch-mention: "@deepseek-review"
+          allowed-associations: "OWNER,MEMBER,COLLABORATOR"
+          sys-prompt: |
+            You are a professional code review assistant for the berry-pi-agent repository
+            (pi-agent: TypeScript AI agent context-canvas workspace plus PowerShell orchestration scripts).
+            Review pull request diffs for correctness, regression risk, security, privacy, workflow reliability,
+            and frontend/product behavior when relevant.
+            List actionable findings with file paths when possible. Prefer concise Korean when the PR description is Korean.
+          user-prompt: Please review the following code changes
