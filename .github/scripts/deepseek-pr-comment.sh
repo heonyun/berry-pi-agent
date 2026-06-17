@@ -31,6 +31,8 @@ Review requirements:
 - Use "fail" for blockers or likely correctness/security regressions, "hold"
   for important unresolved risk or missing verification, and "pass" only when
   there are no actionable findings.
+- Do not list confirmations, praise, or already-correct behavior as findings.
+  Findings must be problems, risks, or verification gaps only.
 - Do not claim you ran tests.
 - In "Commands to rerun", suggest only commands supported by the PR context or
   repository scripts visible in the PR body/diff. If unsure, write "inspect
