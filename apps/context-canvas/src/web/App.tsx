@@ -19,8 +19,10 @@ import type { CanvasCommand } from "../core/commands.ts";
 import { findLineageParentPromptId, roundedPosition } from "../core/mutations.ts";
 import { applyCommand } from "../core/reducer.ts";
 import { compilePromptContext } from "../shared/compiler.ts";
+import { buildNodeBacklinks, formatCompiledPreviewMarkdown } from "../shared/compile-preview.ts";
 import { createInitialDocument, findNode } from "../shared/domain.ts";
 import { canvasNodeTypes } from "./canvas-nodes.tsx";
+import { exportBundle } from "./export-bundle.ts";
 import { streamPrompt } from "./stream-prompt.ts";
 
 function CanvasApp() {
@@ -82,6 +84,22 @@ function CanvasApp() {
     [dispatch],
   );
 
+  const saveBundle = useCallback(async (promptNodeId?: string) => {
+    try {
+      const result = await exportBundle(documentRef.current, promptNodeId);
+      const fileCount = result.pathsWritten.length;
+      const errorCount = result.errors.length;
+      if (errorCount > 0) {
+        setStatus(`Bundle saved (${fileCount} files, ${errorCount} warnings).`);
+        return;
+      }
+      setStatus(`Bundle saved (${fileCount} files).`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`Bundle export failed: ${message}`);
+    }
+  }, []);
+
   const runPrompt = useCallback(
     async (promptNodeId: string, retryAnswerId?: string, promptTextOverride?: string) => {
       setRunningPromptId(promptNodeId);
@@ -112,9 +130,11 @@ function CanvasApp() {
           setAnswerText(answerId!, streamed);
         });
 
+        await saveBundle(promptNodeId);
         setStatus("Answer complete. Next prompt will appear...");
         window.setTimeout(() => {
           dispatch({ type: "ensure_next_prompt", answerId: answerId! });
+          void saveBundle();
         }, 3000);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
@@ -123,7 +143,7 @@ function CanvasApp() {
         setRunningPromptId(null);
       }
     },
-    [dispatch, setAnswerText],
+    [dispatch, saveBundle, setAnswerText],
   );
 
   const onFeedback = useCallback(
@@ -230,6 +250,20 @@ function CanvasApp() {
     }
   }, [document, selectedNode]);
 
+  const compiledPreviewMarkdown = useMemo(() => {
+    if (!compiledPreview) {
+      return null;
+    }
+    return formatCompiledPreviewMarkdown(compiledPreview);
+  }, [compiledPreview]);
+
+  const backlinks = useMemo(() => {
+    if (!selectedNode) {
+      return [];
+    }
+    return buildNodeBacklinks(document, selectedNode.id);
+  }, [document, selectedNode]);
+
   return (
     <div className="app-shell">
       <div className="canvas-panel">
@@ -259,11 +293,34 @@ function CanvasApp() {
         </div>
         <div>
           <h3>Selected Node</h3>
-          <pre>{selectedNode ? JSON.stringify(selectedNode, null, 2) : "None"}</pre>
+          <pre>
+            {selectedNode
+              ? `${selectedNode.kind} · ${selectedNode.id}\n\n${selectedNode.text}`
+              : "None"}
+          </pre>
         </div>
         <div>
           <h3>Compiled Preview</h3>
-          <pre>{compiledPreview ? JSON.stringify(compiledPreview, null, 2) : "Select a prompt node"}</pre>
+          <pre className="markdown-preview">
+            {compiledPreviewMarkdown ?? "Select a prompt node"}
+          </pre>
+        </div>
+        <div>
+          <h3>Backlinks</h3>
+          {backlinks.length === 0 ? (
+            <p className="muted-line">No backlinks for this node.</p>
+          ) : (
+            <ul className="backlink-list">
+              {backlinks.map((backlink) => (
+                <li key={`${backlink.reason}-${backlink.nodeId}`}>
+                  <button type="button" className="backlink-button" onClick={() => setSelectedNodeId(backlink.nodeId)}>
+                    {backlink.nodeId}
+                  </button>
+                  <span className="backlink-reason">{backlink.reason}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </aside>
     </div>

@@ -74,4 +74,22 @@ describe("context canvas server security", () => {
       ),
     ).toEqual({ ok: true });
   });
+
+  it("blocks bundle export requests from non-allowlisted origins", () => {
+    const config = resolveContextCanvasServerConfig({
+      CONTEXT_CANVAS_TOKEN: "dev-secret",
+    });
+
+    expect(
+      verifyRequestAccess(
+        {
+          method: "POST",
+          url: "/api/bundle/export",
+          origin: "https://evil.example",
+          token: "dev-secret",
+        },
+        config,
+      ),
+    ).toEqual({ ok: false, statusCode: 403, message: "Origin is not allowed." });
+  });
 });

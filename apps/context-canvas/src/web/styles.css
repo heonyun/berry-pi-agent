@@ -75,6 +75,42 @@ body,
   line-height: 1.45;
 }
 
+.side-panel .muted-line {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.side-panel .backlink-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.side-panel .backlink-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.side-panel .backlink-button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #0b0d12;
+  color: var(--accent);
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.side-panel .backlink-reason {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .node-card {
   position: relative;
   width: 320px;
