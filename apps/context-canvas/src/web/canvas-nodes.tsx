@@ -10,16 +10,41 @@ function stanceClass(stance: StanceBand): string {
 }
 
 function shouldIgnoreNodeGesture(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && Boolean(target.closest(".nodrag"));
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  return Boolean(
+    target.closest(".nodrag, .branch-dot, .react-flow__handle, .delete-node-button"),
+  );
 }
 
 function BranchDots() {
   return (
     <>
-      <Handle className="branch-dot branch-dot-top" id="branch-top" type="source" position={Position.Top} />
-      <Handle className="branch-dot branch-dot-right" id="branch-right" type="source" position={Position.Right} />
-      <Handle className="branch-dot branch-dot-bottom" id="branch-bottom" type="source" position={Position.Bottom} />
-      <Handle className="branch-dot branch-dot-left" id="branch-left" type="source" position={Position.Left} />
+      <Handle
+        className="branch-dot branch-dot-top nodrag nopan"
+        id="branch-top"
+        type="source"
+        position={Position.Top}
+      />
+      <Handle
+        className="branch-dot branch-dot-right nodrag nopan"
+        id="branch-right"
+        type="source"
+        position={Position.Right}
+      />
+      <Handle
+        className="branch-dot branch-dot-bottom nodrag nopan"
+        id="branch-bottom"
+        type="source"
+        position={Position.Bottom}
+      />
+      <Handle
+        className="branch-dot branch-dot-left nodrag nopan"
+        id="branch-left"
+        type="source"
+        position={Position.Left}
+      />
     </>
   );
 }
