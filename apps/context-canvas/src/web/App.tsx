@@ -93,6 +93,9 @@ function CanvasApp() {
       ) {
         markNodeAsNew(result.meta.promptId);
       }
+      if (command.type === "ensure_next_prompt") {
+        fitViewOnLayoutRef.current = true;
+      }
     }
     if (result.meta.createdAnswer && result.meta.answerId) {
       markNodeAsNew(result.meta.answerId);
@@ -171,10 +174,7 @@ function CanvasApp() {
         await saveBundle(promptNodeId);
         setStatus("Answer complete. Next prompt will appear...");
         nextPromptTimeoutRef.current = window.setTimeout(() => {
-          const next = dispatch({ type: "ensure_next_prompt", answerId: answerId! });
-          if (next.meta.promptId) {
-            fitViewOnLayoutRef.current = true;
-          }
+          dispatch({ type: "ensure_next_prompt", answerId: answerId! });
           void saveBundle();
         }, 3000);
       } catch (error: unknown) {
