@@ -8,6 +8,7 @@ import { createAgentSession, SessionManager, type AgentSession } from "@earendil
 import { compilePromptContext, formatPromptForPi, type CompiledPromptContext } from "../shared/compiler.ts";
 import type { ContextCanvasDocument } from "../shared/domain.ts";
 import { projectDocumentToBundle } from "../storage/markdown/project.ts";
+import { assertSafeId, resolveWithinBundle } from "../storage/markdown/paths.ts";
 import {
   buildCorsHeaders,
   resolveAgentTools,
@@ -106,7 +107,8 @@ export function handleBundleExport(
   body: { document: ContextCanvasDocument; promptNodeId?: string },
   config: ContextCanvasServerConfig,
 ): { bundleRoot: string; pathsWritten: string[]; errors: Array<{ path: string; message: string }> } {
-  const bundleRoot = path.join(resolveBundleRootBase(config), body.document.canvas.id);
+  assertSafeId(body.document.canvas.id, "canvasId");
+  const bundleRoot = resolveWithinBundle(resolveBundleRootBase(config), body.document.canvas.id);
   const compiledByPromptId = new Map<string, CompiledPromptContext>();
   if (body.promptNodeId) {
     compiledByPromptId.set(body.promptNodeId, compilePromptContext(body.document, body.promptNodeId));

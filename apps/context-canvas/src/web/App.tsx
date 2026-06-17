@@ -31,6 +31,7 @@ function CanvasApp() {
   const documentRef = useRef(document);
   const promptDraftsRef = useRef(new Map<string, string>());
   const fitViewOnLayoutRef = useRef(true);
+  const nextPromptTimeoutRef = useRef<number | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string>("prompt-1");
   const [runningPromptId, setRunningPromptId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("Ready");
@@ -40,6 +41,14 @@ function CanvasApp() {
   useEffect(() => {
     documentRef.current = document;
   }, [document]);
+
+  useEffect(() => {
+    return () => {
+      if (nextPromptTimeoutRef.current !== null) {
+        window.clearTimeout(nextPromptTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!fitViewOnLayoutRef.current) {
@@ -132,7 +141,7 @@ function CanvasApp() {
 
         await saveBundle(promptNodeId);
         setStatus("Answer complete. Next prompt will appear...");
-        window.setTimeout(() => {
+        nextPromptTimeoutRef.current = window.setTimeout(() => {
           dispatch({ type: "ensure_next_prompt", answerId: answerId! });
           void saveBundle();
         }, 3000);

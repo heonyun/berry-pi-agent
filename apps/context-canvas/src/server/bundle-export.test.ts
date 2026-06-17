@@ -25,6 +25,24 @@ describe("handleBundleExport", () => {
       rmSync(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it("rejects canvas ids that escape the bundle root", () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "context-canvas-bundle-"));
+    const config = resolveContextCanvasServerConfig({
+      CONTEXT_CANVAS_ALLOW_UNAUTHENTICATED: "1",
+      CONTEXT_CANVAS_BUNDLE_ROOT: tempRoot,
+    });
+    const document = {
+      ...createInitialDocument(),
+      canvas: { ...createInitialDocument().canvas, id: "../escape" },
+    };
+
+    try {
+      expect(() => handleBundleExport({ document }, config)).toThrow(/Invalid canvasId/);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("POST /api/bundle/export", () => {

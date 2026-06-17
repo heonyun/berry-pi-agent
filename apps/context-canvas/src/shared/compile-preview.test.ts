@@ -89,4 +89,40 @@ describe("buildNodeBacklinks", () => {
       { nodeId: "prompt-2", reason: "uses_as_context" },
     ]);
   });
+
+  it("lists downstream lineage prompts for an answer node", () => {
+    const document = {
+      ...createInitialDocument(),
+      nodes: [
+        {
+          id: "answer-1",
+          kind: "ai_answer" as const,
+          groupId: "group-1",
+          text: "A",
+          position: { x: 0, y: -240 },
+          metadata: { stance: "neutral" as const },
+        },
+        {
+          id: "prompt-2",
+          kind: "prompt_input" as const,
+          groupId: "group-1",
+          text: "B",
+          position: { x: 0, y: -480 },
+          metadata: { stance: "neutral" as const },
+        },
+      ],
+      edges: [
+        {
+          id: "edge-lineage",
+          source: "answer-1",
+          target: "prompt-2",
+          meaning: "lineage" as const,
+        },
+      ],
+    };
+
+    expect(buildNodeBacklinks(document, "answer-1")).toEqual([
+      { nodeId: "prompt-2", reason: "lineage_child" },
+    ]);
+  });
 });

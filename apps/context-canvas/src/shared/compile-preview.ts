@@ -9,7 +9,7 @@ const STANCE_LABELS = {
 
 export interface NodeBacklink {
   nodeId: string;
-  reason: "uses_as_context" | "lineage_parent";
+  reason: "uses_as_context" | "lineage_child";
 }
 
 export function formatCompiledPreviewMarkdown(compiled: CompiledPromptContext): string {
@@ -49,11 +49,11 @@ export function buildNodeBacklinks(document: ContextCanvasDocument, nodeId: stri
         backlinks.push({ nodeId: edge.target, reason: "uses_as_context" });
       }
     }
-    if (edge.target === nodeId && edge.meaning === "lineage") {
-      const key = `lineage_parent:${edge.source}`;
+    if (edge.source === nodeId && edge.meaning === "lineage") {
+      const key = `lineage_child:${edge.target}`;
       if (!seen.has(key)) {
         seen.add(key);
-        backlinks.push({ nodeId: edge.source, reason: "lineage_parent" });
+        backlinks.push({ nodeId: edge.target, reason: "lineage_child" });
       }
     }
   }
