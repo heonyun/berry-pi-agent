@@ -5,8 +5,10 @@ import { pathToFileURL } from "node:url";
 import path from "node:path";
 import { getModel, type KnownProvider } from "@earendil-works/pi-ai";
 import { createAgentSession, SessionManager, type AgentSession } from "@earendil-works/pi-coding-agent";
-import { compilePromptContext, formatPromptForPi } from "../shared/compiler.ts";
+import { compilePromptContext, formatPromptForPi, type CompiledPromptContext } from "../shared/compiler.ts";
 import type { ContextCanvasDocument } from "../shared/domain.ts";
+import { projectDocumentToBundle } from "../storage/markdown/project.ts";
+import { assertSafeId, resolveWithinBundle } from "../storage/markdown/paths.ts";
 import {
   buildCorsHeaders,
   resolveAgentTools,
@@ -18,6 +20,13 @@ import {
 const MAX_REQUEST_BODY_BYTES = 5 * 1024 * 1024;
 const monorepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const serverConfig = resolveContextCanvasServerConfig(process.env);
+
+function resolveBundleRootBase(config: ContextCanvasServerConfig): string {
+  if (config.bundleRootBase) {
+    return path.resolve(config.bundleRootBase);
+  }
+  return path.join(monorepoRoot, ".context-bundles");
+}
 
 type SseEvent =
   | { type: "text_delta"; delta: string }
@@ -92,6 +101,27 @@ async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   }
   const raw = Buffer.concat(chunks).toString("utf8");
   return JSON.parse(raw) as T;
+}
+
+export function handleBundleExport(
+  body: { document: ContextCanvasDocument; promptNodeId?: string },
+  config: ContextCanvasServerConfig,
+): { bundleRoot: string; pathsWritten: string[]; errors: Array<{ path: string; message: string }> } {
+  assertSafeId(body.document.canvas.id, "canvasId");
+  const bundleRoot = resolveWithinBundle(resolveBundleRootBase(config), body.document.canvas.id);
+  const compiledByPromptId = new Map<string, CompiledPromptContext>();
+  if (body.promptNodeId) {
+    compiledByPromptId.set(body.promptNodeId, compilePromptContext(body.document, body.promptNodeId));
+  }
+  const result = projectDocumentToBundle(body.document, bundleRoot, {
+    includeCompiled: compiledByPromptId.size > 0,
+    compiledByPromptId,
+  });
+  return {
+    bundleRoot,
+    pathsWritten: result.pathsWritten,
+    errors: result.errors,
+  };
 }
 
 async function handlePrompt(
@@ -192,6 +222,21 @@ export function createContextCanvasServer(config: ContextCanvasServerConfig = se
       try {
         const body = await readJsonBody<{ document: ContextCanvasDocument; promptNodeId: string }>(req);
         await handlePrompt(body, res);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        const statusCode = error instanceof RequestBodyTooLargeError ? 413 : 400;
+        res.writeHead(statusCode, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: message }));
+      }
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/api/bundle/export") {
+      try {
+        const body = await readJsonBody<{ document: ContextCanvasDocument; promptNodeId?: string }>(req);
+        const result = handleBundleExport(body, config);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         const statusCode = error instanceof RequestBodyTooLargeError ? 413 : 400;

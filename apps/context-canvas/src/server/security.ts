@@ -1,6 +1,7 @@
 export type ContextCanvasServerConfig = {
   allowedOrigins: string[];
   bindHost: string;
+  bundleRootBase?: string;
   enableMutationTools: boolean;
   model: string;
   port: number;
@@ -8,6 +9,8 @@ export type ContextCanvasServerConfig = {
   requireToken: boolean;
   token?: string;
 };
+
+const PROTECTED_API_PATHS = new Set(["/api/prompt", "/api/bundle/export"]);
 
 type Env = Partial<Record<string, string>>;
 
@@ -39,6 +42,7 @@ export function resolveContextCanvasServerConfig(env: Env): ContextCanvasServerC
       ? splitCsv(env.CONTEXT_CANVAS_ALLOWED_ORIGINS)
       : DEFAULT_ALLOWED_ORIGINS,
     bindHost: env.CONTEXT_CANVAS_BIND_HOST?.trim() || "127.0.0.1",
+    bundleRootBase: env.CONTEXT_CANVAS_BUNDLE_ROOT?.trim() || undefined,
     enableMutationTools: env.CONTEXT_CANVAS_ENABLE_MUTATION_TOOLS === "1",
     model: env.CONTEXT_CANVAS_MODEL?.trim() || "gpt-5.4-mini",
     port: Number(env.CONTEXT_CANVAS_PORT || 3001),
@@ -75,7 +79,7 @@ export function verifyRequestAccess(
   request: RequestAccessInput,
   config: ContextCanvasServerConfig,
 ): RequestAccessResult {
-  if (request.url !== "/api/prompt" || request.method === "OPTIONS") {
+  if (request.method === "OPTIONS" || !request.url || !PROTECTED_API_PATHS.has(request.url)) {
     return { ok: true };
   }
   if (!isAllowedOrigin(request.origin, config)) {
