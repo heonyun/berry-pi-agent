@@ -54,6 +54,8 @@ export interface ContextEdge {
   source: string;
   target: string;
   meaning: EdgeMeaning;
+  sourceHandle?: string;
+  targetHandle?: string;
 }
 
 export interface ContextGroup {

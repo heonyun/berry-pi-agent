@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import {
   Background,
   Controls,
@@ -7,6 +7,8 @@ import {
   ReactFlowProvider,
   useReactFlow,
   type Connection,
+  type FinalConnectionState,
+  type OnConnectEnd,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
@@ -33,6 +35,8 @@ function CanvasApp() {
   const fitViewOnLayoutRef = useRef(true);
   const nextPromptTimeoutRef = useRef<number | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string>("prompt-1");
+  const [deleteArmedNodeId, setDeleteArmedNodeId] = useState<string | null>(null);
+  const [newNodeIds, setNewNodeIds] = useState<ReadonlySet<string>>(() => new Set());
   const [runningPromptId, setRunningPromptId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("Ready");
   const nodeCount = document.nodes.length;
@@ -58,6 +62,20 @@ function CanvasApp() {
     void fitView({ padding: 0.2, duration: 180 });
   }, [edgeCount, fitView, nodeCount]);
 
+  const markNodeAsNew = useCallback((nodeId: string) => {
+    setNewNodeIds((current) => new Set([...current, nodeId]));
+    window.setTimeout(() => {
+      setNewNodeIds((current) => {
+        if (!current.has(nodeId)) {
+          return current;
+        }
+        const next = new Set(current);
+        next.delete(nodeId);
+        return next;
+      });
+    }, 220);
+  }, []);
+
   const dispatch = useCallback((command: CanvasCommand) => {
     const result = applyCommand(documentRef.current, command);
     documentRef.current = result.document;
@@ -67,12 +85,23 @@ function CanvasApp() {
     }
     if (result.meta.promptId) {
       setSelectedNodeId(result.meta.promptId);
+      setDeleteArmedNodeId(null);
+      if (
+        command.type === "create_prompt_at" ||
+        command.type === "create_prompt_from_source" ||
+        command.type === "ensure_next_prompt"
+      ) {
+        markNodeAsNew(result.meta.promptId);
+      }
+    }
+    if (result.meta.createdAnswer && result.meta.answerId) {
+      markNodeAsNew(result.meta.answerId);
     }
     if (result.meta.statusMessage) {
       setStatus(result.meta.statusMessage);
     }
     return result;
-  }, []);
+  }, [markNodeAsNew]);
 
   const updatePromptDraft = useCallback((nodeId: string, text: string) => {
     promptDraftsRef.current.set(nodeId, text);
@@ -185,15 +214,28 @@ function CanvasApp() {
     [dispatch],
   );
 
-  const onBranch = useCallback(
-    (answerId: string, direction: "critical" | "constructive") => {
-      dispatch({ type: "branch_from_answer", answerId, direction });
+  const armDelete = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setDeleteArmedNodeId(nodeId);
+  }, []);
+
+  const deleteNode = useCallback(
+    (nodeId: string) => {
+      dispatch({ type: "delete_node", nodeId });
+      setDeleteArmedNodeId(null);
+      setSelectedNodeId((current) => {
+        if (current !== nodeId) {
+          return current;
+        }
+        const nextNode = documentRef.current.nodes.find((node) => node.id !== nodeId);
+        return nextNode?.id ?? "";
+      });
     },
     [dispatch],
   );
 
   const onPaneClick = useCallback(
-    (event: MouseEvent) => {
+    (event: ReactMouseEvent) => {
       if (event.detail !== 2) {
         return;
       }
@@ -214,6 +256,31 @@ function CanvasApp() {
     [dispatch],
   );
 
+  const eventClientPoint = useCallback((event: MouseEvent | TouchEvent) => {
+    if ("changedTouches" in event && event.changedTouches.length > 0) {
+      const touch = event.changedTouches[0]!;
+      return { x: touch.clientX, y: touch.clientY };
+    }
+    const mouseEvent = event as MouseEvent;
+    return { x: mouseEvent.clientX, y: mouseEvent.clientY };
+  }, []);
+
+  const onConnectEnd: OnConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+      if (!connectionState.fromNode || connectionState.toNode) {
+        return;
+      }
+      const position = screenToFlowPosition(eventClientPoint(event));
+      dispatch({
+        type: "create_prompt_from_source",
+        sourceNodeId: connectionState.fromNode.id,
+        position,
+        sourceHandle: connectionState.fromHandle?.id ?? undefined,
+      });
+    },
+    [dispatch, eventClientPoint, screenToFlowPosition],
+  );
+
   const runPromptById = useCallback(
     (promptNodeId: string, promptText?: string) => {
       void runPrompt(promptNodeId, undefined, promptText);
@@ -230,12 +297,27 @@ function CanvasApp() {
           onDraftChange: updatePromptDraft,
           onTextChange: updatePromptText,
           onRun: runPromptById,
+          onArmDelete: armDelete,
+          onDelete: deleteNode,
           onFeedback,
-          onBranch,
           onRetry,
         },
+        deleteArmedNodeId,
+        newNodeIds,
       }),
-    [document, onBranch, onFeedback, onRetry, runPromptById, runningPromptId, updatePromptDraft, updatePromptText],
+    [
+      armDelete,
+      deleteArmedNodeId,
+      deleteNode,
+      document,
+      newNodeIds,
+      onFeedback,
+      onRetry,
+      runPromptById,
+      runningPromptId,
+      updatePromptDraft,
+      updatePromptText,
+    ],
   );
 
   const flowEdges = useMemo(() => toReactFlowEdges(document), [document]);
@@ -284,11 +366,25 @@ function CanvasApp() {
           panOnScroll={false}
           zoomOnScroll
           zoomOnDoubleClick={false}
-          onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-          onNodeDrag={(_, node) => updateDraggedNodePosition(node as CanvasFlowNode)}
+          onNodeClick={(_, node) => {
+            setSelectedNodeId(node.id);
+            setDeleteArmedNodeId(null);
+          }}
+          onNodeDoubleClick={(event, node) => {
+            event.stopPropagation();
+            armDelete(node.id);
+          }}
+          onNodeContextMenu={(event, node) => {
+            event.preventDefault();
+            armDelete(node.id);
+          }}
           onNodeDragStop={(_, node) => updateDraggedNodePosition(node as CanvasFlowNode)}
-          onPaneClick={onPaneClick}
+          onPaneClick={(event) => {
+            setDeleteArmedNodeId(null);
+            onPaneClick(event);
+          }}
           onConnect={onConnect}
+          onConnectEnd={onConnectEnd}
         >
           <Background gap={18} color="#2a3140" />
           <MiniMap pannable zoomable />

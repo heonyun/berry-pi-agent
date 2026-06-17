@@ -7,8 +7,8 @@ import {
 } from "../shared/domain.ts";
 import type { ApplyResult, CanvasCommand } from "./commands.ts";
 import {
-  branchFromAnswer,
   createPromptAt,
+  createPromptFromSource,
   ensureAnswerForPrompt,
   ensureNextPrompt,
 } from "./mutations.ts";
@@ -39,6 +39,18 @@ export function applyCommand(document: ContextCanvasDocument, command: CanvasCom
         meta: {},
       };
 
+    case "delete_node":
+      return {
+        document: {
+          ...document,
+          nodes: document.nodes.filter((node) => node.id !== command.nodeId),
+          edges: document.edges.filter(
+            (edge) => edge.source !== command.nodeId && edge.target !== command.nodeId,
+          ),
+        },
+        meta: {},
+      };
+
     case "set_feedback":
       return {
         document: updateNode(document, command.nodeId, (node) =>
@@ -47,22 +59,21 @@ export function applyCommand(document: ContextCanvasDocument, command: CanvasCom
         meta: {},
       };
 
-    case "branch_from_answer": {
-      const created = branchFromAnswer(document, command.answerId, command.direction);
+    case "create_prompt_at": {
+      const created = createPromptAt(document, command.position, command.parentAnswerId);
       return {
         document: created.document,
-        meta: {
-          promptId: created.promptId,
-          statusMessage:
-            command.direction === "critical"
-              ? "Critical follow-up prompt created"
-              : "Constructive follow-up prompt created",
-        },
+        meta: { promptId: created.promptId, statusMessage: "New prompt created" },
       };
     }
 
-    case "create_prompt_at": {
-      const created = createPromptAt(document, command.position, command.parentAnswerId);
+    case "create_prompt_from_source": {
+      const created = createPromptFromSource(
+        document,
+        command.sourceNodeId,
+        command.position,
+        command.sourceHandle,
+      );
       return {
         document: created.document,
         meta: { promptId: created.promptId, statusMessage: "New prompt created" },
@@ -84,6 +95,8 @@ export function applyCommand(document: ContextCanvasDocument, command: CanvasCom
         source: command.source,
         target: command.target,
         meaning: "context_reference",
+        sourceHandle: command.sourceHandle,
+        targetHandle: command.targetHandle,
       };
       return {
         document: { ...document, edges: [...document.edges, edge] },
