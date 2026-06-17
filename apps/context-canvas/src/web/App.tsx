@@ -171,7 +171,10 @@ function CanvasApp() {
         await saveBundle(promptNodeId);
         setStatus("Answer complete. Next prompt will appear...");
         nextPromptTimeoutRef.current = window.setTimeout(() => {
-          dispatch({ type: "ensure_next_prompt", answerId: answerId! });
+          const next = dispatch({ type: "ensure_next_prompt", answerId: answerId! });
+          if (next.meta.promptId) {
+            fitViewOnLayoutRef.current = true;
+          }
           void saveBundle();
         }, 3000);
       } catch (error: unknown) {

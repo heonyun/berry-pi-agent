@@ -14,7 +14,9 @@ function shouldIgnoreNodeGesture(target: EventTarget | null): boolean {
     return false;
   }
   return Boolean(
-    target.closest(".nodrag, .branch-dot, .react-flow__handle, .delete-node-button"),
+    target.closest(
+      ".nodrag, .branch-dot, .react-flow__handle, .delete-node-button, .node-drag-handle",
+    ),
   );
 }
 
@@ -167,21 +169,22 @@ export const PromptInputNode = memo(function PromptInputNode({
   );
 
   return (
-    <div
-      className={`node-card prompt ${dragging ? "dragging" : ""} ${selected ? "selected" : ""} ${data.isNew ? "is-new" : ""}`}
-      onPointerDown={handlePointerDown}
-      onPointerMove={clearTimer}
-      onPointerUp={clearTimer}
-      onPointerCancel={clearTimer}
-      onPointerLeave={clearTimer}
-    >
+    <div className={`node-card prompt ${dragging ? "dragging" : ""} ${selected ? "selected" : ""} ${data.isNew ? "is-new" : ""}`}>
       <Handle type="target" position={Position.Bottom} />
       <BranchDots />
       <DeleteButton nodeId={nodeId} visible={deleteArmed} onDelete={onDelete} />
-      <header>
+      <header className="node-drag-handle">
         <span>Prompt</span>
         <span className={stanceClass(stance)}>{stance}</span>
       </header>
+      <div
+        className="node-body"
+        onPointerDown={handlePointerDown}
+        onPointerMove={clearTimer}
+        onPointerUp={clearTimer}
+        onPointerCancel={clearTimer}
+        onPointerLeave={clearTimer}
+      >
       <ImeTextarea
         className="nodrag nopan nowheel"
         value={text}
@@ -203,6 +206,7 @@ export const PromptInputNode = memo(function PromptInputNode({
           {running ? "Running..." : "Run"}
         </button>
       </div>
+      </div>
     </div>
   );
 });
@@ -214,21 +218,22 @@ export const AIAnswerNode = memo(function AIAnswerNode({
 }: NodeProps<Node<AnswerNodeData>>) {
   const { handlePointerDown, clearTimer } = useLongPressDeleteArm(data.nodeId, data.onArmDelete);
   return (
-    <div
-      className={`node-card answer ${dragging ? "dragging" : ""} ${selected ? "selected" : ""} ${data.isNew ? "is-new" : ""}`}
-      onPointerDown={handlePointerDown}
-      onPointerMove={clearTimer}
-      onPointerUp={clearTimer}
-      onPointerCancel={clearTimer}
-      onPointerLeave={clearTimer}
-    >
+    <div className={`node-card answer ${dragging ? "dragging" : ""} ${selected ? "selected" : ""} ${data.isNew ? "is-new" : ""}`}>
       <Handle type="target" position={Position.Bottom} />
       <BranchDots />
       <DeleteButton nodeId={data.nodeId} visible={data.deleteArmed} onDelete={data.onDelete} />
-      <header>
+      <header className="node-drag-handle">
         <span>AI Answer</span>
         <span className={stanceClass(data.stance)}>{data.stance}</span>
       </header>
+      <div
+        className="node-body"
+        onPointerDown={handlePointerDown}
+        onPointerMove={clearTimer}
+        onPointerUp={clearTimer}
+        onPointerCancel={clearTimer}
+        onPointerLeave={clearTimer}
+      >
       <div className="answer-text">
         {data.text || (data.running ? <span className="streaming-dot" aria-label="Streaming answer" /> : "No answer yet.")}
       </div>
@@ -255,6 +260,7 @@ export const AIAnswerNode = memo(function AIAnswerNode({
         >
           Regenerate answer (v{data.versionCount + 1})
         </button>
+      </div>
       </div>
     </div>
   );

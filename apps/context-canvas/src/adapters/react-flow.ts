@@ -60,6 +60,7 @@ export function toReactFlowNodes(input: ReactFlowAdapterInput): CanvasFlowNode[]
         id: node.id,
         type: "promptInput",
         position: node.position,
+        dragHandle: ".node-drag-handle",
         data: {
           nodeId: node.id,
           text: node.text,
@@ -80,6 +81,7 @@ export function toReactFlowNodes(input: ReactFlowAdapterInput): CanvasFlowNode[]
       id: node.id,
       type: "aiAnswer",
       position: node.position,
+      dragHandle: ".node-drag-handle",
       data: {
         nodeId: node.id,
         text: node.text,
