@@ -77,7 +77,7 @@ function useLongPressDeleteArm(nodeId: string, onArmDelete: (nodeId: string) => 
     [clearTimer, nodeId, onArmDelete],
   );
 
-  useEffect(() => clearTimer, [clearTimer]);
+  useEffect(() => () => clearTimer(), [clearTimer]);
 
   return { handlePointerDown, clearTimer };
 }

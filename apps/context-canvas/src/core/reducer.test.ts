@@ -66,6 +66,8 @@ describe("applyCommand", () => {
       type: "connect_context_reference",
       source: "prompt-1",
       target: document.nodes[1]!.id,
+      sourceHandle: "branch-right",
+      targetHandle: "target-bottom",
     });
     const second = applyCommand(first.document, {
       type: "connect_context_reference",
@@ -74,6 +76,10 @@ describe("applyCommand", () => {
     });
 
     expect(first.document.edges.filter((edge) => edge.meaning === "context_reference")).toHaveLength(1);
+    expect(first.document.edges[0]).toMatchObject({
+      sourceHandle: "branch-right",
+      targetHandle: "target-bottom",
+    });
     expect(second.document.edges.filter((edge) => edge.meaning === "context_reference")).toHaveLength(1);
   });
 });
