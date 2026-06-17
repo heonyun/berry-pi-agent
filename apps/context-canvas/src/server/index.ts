@@ -120,7 +120,10 @@ export function handleBundleExport(
   return {
     bundleRoot,
     pathsWritten: result.pathsWritten,
-    errors: result.errors,
+    errors: result.errors.map((error) => ({
+      path: error.path ?? "",
+      message: error.message,
+    })),
   };
 }
 

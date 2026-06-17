@@ -9,7 +9,6 @@ import {
   type PromptInputNode,
   type Vec2,
 } from "../shared/domain.ts";
-import type { BranchDirection } from "./commands.ts";
 
 export function nextId(prefix: string): string {
   const id =
@@ -165,21 +164,38 @@ export function createPromptAt(
   return { document: { ...document, nodes, edges }, promptId };
 }
 
-export function branchFromAnswer(
+export function createPromptFromSource(
   document: ContextCanvasDocument,
-  answerId: string,
-  direction: BranchDirection,
+  sourceNodeId: string,
+  position: Vec2,
+  sourceHandle?: string,
 ): { document: ContextCanvasDocument; promptId: string } {
-  const answer = findNode(document, answerId);
-  if (answer.kind !== "ai_answer") {
-    throw new Error("Branch source is not an answer node.");
-  }
-  const xOffset = direction === "critical" ? -360 : 360;
-  return createPromptAt(
-    document,
-    { x: answer.position.x + xOffset, y: answer.position.y },
-    answerId,
-  );
+  const source = findNode(document, sourceNodeId);
+  const promptId = nextId("prompt");
+  const prompt: PromptInputNode = {
+    id: promptId,
+    kind: "prompt_input",
+    groupId: source.groupId,
+    text: "",
+    position: roundedPosition(position),
+    metadata: { stance: "neutral" },
+  };
+  const lineage: ContextEdge = {
+    id: `edge-${source.id}-${promptId}`,
+    source: source.id,
+    target: promptId,
+    meaning: "lineage",
+    sourceHandle,
+  };
+
+  return {
+    document: {
+      ...document,
+      nodes: [...document.nodes, prompt],
+      edges: [...document.edges, lineage],
+    },
+    promptId,
+  };
 }
 
 export function lineageParent(

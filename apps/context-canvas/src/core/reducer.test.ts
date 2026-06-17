@@ -16,22 +16,41 @@ describe("applyCommand", () => {
     expect(result.meta.statusMessage).toBe("New prompt created");
   });
 
-  it("branches a constructive follow-up prompt", () => {
-    let document = createInitialDocument();
-    const prepared = applyCommand(document, { type: "ensure_answer_for_prompt", promptId: "prompt-1" });
-    document = prepared.document;
-    const answerId = prepared.meta.answerId!;
-
-    const branched = applyCommand(document, {
-      type: "branch_from_answer",
-      answerId,
-      direction: "constructive",
+  it("creates a prompt from any source node with a lineage edge", () => {
+    const initial = createInitialDocument();
+    const created = applyCommand(initial, {
+      type: "create_prompt_from_source",
+      sourceNodeId: "prompt-1",
+      position: { x: 240, y: 120 },
     });
 
-    expect(branched.document.nodes).toHaveLength(3);
-    expect(branched.meta.promptId).toBeDefined();
-    const prompt = branched.document.nodes.find((node) => node.id === branched.meta.promptId);
-    expect(prompt?.position.x).toBeGreaterThan(0);
+    expect(created.document.nodes).toHaveLength(2);
+    expect(created.meta.promptId).toBeDefined();
+    expect(created.document.edges).toEqual([
+      expect.objectContaining({
+        source: "prompt-1",
+        target: created.meta.promptId,
+        meaning: "lineage",
+      }),
+    ]);
+  });
+
+  it("deletes a node and its attached edges", () => {
+    let document = createInitialDocument();
+    const created = applyCommand(document, {
+      type: "create_prompt_from_source",
+      sourceNodeId: "prompt-1",
+      position: { x: 240, y: 120 },
+    });
+    document = created.document;
+
+    const deleted = applyCommand(document, {
+      type: "delete_node",
+      nodeId: created.meta.promptId!,
+    });
+
+    expect(deleted.document.nodes.map((node) => node.id)).toEqual(["prompt-1"]);
+    expect(deleted.document.edges).toHaveLength(0);
   });
 
   it("connects context references without duplicates", () => {
