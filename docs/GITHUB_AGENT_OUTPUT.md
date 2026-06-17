@@ -48,6 +48,7 @@ The HTML comment marker is used for loop prevention and workflow identification.
 Its useful output is a pre-implementation review:
 
 - implementation readiness: `Ready now`, `Needs design decision`, `Needs prototype`, or `Too ambiguous`,
+- P0/P1/P2/P3 severity for actionable findings (not high/medium/low),
 - file/function areas likely affected,
 - incorrect assumptions or missing design decisions,
 - event-flow, state-management, workflow, or testing risks,

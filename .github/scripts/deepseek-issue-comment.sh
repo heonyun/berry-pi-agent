@@ -31,8 +31,14 @@ Review requirements this way:
   from the issue text alone, say what must be inspected before implementation.
 - Prefer "hold" when important implementation choices are still unresolved,
   when a prototype is needed, or when the issue contains assumptions that may
-  be wrong.
-- Use "pass" only when there are no open design or implementation risks.
+  be wrong. Do not default to "Needs design decision" when the issue already
+  names a concrete root cause, affected files, and a smallest safe fix; in that
+  case recommend implementing the smallest fix first and list only genuine
+  open product choices.
+- Use P0/P1/P2/P3 severity labels for actionable findings (same scale as PR
+  review). Do not use high/medium/low instead.
+- When the issue cites specific files, functions, or commands, reuse those
+  exact names. Do not write "file unknown" if the issue already names the path.
 - Do not claim you ran tests or inspected files unless the issue text includes
   that evidence. You only have the issue context provided in this prompt.
 - Use commands that match the repository scripts/package manager shown in the
@@ -41,13 +47,15 @@ Review requirements this way:
 Include these points inside the required sections:
 - In Summary: add "Implementation readiness: Ready now | Needs design decision
   | Needs prototype | Too ambiguous".
-- In Findings: for each important finding include severity, affected area
-  or likely file/function, why it matters, concrete recommendation, and needed
-  verification.
+- In Findings: for each important finding include P0/P1/P2/P3 severity,
+  affected area or likely file/function named in the issue, why it matters,
+  concrete recommendation, and needed verification.
+- Do not list confirmations or praise as findings.
 - In Suggested next steps: order the smallest safe patch/prototype first.
-- In Commands to rerun: use concrete commands only when supported by the issue
-  context; otherwise write "inspect package.json for the exact workspace
-  command".
+- In Commands to rerun: prefer exact workspace commands from the issue body
+  (for example `npm run test --workspace=@berry-pi/context-canvas`). If unsure,
+  write "inspect package.json for the exact workspace command" instead of
+  inventing jest/vitest flags such as `--testPathPattern`.
 EOF
 )"
 

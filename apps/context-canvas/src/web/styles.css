@@ -164,6 +164,15 @@ body,
   color: var(--muted);
 }
 
+.node-drag-handle {
+  cursor: grab;
+  user-select: none;
+}
+
+.node-card.dragging .node-drag-handle {
+  cursor: grabbing;
+}
+
 .node-card textarea {
   width: 100%;
   min-height: 88px;

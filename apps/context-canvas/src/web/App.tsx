@@ -93,6 +93,9 @@ function CanvasApp() {
       ) {
         markNodeAsNew(result.meta.promptId);
       }
+      if (command.type === "ensure_next_prompt") {
+        fitViewOnLayoutRef.current = true;
+      }
     }
     if (result.meta.createdAnswer && result.meta.answerId) {
       markNodeAsNew(result.meta.answerId);
