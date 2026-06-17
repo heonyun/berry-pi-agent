@@ -38,9 +38,42 @@ The HTML comment marker is used for loop prevention and workflow identification.
 
 | Workflow | Typical Conclusion | Notes |
 | --- | --- | --- |
-| `deepseek-issue-assistant` | `hold` or `pass` | Planning only; no code changes |
-| `deepseek-pr-review` | `pass`, `hold`, or `fail` | Based on review severity |
+| `deepseek-issue-assistant` | `hold` or `pass` | Pre-implementation review only; no code changes. Prefer `hold` when design choices, prototypes, incorrect assumptions, or verification gaps remain. |
+| `deepseek-pr-review` | `pass`, `hold`, or `fail` | Strict diff review. Prefer file/line findings with severity; `pass` only when no actionable findings remain. |
 | `ci-failure-explain` | `fail` | CI already failed |
+
+## Issue assistant expectations
+
+`deepseek-issue-assistant` should not act as a cheerleader or summary bot.
+Its useful output is a pre-implementation review:
+
+- implementation readiness: `Ready now`, `Needs design decision`, `Needs prototype`, or `Too ambiguous`,
+- file/function areas likely affected,
+- incorrect assumptions or missing design decisions,
+- event-flow, state-management, workflow, or testing risks,
+- smallest safe first patch or prototype,
+- concrete verification commands only when supported by repository context.
+
+Treat `Conclusion: pass` on issue planning comments as a weak signal. Codex
+still owns final implementation and verification decisions.
+
+## PR review expectations
+
+`deepseek-pr-review` should focus on actionable diff findings, not summaries.
+Useful PR review output includes:
+
+- severity for each actionable finding (`P0`, `P1`, `P2`, or `P3`),
+- affected file and line or hunk when available,
+- why the diff creates a bug, regression, security/privacy issue, workflow
+  reliability problem, or missing-test risk,
+- concrete fix direction,
+- clear separation between diff-grounded facts and context that still needs
+  verification,
+- verification commands only when supported by repository scripts or PR
+  context.
+
+Treat generic praise, broad style advice, and unsupported package-manager
+commands as low-value output.
 
 ## Language
 

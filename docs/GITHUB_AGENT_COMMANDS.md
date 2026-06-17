@@ -32,11 +32,11 @@ Reasonix, Qwen, and Cursor workers must not post `@deepseek*` mentions or run `g
 
 | Trigger | Workflow | Action |
 | --- | --- | --- |
-| Issue opened/reopened (trusted author or Antigravity marker) | `deepseek-issue-assistant` | Post planning comment |
-| `@deepseek ...` on issue comment | `deepseek-issue-assistant` | Follow-up planning reply |
-| Manual `workflow_dispatch` with issue number | `deepseek-issue-assistant` | Planning comment on demand |
-| PR opened/reopened/synchronize (same-repo) | `deepseek-pr-review` | Post review comment |
-| `@deepseek-review ...` on PR comment | `deepseek-pr-review` | Review with extra context |
+| Issue opened/reopened (trusted author or Antigravity marker) | `deepseek-issue-assistant` | Post pre-implementation review comment |
+| `@deepseek ...` on issue comment | `deepseek-issue-assistant` | Follow-up pre-implementation review reply |
+| Manual `workflow_dispatch` with issue number | `deepseek-issue-assistant` | Pre-implementation review comment on demand |
+| PR opened/reopened/synchronize (same-repo) | `deepseek-pr-review` | Post strict diff review comment |
+| `@deepseek-review ...` on PR comment | `deepseek-pr-review` | Strict diff review with extra context |
 | CI Verify failure on PR | `ci-failure-explain` | Post failure analysis comment |
 | `lgtm` / `lgtmi` on issue comment (maintainer) | `approve-contributor` | Update contributor approval |
 
@@ -51,6 +51,16 @@ Reasonix, Qwen, and Cursor workers must not post `@deepseek*` mentions or run `g
 ## Output format
 
 See [GITHUB_AGENT_OUTPUT.md](GITHUB_AGENT_OUTPUT.md).
+
+For issue comments, expect the bot to challenge readiness rather than approve
+the idea. Useful output should call out missing design decisions, likely
+file/function areas, implementation risks, and verification gaps. A shallow
+summary or generic `pass` is not sufficient implementation guidance.
+
+For PR comments, expect the bot to review the diff rather than summarize the
+PR. Useful output should include severity, affected file/line or hunk, concrete
+fix direction, and verification commands grounded in repository scripts. Generic
+praise, broad style notes, or invented package-manager commands are low-value.
 
 ## Labels
 

@@ -14,6 +14,35 @@ REPO="${GITHUB_REPOSITORY:?}"
 WORKFLOW_ID="deepseek-pr-review"
 MAX_DIFF_CHARS="${MAX_DIFF_CHARS:-60000}"
 OUTPUT_SECTIONS="$(agent_output_sections_prompt)"
+PR_REVIEW_INSTRUCTIONS="$(cat <<'EOF'
+Act as a strict diff reviewer, not a summary bot.
+
+Review only the provided PR diff and PR context. Do not invent repository facts
+outside the diff. If a risk requires non-diff context, mark it as "needs
+verification" instead of stating it as fact.
+
+Review requirements:
+- Prioritize correctness bugs, behavioral regressions, security/privacy issues,
+  workflow reliability problems, and missing tests.
+- Every actionable finding must include severity (P0/P1/P2/P3), affected file
+  and line or hunk when available, why it matters, and a concrete fix direction.
+- Do not produce generic praise, restatements of the PR, or broad style advice
+  unless it points to a real bug or maintainability risk in the diff.
+- Use "fail" for blockers or likely correctness/security regressions, "hold"
+  for important unresolved risk or missing verification, and "pass" only when
+  there are no actionable findings.
+- Do not list confirmations, praise, or already-correct behavior as findings.
+  Findings must be problems, risks, or verification gaps only.
+- Do not claim you ran tests.
+- In "Commands to rerun", suggest only commands supported by the PR context or
+  repository scripts visible in the PR body/diff. If unsure, write "inspect
+  package.json for the exact workspace command" instead of inventing package
+  manager commands.
+
+If there are no actionable findings, say so explicitly in Findings and include
+remaining test gaps or residual risks.
+EOF
+)"
 
 if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
   echo "DEEPSEEK_API_KEY is not set" >&2
@@ -50,6 +79,8 @@ ${truncated_note}
 
 Review the PR diff for correctness, regression risk, security/privacy issues, workflow reliability, and missing tests.
 
+${PR_REVIEW_INSTRUCTIONS}
+
 ${OUTPUT_SECTIONS}
 
 Diff:
@@ -67,7 +98,7 @@ jq -n \
     messages: [
       {
         role: "system",
-        content: "You are a code review assistant for berry-pi-agent. Return actionable review notes only. Do not claim you ran tests. Prefer concise Korean when the PR text is Korean."
+        content: "You are a strict diff review assistant for berry-pi-agent. Lead with actionable bugs and risks grounded in the provided diff. Do not claim you ran tests. Prefer concise Korean when the PR text is Korean."
       },
       {role: "user", content: $user}
     ]
