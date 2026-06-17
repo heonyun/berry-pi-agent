@@ -132,6 +132,21 @@ body,
   cursor: grabbing;
 }
 
+.node-card.is-new {
+  animation: node-pop 0.2s ease-out;
+}
+
+@keyframes node-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .node-card.prompt {
   background: var(--prompt);
 }

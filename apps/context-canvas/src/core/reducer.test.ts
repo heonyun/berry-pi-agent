@@ -22,6 +22,7 @@ describe("applyCommand", () => {
       type: "create_prompt_from_source",
       sourceNodeId: "prompt-1",
       position: { x: 240, y: 120 },
+      sourceHandle: "branch-right",
     });
 
     expect(created.document.nodes).toHaveLength(2);
@@ -31,6 +32,7 @@ describe("applyCommand", () => {
         source: "prompt-1",
         target: created.meta.promptId,
         meaning: "lineage",
+        sourceHandle: "branch-right",
       }),
     ]);
   });

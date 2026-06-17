@@ -36,6 +36,7 @@ function CanvasApp() {
   const nextPromptTimeoutRef = useRef<number | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string>("prompt-1");
   const [deleteArmedNodeId, setDeleteArmedNodeId] = useState<string | null>(null);
+  const [newNodeIds, setNewNodeIds] = useState<ReadonlySet<string>>(() => new Set());
   const [runningPromptId, setRunningPromptId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("Ready");
   const nodeCount = document.nodes.length;
@@ -61,6 +62,20 @@ function CanvasApp() {
     void fitView({ padding: 0.2, duration: 180 });
   }, [edgeCount, fitView, nodeCount]);
 
+  const markNodeAsNew = useCallback((nodeId: string) => {
+    setNewNodeIds((current) => new Set([...current, nodeId]));
+    window.setTimeout(() => {
+      setNewNodeIds((current) => {
+        if (!current.has(nodeId)) {
+          return current;
+        }
+        const next = new Set(current);
+        next.delete(nodeId);
+        return next;
+      });
+    }, 220);
+  }, []);
+
   const dispatch = useCallback((command: CanvasCommand) => {
     const result = applyCommand(documentRef.current, command);
     documentRef.current = result.document;
@@ -71,12 +86,22 @@ function CanvasApp() {
     if (result.meta.promptId) {
       setSelectedNodeId(result.meta.promptId);
       setDeleteArmedNodeId(null);
+      if (
+        command.type === "create_prompt_at" ||
+        command.type === "create_prompt_from_source" ||
+        command.type === "ensure_next_prompt"
+      ) {
+        markNodeAsNew(result.meta.promptId);
+      }
+    }
+    if (result.meta.createdAnswer && result.meta.answerId) {
+      markNodeAsNew(result.meta.answerId);
     }
     if (result.meta.statusMessage) {
       setStatus(result.meta.statusMessage);
     }
     return result;
-  }, []);
+  }, [markNodeAsNew]);
 
   const updatePromptDraft = useCallback((nodeId: string, text: string) => {
     promptDraftsRef.current.set(nodeId, text);
@@ -198,12 +223,15 @@ function CanvasApp() {
     (nodeId: string) => {
       dispatch({ type: "delete_node", nodeId });
       setDeleteArmedNodeId(null);
-      if (selectedNodeId === nodeId) {
+      setSelectedNodeId((current) => {
+        if (current !== nodeId) {
+          return current;
+        }
         const nextNode = documentRef.current.nodes.find((node) => node.id !== nodeId);
-        setSelectedNodeId(nextNode?.id ?? "");
-      }
+        return nextNode?.id ?? "";
+      });
     },
-    [dispatch, selectedNodeId],
+    [dispatch],
   );
 
   const onPaneClick = useCallback(
@@ -275,12 +303,14 @@ function CanvasApp() {
           onRetry,
         },
         deleteArmedNodeId,
+        newNodeIds,
       }),
     [
       armDelete,
       deleteArmedNodeId,
       deleteNode,
       document,
+      newNodeIds,
       onFeedback,
       onRetry,
       runPromptById,

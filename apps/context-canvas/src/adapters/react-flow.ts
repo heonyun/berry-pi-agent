@@ -11,6 +11,7 @@ export interface PromptNodeData {
   onTextChange: (nodeId: string, text: string) => void;
   onRun: (nodeId: string, text?: string) => void;
   deleteArmed: boolean;
+  isNew: boolean;
   onArmDelete: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
   [key: string]: unknown;
@@ -24,6 +25,7 @@ export interface AnswerNodeData {
   versionCount: number;
   running: boolean;
   deleteArmed: boolean;
+  isNew: boolean;
   onFeedback: (nodeId: string, feedback: FeedbackState) => void;
   onArmDelete: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
@@ -46,10 +48,11 @@ export interface ReactFlowAdapterInput {
     onRetry: AnswerNodeData["onRetry"];
   };
   deleteArmedNodeId?: string | null;
+  newNodeIds?: ReadonlySet<string>;
 }
 
 export function toReactFlowNodes(input: ReactFlowAdapterInput): CanvasFlowNode[] {
-  const { document, runningPromptId, callbacks, deleteArmedNodeId } = input;
+  const { document, runningPromptId, callbacks, deleteArmedNodeId, newNodeIds } = input;
   return document.nodes.map((node) => {
     const stance = stanceForNode(document, node);
     if (node.kind === "prompt_input") {
@@ -63,6 +66,7 @@ export function toReactFlowNodes(input: ReactFlowAdapterInput): CanvasFlowNode[]
           stance,
           running: runningPromptId === node.id,
           deleteArmed: deleteArmedNodeId === node.id,
+          isNew: newNodeIds?.has(node.id) ?? false,
           onDraftChange: callbacks.onDraftChange,
           onTextChange: callbacks.onTextChange,
           onRun: callbacks.onRun,
@@ -87,6 +91,7 @@ export function toReactFlowNodes(input: ReactFlowAdapterInput): CanvasFlowNode[]
           node.text === "" &&
           node.stack?.versions.at(-1)?.text === "",
         deleteArmed: deleteArmedNodeId === node.id,
+        isNew: newNodeIds?.has(node.id) ?? false,
         onFeedback: callbacks.onFeedback,
         onArmDelete: callbacks.onArmDelete,
         onDelete: callbacks.onDelete,

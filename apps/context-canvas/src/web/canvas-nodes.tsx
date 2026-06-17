@@ -143,7 +143,7 @@ export const PromptInputNode = memo(function PromptInputNode({
 
   return (
     <div
-      className={`node-card prompt ${dragging ? "dragging" : ""} ${selected ? "selected" : ""}`}
+      className={`node-card prompt ${dragging ? "dragging" : ""} ${selected ? "selected" : ""} ${data.isNew ? "is-new" : ""}`}
       onPointerDown={handlePointerDown}
       onPointerMove={clearTimer}
       onPointerUp={clearTimer}
@@ -190,7 +190,7 @@ export const AIAnswerNode = memo(function AIAnswerNode({
   const { handlePointerDown, clearTimer } = useLongPressDeleteArm(data.nodeId, data.onArmDelete);
   return (
     <div
-      className={`node-card answer ${dragging ? "dragging" : ""} ${selected ? "selected" : ""}`}
+      className={`node-card answer ${dragging ? "dragging" : ""} ${selected ? "selected" : ""} ${data.isNew ? "is-new" : ""}`}
       onPointerDown={handlePointerDown}
       onPointerMove={clearTimer}
       onPointerUp={clearTimer}
