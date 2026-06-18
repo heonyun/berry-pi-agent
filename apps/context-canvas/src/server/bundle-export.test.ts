@@ -1,10 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createInitialDocument } from "../shared/domain.ts";
 import { CANVAS_SIDECAR } from "../storage/markdown/sidecar.ts";
-import { createContextCanvasServer, handleBundleExport } from "./index.ts";
+import { createContextCanvasServer, handleBundleExport, handleBundleLoad } from "./index.ts";
 import { resolveContextCanvasServerConfig } from "./security.ts";
 
 describe("handleBundleExport", () => {
@@ -39,6 +39,29 @@ describe("handleBundleExport", () => {
 
     try {
       expect(() => handleBundleExport({ document }, config)).toThrow(/Invalid canvasId/);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a saved snapshot whose canvas id does not match the loaded bundle path", () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "context-canvas-bundle-"));
+    const config = resolveContextCanvasServerConfig({
+      CONTEXT_CANVAS_ALLOW_UNAUTHENTICATED: "1",
+      CONTEXT_CANVAS_BUNDLE_ROOT: tempRoot,
+    });
+    const document = createInitialDocument();
+
+    try {
+      const exportResult = handleBundleExport({ document }, config);
+      const sidecarPath = path.join(exportResult.bundleRoot, CANVAS_SIDECAR);
+      const sidecar = JSON.parse(readFileSync(sidecarPath, "utf8")) as typeof document;
+      writeFileSync(sidecarPath, JSON.stringify({ ...sidecar, canvas: { ...sidecar.canvas, id: "canvas-2" } }));
+
+      const loadResult = handleBundleLoad(config);
+
+      expect(loadResult.statusCode).toBe(422);
+      expect(loadResult.errors).toEqual(["Bundle canvas id mismatch: expected canvas-1, loaded canvas-2."]);
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }

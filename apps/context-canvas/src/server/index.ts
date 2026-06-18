@@ -8,7 +8,7 @@ import { getModel, type KnownProvider } from "@earendil-works/pi-ai";
 import { createAgentSession, SessionManager, type AgentSession } from "@earendil-works/pi-coding-agent";
 import { compilePromptContext, formatPromptForPi, type CompiledPromptContext } from "../shared/compiler.ts";
 import type { ContextCanvasDocument } from "../shared/domain.ts";
-import { createInitialDocument } from "../shared/domain.ts";
+import { DEFAULT_CANVAS_ID, createInitialDocument } from "../shared/domain.ts";
 import { loadBundleToDocument } from "../storage/markdown/load.ts";
 import { projectDocumentToBundle } from "../storage/markdown/project.ts";
 import { assertSafeId, resolveWithinBundle } from "../storage/markdown/paths.ts";
@@ -136,13 +136,20 @@ export function handleBundleLoad(config: ContextCanvasServerConfig): {
   errors: string[];
   statusCode: 200 | 404 | 422 | 500;
 } {
-  const canvasId = createInitialDocument().canvas.id;
+  const canvasId = DEFAULT_CANVAS_ID;
   assertSafeId(canvasId, "canvasId");
   const bundleRoot = resolveWithinBundle(resolveBundleRootBase(config), canvasId);
   const bundleExists = fs.existsSync(bundleRoot);
   try {
     const result = loadBundleToDocument(bundleRoot);
     if (result.document) {
+      if (result.document.canvas.id !== canvasId) {
+        return {
+          warnings: result.warnings,
+          errors: [`Bundle canvas id mismatch: expected ${canvasId}, loaded ${result.document.canvas.id}.`],
+          statusCode: 422,
+        };
+      }
       return { ...result, statusCode: 200 };
     }
     return { ...result, statusCode: bundleExists ? 422 : 404 };

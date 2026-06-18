@@ -1,5 +1,6 @@
 export const VERTICAL_GAP = 240;
 export const INITIAL_PROMPT_TEXT = "What should we explore on this canvas?";
+export const DEFAULT_CANVAS_ID = "canvas-1";
 
 export type StanceBand = "critical" | "neutral" | "constructive";
 export type FeedbackState = "agree" | "disagree" | "unsure" | "needs_retry";
@@ -114,7 +115,7 @@ export function createInitialDocument(): ContextCanvasDocument {
   return {
     schemaVersion: 1,
     canvas: {
-      id: "canvas-1",
+      id: DEFAULT_CANVAS_ID,
       title: "Context Canvas MVP",
     },
     groups: [

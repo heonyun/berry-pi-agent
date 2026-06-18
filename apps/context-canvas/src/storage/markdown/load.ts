@@ -1,16 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
-import type {
-  AIAnswerNode,
-  ContextCanvasDocument,
-  ContextEdge,
-  ContextGroup,
-  ContextNode,
-  FeedbackState,
-  NodeKind,
-  PromptInputNode,
-  StanceBand,
-  Vec2,
+import {
+  DEFAULT_CANVAS_ID,
+  type AIAnswerNode,
+  type ContextCanvasDocument,
+  type ContextEdge,
+  type ContextGroup,
+  type ContextNode,
+  type FeedbackState,
+  type NodeKind,
+  type PromptInputNode,
+  type StanceBand,
+  type Vec2,
 } from "../../shared/domain.ts";
 import { parse, validate, type MarkdownDocument } from "./document.ts";
 import { readBodyMainText } from "./helpers.ts";
@@ -280,6 +281,6 @@ function readCanvasId(parsedFiles: ParsedNodeFile[], warnings: string[]): string
       return canvas;
     }
   }
-  warnings.push("Could not read canvas id from node frontmatter; defaulting to canvas-1.");
-  return "canvas-1";
+  warnings.push(`Could not read canvas id from node frontmatter; defaulting to ${DEFAULT_CANVAS_ID}.`);
+  return DEFAULT_CANVAS_ID;
 }
