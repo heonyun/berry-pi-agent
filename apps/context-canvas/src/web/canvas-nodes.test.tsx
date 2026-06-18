@@ -21,6 +21,7 @@ describe("PromptInputNode", () => {
       stance: "neutral",
       running: false,
       deleteArmed: false,
+      isNew: false,
       onDraftChange,
       onTextChange,
       onRun,

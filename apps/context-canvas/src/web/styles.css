@@ -1,17 +1,28 @@
 :root {
-  color-scheme: dark;
-  font-family: "Segoe UI", system-ui, sans-serif;
-  --bg: #0f1117;
-  --panel: #171a22;
-  --border: #2a3140;
-  --text: #e8ecf4;
-  --muted: #9aa7bd;
-  --accent: #6ea8fe;
-  --prompt: #1f2a44;
-  --answer: #1f3a2f;
-  --critical: #ff7b72;
-  --neutral: #d2a8ff;
-  --constructive: #7ee787;
+  color-scheme: light;
+  font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  --bg: #f5eadc;
+  --bg-warm: #f9f1e8;
+  --panel: #fff8ec;
+  --panel-soft: #f1dfc8;
+  --border: #7d6b5d;
+  --ink: #453d39;
+  --text: #3b332f;
+  --muted: #75685f;
+  --accent: #7e91a9;
+  --accent-strong: #586f8e;
+  --prompt: #f6d8c8;
+  --prompt-cel: #eebfae;
+  --answer: #dce7ce;
+  --answer-cel: #c8d8b6;
+  --critical: #8f454a;
+  --neutral: #5f537c;
+  --constructive: #3f6651;
+  --canvas-grid: #dccab8;
+  --edge-lineage: #9d8f84;
+  --edge-context: #6d88a1;
+  --shadow: rgba(72, 53, 38, 0.16);
+  --paper-line: rgba(125, 107, 93, 0.14);
 }
 
 * {
@@ -24,7 +35,14 @@ body,
   width: 100%;
   height: 100%;
   margin: 0;
-  background: var(--bg);
+  background:
+    linear-gradient(90deg, var(--paper-line) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.34) 1px, transparent 1px),
+    linear-gradient(135deg, var(--bg-warm), var(--bg) 62%, #eadfce);
+  background-size:
+    38px 38px,
+    38px 38px,
+    auto;
   color: var(--text);
 }
 
@@ -38,7 +56,10 @@ body,
 .canvas-panel {
   position: relative;
   min-width: 0;
-  border-right: 1px solid var(--border);
+  border-right: 2px solid var(--border);
+  background:
+    linear-gradient(120deg, rgba(255, 251, 241, 0.72), rgba(238, 223, 206, 0.28)),
+    var(--bg);
 }
 
 .canvas-panel .react-flow {
@@ -50,29 +71,35 @@ body,
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px;
+  padding: 18px;
   background: var(--panel);
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.5), transparent 34%),
+    repeating-linear-gradient(0deg, transparent 0 27px, rgba(125, 107, 93, 0.08) 28px);
+  box-shadow: inset 5px 0 0 rgba(125, 107, 93, 0.08);
   overflow: auto;
 }
 
 .side-panel h2,
 .side-panel h3 {
   margin: 0 0 8px;
-  font-size: 14px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--muted);
 }
 
 .side-panel pre {
   margin: 0;
   padding: 12px;
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
   border-radius: 8px;
-  background: #0b0d12;
+  background: rgba(255, 252, 243, 0.82);
   white-space: pre-wrap;
   font-size: 12px;
   line-height: 1.45;
+  box-shadow: 3px 3px 0 rgba(125, 107, 93, 0.12);
 }
 
 .side-panel .muted-line {
@@ -97,10 +124,10 @@ body,
 }
 
 .side-panel .backlink-button {
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
   border-radius: 6px;
-  background: #0b0d12;
-  color: var(--accent);
+  background: #f7dfbf;
+  color: var(--accent-strong);
   padding: 4px 8px;
   font-size: 12px;
   cursor: pointer;
@@ -117,19 +144,25 @@ body,
   min-width: 320px;
   max-width: 320px;
   padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  box-shadow:
+    4px 5px 0 rgba(69, 61, 57, 0.18),
+    inset 0 -18px 0 rgba(255, 255, 255, 0.22);
   cursor: grab;
   transition:
     box-shadow 140ms ease,
-    border-color 140ms ease;
+    border-color 140ms ease,
+    transform 140ms ease;
 }
 
 .node-card.dragging {
-  border-color: var(--accent);
-  box-shadow: 0 14px 36px rgba(110, 168, 254, 0.35);
+  border-color: var(--accent-strong);
+  box-shadow:
+    7px 8px 0 rgba(88, 111, 142, 0.24),
+    inset 0 -18px 0 rgba(255, 255, 255, 0.22);
   cursor: grabbing;
+  transform: rotate(-0.4deg);
 }
 
 .node-card.is-new {
@@ -148,11 +181,15 @@ body,
 }
 
 .node-card.prompt {
-  background: var(--prompt);
+  background:
+    linear-gradient(180deg, var(--prompt), var(--prompt) 68%, var(--prompt-cel) 68%),
+    var(--prompt);
 }
 
 .node-card.answer {
-  background: var(--answer);
+  background:
+    linear-gradient(180deg, var(--answer), var(--answer) 68%, var(--answer-cel) 68%),
+    var(--answer);
 }
 
 .node-card header {
@@ -161,6 +198,7 @@ body,
   align-items: center;
   margin-bottom: 8px;
   font-size: 12px;
+  font-weight: 700;
   color: var(--muted);
 }
 
@@ -177,11 +215,13 @@ body,
   width: 100%;
   min-height: 88px;
   resize: vertical;
-  border: 1px solid var(--border);
+  border: 2px solid rgba(69, 61, 57, 0.72);
   border-radius: 8px;
   padding: 8px;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(255, 253, 246, 0.78);
   color: var(--text);
+  font: inherit;
+  box-shadow: inset 2px 2px 0 rgba(125, 107, 93, 0.1);
 }
 
 .node-card .answer-text {
@@ -189,15 +229,17 @@ body,
   white-space: pre-wrap;
   font-size: 13px;
   line-height: 1.45;
+  color: var(--text);
 }
 
 .branch-dot {
   position: absolute;
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
   border: 2px solid var(--accent);
-  background: var(--panel);
+  background: #fff7df;
   opacity: 0;
+  border-radius: 999px;
   transition:
     opacity 120ms ease,
     transform 120ms ease;
@@ -238,9 +280,9 @@ body,
   height: 26px;
   padding: 0;
   border-radius: 999px;
-  border-color: var(--critical);
+  border: 2px solid var(--critical);
   color: var(--critical);
-  background: #202838;
+  background: #fff0ec;
   font-weight: 700;
 }
 
@@ -263,18 +305,20 @@ body,
 }
 
 button {
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
   border-radius: 8px;
-  background: #222938;
+  background: #fff2d4;
   color: var(--text);
   padding: 6px 10px;
   cursor: pointer;
   font-size: 12px;
+  font-family: inherit;
+  box-shadow: 2px 2px 0 rgba(125, 107, 93, 0.16);
 }
 
 button.primary {
-  background: #2f4f9f;
-  border-color: #4d74d8;
+  background: #cddfbf;
+  border-color: var(--constructive);
 }
 
 button:disabled {
@@ -283,7 +327,9 @@ button:disabled {
 }
 
 button.active {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+  background: #d8e2ef;
 }
 
 .stance-critical {
@@ -301,6 +347,58 @@ button.active {
 .status-line {
   font-size: 12px;
   color: var(--muted);
+}
+
+.react-flow__edge-path {
+  stroke-width: 2;
+}
+
+.react-flow__edge-textbg {
+  fill: rgba(255, 248, 236, 0.86);
+}
+
+.react-flow__edge-text {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.react-flow__controls,
+.react-flow__minimap {
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 3px 3px 0 rgba(125, 107, 93, 0.14);
+}
+
+.react-flow__controls-button {
+  background: #fff7e8;
+  border-bottom: 1px solid rgba(125, 107, 93, 0.24);
+  color: var(--text);
+}
+
+.react-flow__controls-button:hover {
+  background: #f4dfc4;
+}
+
+.react-flow__minimap {
+  background: rgba(255, 248, 236, 0.88);
+}
+
+@media (max-width: 860px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(520px, 1fr) auto;
+  }
+
+  .canvas-panel {
+    border-right: 0;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .side-panel {
+    max-height: 42vh;
+  }
 }
 
 @keyframes answer-dot {

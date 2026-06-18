@@ -389,8 +389,13 @@ function CanvasApp() {
           onConnect={onConnect}
           onConnectEnd={onConnectEnd}
         >
-          <Background gap={18} color="#2a3140" />
-          <MiniMap pannable zoomable />
+          <Background gap={22} color="#dccab8" />
+          <MiniMap
+            maskColor="rgba(245, 234, 220, 0.64)"
+            nodeColor={(node) => (node.type === "promptInput" ? "#f6d8c8" : "#dce7ce")}
+            pannable
+            zoomable
+          />
           <Controls />
         </ReactFlow>
       </div>
