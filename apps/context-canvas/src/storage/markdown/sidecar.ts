@@ -1,5 +1,5 @@
 import fs from "node:fs";
-import type { ContextCanvasDocument } from "../../shared/domain.ts";
+import { normalizeDocument, type ContextCanvasDocument } from "../../shared/domain.ts";
 import { CANVAS_SIDECAR, canvasSidecarPath } from "./paths.ts";
 
 export function readBundleDocument(bundleRoot: string): ContextCanvasDocument | undefined {
@@ -13,7 +13,7 @@ export function readBundleDocument(bundleRoot: string): ContextCanvasDocument | 
     if (parsed?.schemaVersion !== 1 || !parsed.canvas || !Array.isArray(parsed.nodes)) {
       return undefined;
     }
-    return parsed;
+    return normalizeDocument(parsed);
   } catch {
     return undefined;
   }

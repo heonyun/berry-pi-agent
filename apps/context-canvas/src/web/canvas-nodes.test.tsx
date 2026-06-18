@@ -3,8 +3,8 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PromptInputNode } from "./canvas-nodes.tsx";
-import type { PromptNodeData } from "../adapters/react-flow.ts";
+import { AIAnswerNode, PromptInputNode } from "./canvas-nodes.tsx";
+import type { AnswerNodeData, PromptNodeData } from "../adapters/react-flow.ts";
 
 afterEach(() => {
   cleanup();
@@ -56,5 +56,94 @@ describe("PromptInputNode", () => {
     expect(onDraftChange).toHaveBeenLastCalledWith("prompt-1", "hello");
     expect(onTextChange).toHaveBeenCalledWith("prompt-1", "hello");
     expect(onRun).toHaveBeenCalledWith("prompt-1", "hello");
+  });
+});
+
+describe("AIAnswerNode", () => {
+  it("renders enabled corner action handles for non-empty selected answers", () => {
+    const onAnswerAction = vi.fn();
+    const data: AnswerNodeData = {
+      nodeId: "answer-1",
+      text: "Answer text",
+      stance: "neutral",
+      versionCount: 1,
+      running: false,
+      interactionDisabled: false,
+      deleteArmed: false,
+      isNew: false,
+      selected: true,
+      multiSelected: false,
+      onFeedback: vi.fn(),
+      onArmDelete: vi.fn(),
+      onDelete: vi.fn(),
+      onRetry: vi.fn(),
+      onAnswerAction,
+    };
+
+    render(
+      <ReactFlowProvider>
+        <AIAnswerNode
+          id="answer-1"
+          type="aiAnswer"
+          selected
+          dragging={false}
+          draggable
+          selectable
+          deletable
+          zIndex={0}
+          isConnectable
+          positionAbsoluteX={0}
+          positionAbsoluteY={0}
+          data={data}
+        />
+      </ReactFlowProvider>,
+    );
+
+    fireEvent.pointerDown(screen.getByLabelText("Ask for answer risks"));
+    fireEvent.pointerUp(screen.getByLabelText("Ask for answer risks"));
+
+    expect(onAnswerAction).toHaveBeenCalledWith("answer-1", "risks");
+  });
+
+  it("disables corner action handles for multi-selected answers", () => {
+    const onAnswerAction = vi.fn();
+    const data: AnswerNodeData = {
+      nodeId: "answer-1",
+      text: "Answer text",
+      stance: "neutral",
+      versionCount: 1,
+      running: false,
+      interactionDisabled: false,
+      deleteArmed: false,
+      isNew: false,
+      selected: true,
+      multiSelected: true,
+      onFeedback: vi.fn(),
+      onArmDelete: vi.fn(),
+      onDelete: vi.fn(),
+      onRetry: vi.fn(),
+      onAnswerAction,
+    };
+
+    render(
+      <ReactFlowProvider>
+        <AIAnswerNode
+          id="answer-1"
+          type="aiAnswer"
+          selected
+          dragging={false}
+          draggable
+          selectable
+          deletable
+          zIndex={0}
+          isConnectable
+          positionAbsoluteX={0}
+          positionAbsoluteY={0}
+          data={data}
+        />
+      </ReactFlowProvider>,
+    );
+
+    expect(screen.getByLabelText("Ask for answer risks")).toHaveProperty("disabled", true);
   });
 });

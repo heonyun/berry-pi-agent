@@ -82,4 +82,45 @@ describe("applyCommand", () => {
     });
     expect(second.document.edges.filter((edge) => edge.meaning === "context_reference")).toHaveLength(1);
   });
+
+  it("creates a group from selected nodes with a local summary draft", () => {
+    let document = createInitialDocument();
+    document = applyCommand(document, {
+      type: "create_prompt_at",
+      position: { x: 120, y: 40 },
+    }).document;
+
+    const result = applyCommand(document, {
+      type: "create_group_from_nodes",
+      nodeIds: ["prompt-1", document.nodes[1]!.id],
+      origin: { x: 50, y: 20 },
+    });
+
+    const createdGroup = result.document.groups.find((group) => group.id !== "group-1");
+    expect(createdGroup).toMatchObject({
+      title: "Group 2",
+      origin: { x: 50, y: 20 },
+    });
+    expect(createdGroup?.summary).toContain("What should we explore on this canvas?");
+    expect(result.document.nodes.map((node) => node.groupId)).toEqual([
+      createdGroup?.id,
+      createdGroup?.id,
+    ]);
+    expect(result.meta.groupId).toBe(createdGroup?.id);
+  });
+
+  it("updates group summaries without changing node membership", () => {
+    const initial = createInitialDocument();
+    const result = applyCommand(initial, {
+      type: "update_group_summary",
+      groupId: "group-1",
+      summary: "Edited group summary",
+    });
+
+    expect(result.document.groups[0]).toMatchObject({
+      id: "group-1",
+      summary: "Edited group summary",
+    });
+    expect(result.document.nodes[0]?.groupId).toBe("group-1");
+  });
 });

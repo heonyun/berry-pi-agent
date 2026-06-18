@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import {
   Background,
   Controls,
@@ -15,6 +23,7 @@ import {
   connectionToContextReferenceCommand,
   toReactFlowEdges,
   toReactFlowNodes,
+  type AnswerAction,
   type CanvasFlowNode,
 } from "../adapters/react-flow.ts";
 import type { ApplyResult, CanvasCommand } from "../core/commands.ts";
@@ -22,7 +31,7 @@ import { findLineageParentPromptId, roundedPosition } from "../core/mutations.ts
 import { applyCommand } from "../core/reducer.ts";
 import { compilePromptContext } from "../shared/compiler.ts";
 import { buildNodeBacklinks, formatCompiledPreviewMarkdown } from "../shared/compile-preview.ts";
-import { createInitialDocument, findNode } from "../shared/domain.ts";
+import { createInitialDocument, findNode, type ContextNode, type Vec2 } from "../shared/domain.ts";
 import { canvasNodeTypes } from "./canvas-nodes.tsx";
 import { exportBundle } from "./export-bundle.ts";
 import { loadBundle } from "./load-bundle.ts";
@@ -36,12 +45,28 @@ function CanvasApp() {
   const fitViewOnLayoutRef = useRef(true);
   const nextPromptTimeoutRef = useRef<number | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string>("prompt-1");
+  const [selectedNodeIds, setSelectedNodeIds] = useState<ReadonlySet<string>>(() => new Set(["prompt-1"]));
   const [deleteArmedNodeId, setDeleteArmedNodeId] = useState<string | null>(null);
   const [newNodeIds, setNewNodeIds] = useState<ReadonlySet<string>>(() => new Set());
   const [runningPromptId, setRunningPromptId] = useState<string | null>(null);
+  const [selectionBox, setSelectionBox] = useState<{
+    start: { x: number; y: number };
+    current: { x: number; y: number };
+  } | null>(null);
+  const [groupConfirm, setGroupConfirm] = useState<{
+    nodeIds: string[];
+    screenPosition: { x: number; y: number };
+  } | null>(null);
   const [status, setStatus] = useState<string>("Loading saved bundle...");
   const bundleLoadCompleteRef = useRef(false);
   const bundleLoadFailureRef = useRef<string | null>(null);
+  const pressedArrowsRef = useRef(new Set<string>());
+  const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
+  const selectionBoxRef = useRef<{
+    start: { x: number; y: number };
+    current: { x: number; y: number };
+  } | null>(null);
+  const userInteractionVersionRef = useRef(0);
   const nodeCount = document.nodes.length;
   const edgeCount = document.edges.length;
   const interactionDisabled = !bundleLoadCompleteRef.current || bundleLoadFailureRef.current !== null;
@@ -66,7 +91,9 @@ function CanvasApp() {
         documentRef.current = result.document;
         setDocument(result.document);
         const firstPrompt = result.document.nodes.find((node) => node.kind === "prompt_input");
-        setSelectedNodeId(firstPrompt?.id ?? result.document.nodes[0]?.id ?? "");
+        const nextSelectedId = firstPrompt?.id ?? result.document.nodes[0]?.id ?? "";
+        setSelectedNodeId(nextSelectedId);
+        setSelectedNodeIds(nextSelectedId ? new Set([nextSelectedId]) : new Set());
         fitViewOnLayoutRef.current = true;
         const warningCount = result.warnings.length;
         setStatus(warningCount > 0 ? `Saved bundle loaded (${warningCount} warnings).` : "Saved bundle loaded.");
@@ -133,6 +160,7 @@ function CanvasApp() {
     }
     if (result.meta.promptId) {
       setSelectedNodeId(result.meta.promptId);
+      setSelectedNodeIds(new Set([result.meta.promptId]));
       setDeleteArmedNodeId(null);
       if (
         command.type === "create_prompt_at" ||
@@ -213,6 +241,7 @@ function CanvasApp() {
       }
       setRunningPromptId(promptNodeId);
       setStatus("Running agent...");
+      const focusVersion = userInteractionVersionRef.current;
 
       const latestPromptText = promptTextOverride ?? promptDraftsRef.current.get(promptNodeId);
       if (latestPromptText !== undefined) {
@@ -242,7 +271,15 @@ function CanvasApp() {
         await saveBundle(promptNodeId);
         setStatus("Answer complete. Next prompt will appear...");
         nextPromptTimeoutRef.current = window.setTimeout(() => {
-          dispatch({ type: "ensure_next_prompt", answerId: answerId! });
+          const result = dispatch({ type: "ensure_next_prompt", answerId: answerId! });
+          if (result.meta.promptId && userInteractionVersionRef.current === focusVersion) {
+            window.setTimeout(() => {
+              const textarea = globalThis.document.querySelector<HTMLTextAreaElement>(
+                `textarea[data-prompt-id="${result.meta.promptId}"]`,
+              );
+              textarea?.focus();
+            }, 0);
+          }
           void saveBundle();
         }, 3000);
       } catch (error: unknown) {
@@ -274,6 +311,168 @@ function CanvasApp() {
     [runPrompt],
   );
 
+  const setSingleSelection = useCallback((nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setSelectedNodeIds(new Set([nodeId]));
+    setDeleteArmedNodeId(null);
+  }, []);
+
+  const selectedAnswerForAction = useCallback((): ContextNode | undefined => {
+    if (selectedNodeIds.size !== 1) {
+      setStatus("Select exactly one answer node for this action.");
+      return undefined;
+    }
+    const nodeId = [...selectedNodeIds][0]!;
+    const node = findNode(documentRef.current, nodeId);
+    if (node.kind !== "ai_answer") {
+      setStatus("Select an AI answer node for this action.");
+      return undefined;
+    }
+    if (runningPromptId !== null || node.text.trim().length === 0) {
+      setStatus("Answer action is unavailable while the answer is empty or running.");
+      return undefined;
+    }
+    return node;
+  }, [runningPromptId, selectedNodeIds]);
+
+  const createAnswerFollowUp = useCallback(
+    (answer: ContextNode, action: AnswerAction) => {
+      if (answer.kind !== "ai_answer") {
+        return;
+      }
+      const promptTextByAction: Record<AnswerAction, string> = {
+        risks: "좋아. 너의 답에서 예상 문제와 위험을 말해.",
+        positives: "좋아. 너의 답에서 예상 긍정을 말해.",
+        risk_retry: "다시 너의 답에 문제와 위험을 생각해서 답해.",
+      };
+      const positionByAction: Record<AnswerAction, Vec2> = {
+        risks: { x: answer.position.x - 360, y: answer.position.y - 220 },
+        positives: { x: answer.position.x + 360, y: answer.position.y - 220 },
+        risk_retry: { x: answer.position.x - 360, y: answer.position.y + 220 },
+      };
+      const created = dispatch({
+        type: "create_prompt_from_source",
+        sourceNodeId: answer.id,
+        position: positionByAction[action],
+      });
+      if (!created.meta.promptId) {
+        return;
+      }
+      dispatch({
+        type: "connect_context_reference",
+        source: answer.id,
+        target: created.meta.promptId,
+      });
+      dispatch({
+        type: "update_prompt_text",
+        nodeId: created.meta.promptId,
+        text: promptTextByAction[action],
+      });
+      promptDraftsRef.current.set(created.meta.promptId, promptTextByAction[action]);
+      setStatus("Follow-up prompt created.");
+      void saveBundle(created.meta.promptId);
+    },
+    [dispatch, saveBundle],
+  );
+
+  const onAnswerAction = useCallback(
+    (nodeId: string, action: AnswerAction) => {
+      if (selectedNodeIds.size !== 1 || !selectedNodeIds.has(nodeId)) {
+        setStatus("Select exactly one answer node for this action.");
+        return;
+      }
+      const answer = findNode(documentRef.current, nodeId);
+      if (answer.kind !== "ai_answer" || runningPromptId !== null || answer.text.trim().length === 0) {
+        setStatus("Answer action is unavailable while the answer is empty or running.");
+        return;
+      }
+      createAnswerFollowUp(answer, action);
+    },
+    [createAnswerFollowUp, runningPromptId, selectedNodeIds],
+  );
+
+  const retrySelectedAnswer = useCallback(() => {
+    const answer = selectedAnswerForAction();
+    if (!answer || answer.kind !== "ai_answer") {
+      return;
+    }
+    onRetry(answer.id);
+  }, [onRetry, selectedAnswerForAction]);
+
+  const isTextEntryTarget = useCallback((target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) {
+      return false;
+    }
+    return Boolean(target.closest("textarea, input, button, [contenteditable='true']"));
+  }, []);
+
+  const handleAppKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (isTextEntryTarget(event.target)) {
+        return;
+      }
+      if (event.key.startsWith("Arrow")) {
+        pressedArrowsRef.current.add(event.key);
+      }
+      if (groupConfirm && event.key === "Enter") {
+        event.preventDefault();
+        event.stopPropagation();
+        dispatch({
+          type: "create_group_from_nodes",
+          nodeIds: groupConfirm.nodeIds,
+          origin: screenToFlowPosition(groupConfirm.screenPosition),
+        });
+        setGroupConfirm(null);
+        return;
+      }
+      if (!event.ctrlKey || !event.key.startsWith("Arrow")) {
+        return;
+      }
+      const arrows = pressedArrowsRef.current;
+      const action =
+        event.key === "ArrowUp" && arrows.has("ArrowLeft")
+          ? "risks"
+          : event.key === "ArrowUp" && arrows.has("ArrowRight")
+            ? "positives"
+            : event.key === "ArrowDown" && arrows.has("ArrowLeft")
+              ? "risk_retry"
+              : undefined;
+      if (!action && event.key !== "ArrowDown") {
+        return;
+      }
+      const answer = selectedAnswerForAction();
+      if (!answer || answer.kind !== "ai_answer") {
+        return;
+      }
+      if (action) {
+        event.preventDefault();
+        event.stopPropagation();
+        createAnswerFollowUp(answer, action);
+        return;
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        event.stopPropagation();
+        retrySelectedAnswer();
+      }
+    },
+    [
+      createAnswerFollowUp,
+      dispatch,
+      groupConfirm,
+      isTextEntryTarget,
+      retrySelectedAnswer,
+      screenToFlowPosition,
+      selectedAnswerForAction,
+    ],
+  );
+
+  const handleAppKeyUp = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key.startsWith("Arrow")) {
+      pressedArrowsRef.current.delete(event.key);
+    }
+  }, []);
+
   const updateDraggedNodePosition = useCallback(
     (node: CanvasFlowNode) => {
       dispatch({
@@ -286,23 +485,31 @@ function CanvasApp() {
   );
 
   const armDelete = useCallback((nodeId: string) => {
-    setSelectedNodeId(nodeId);
+    setSingleSelection(nodeId);
     setDeleteArmedNodeId(nodeId);
-  }, []);
+  }, [setSingleSelection]);
 
   const deleteNode = useCallback(
     (nodeId: string) => {
-      dispatch({ type: "delete_node", nodeId });
+      const result = dispatch({ type: "delete_node", nodeId });
+      const remainingNodeIds = new Set(result.document.nodes.map((node) => node.id));
+      const remainingSelected = [...selectedNodeIds].filter(
+        (selectedId) => selectedId !== nodeId && remainingNodeIds.has(selectedId),
+      );
+      const currentStillSelected = selectedNodeId !== nodeId && remainingNodeIds.has(selectedNodeId);
+      const nextSelectedId =
+        currentStillSelected
+          ? selectedNodeId
+          : remainingSelected[0] ?? result.document.nodes.find((node) => node.id !== nodeId)?.id ?? "";
       setDeleteArmedNodeId(null);
-      setSelectedNodeId((current) => {
-        if (current !== nodeId) {
-          return current;
-        }
-        const nextNode = documentRef.current.nodes.find((node) => node.id !== nodeId);
-        return nextNode?.id ?? "";
-      });
+      setSelectedNodeId(nextSelectedId);
+      setSelectedNodeIds(
+        nextSelectedId
+          ? new Set(remainingSelected.includes(nextSelectedId) ? remainingSelected : [nextSelectedId])
+          : new Set(),
+      );
     },
-    [dispatch],
+    [dispatch, selectedNodeId, selectedNodeIds],
   );
 
   const onPaneClick = useCallback(
@@ -315,6 +522,87 @@ function CanvasApp() {
     },
     [dispatch, screenToFlowPosition],
   );
+
+  const selectedNodesInRect = useCallback(
+    (start: { x: number; y: number }, end: { x: number; y: number }) => {
+      const leftTop = screenToFlowPosition({
+        x: Math.min(start.x, end.x),
+        y: Math.min(start.y, end.y),
+      });
+      const rightBottom = screenToFlowPosition({
+        x: Math.max(start.x, end.x),
+        y: Math.max(start.y, end.y),
+      });
+      return documentRef.current.nodes
+        .filter(
+          (node) =>
+            node.position.x >= leftTop.x &&
+            node.position.x <= rightBottom.x &&
+            node.position.y >= leftTop.y &&
+            node.position.y <= rightBottom.y,
+        )
+        .map((node) => node.id);
+    },
+    [screenToFlowPosition],
+  );
+
+  const onPaneMouseDown = useCallback((event: ReactMouseEvent) => {
+    if (event.button !== 0 || event.detail > 1) {
+      return;
+    }
+    if (event.target instanceof HTMLElement && event.target.closest(".react-flow__node")) {
+      return;
+    }
+    selectionStartRef.current = { x: event.clientX, y: event.clientY };
+    setGroupConfirm(null);
+  }, []);
+
+  const onPaneMouseMove = useCallback((event: ReactMouseEvent) => {
+    const start = selectionStartRef.current;
+    if (!start) {
+      return;
+    }
+    const current = { x: event.clientX, y: event.clientY };
+    if (Math.abs(current.x - start.x) < 6 && Math.abs(current.y - start.y) < 6) {
+      return;
+    }
+    const nextBox = { start, current };
+    selectionBoxRef.current = nextBox;
+    setSelectionBox(nextBox);
+  }, []);
+
+  const onPaneMouseUp = useCallback(
+    (event: ReactMouseEvent) => {
+      const start = selectionStartRef.current;
+      selectionStartRef.current = null;
+      const box = selectionBoxRef.current;
+      selectionBoxRef.current = null;
+      setSelectionBox(null);
+      if (!start || !box) {
+        return;
+      }
+      const nodeIds = selectedNodesInRect(start, { x: event.clientX, y: event.clientY });
+      if (nodeIds.length === 0) {
+        return;
+      }
+      setSelectedNodeIds(new Set(nodeIds));
+      setSelectedNodeId(nodeIds[0] ?? "");
+      setGroupConfirm({ nodeIds, screenPosition: { x: event.clientX, y: event.clientY } });
+    },
+    [selectedNodesInRect],
+  );
+
+  const confirmGroup = useCallback(() => {
+    if (!groupConfirm) {
+      return;
+    }
+    dispatch({
+      type: "create_group_from_nodes",
+      nodeIds: groupConfirm.nodeIds,
+      origin: screenToFlowPosition(groupConfirm.screenPosition),
+    });
+    setGroupConfirm(null);
+  }, [dispatch, groupConfirm, screenToFlowPosition]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -373,9 +661,11 @@ function CanvasApp() {
           onDelete: deleteNode,
           onFeedback,
           onRetry,
+          onAnswerAction,
         },
         deleteArmedNodeId,
         newNodeIds,
+        selectedNodeIds,
       }),
     [
       armDelete,
@@ -384,10 +674,12 @@ function CanvasApp() {
       document,
       interactionDisabled,
       newNodeIds,
+      onAnswerAction,
       onFeedback,
       onRetry,
       runPromptById,
       runningPromptId,
+      selectedNodeIds,
       updatePromptDraft,
       updatePromptText,
     ],
@@ -402,6 +694,20 @@ function CanvasApp() {
       return undefined;
     }
   }, [document, selectedNodeId]);
+
+  const selectedGroup = useMemo(() => {
+    if (!selectedNode || selectedNodeIds.size !== 1) {
+      return undefined;
+    }
+    return document.groups.find((group) => group.id === selectedNode.groupId);
+  }, [document.groups, selectedNode, selectedNodeIds.size]);
+
+  const updateGroupSummary = useCallback(
+    (groupId: string, summary: string) => {
+      dispatch({ type: "update_group_summary", groupId, summary });
+    },
+    [dispatch],
+  );
 
   const compiledPreview = useMemo(() => {
     if (!selectedNode || selectedNode.kind !== "prompt_input") {
@@ -429,8 +735,28 @@ function CanvasApp() {
   }, [document, selectedNode]);
 
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      data-testid="app-shell"
+      tabIndex={0}
+      onPointerDownCapture={() => {
+        userInteractionVersionRef.current += 1;
+      }}
+      onKeyDown={handleAppKeyDown}
+      onKeyUp={handleAppKeyUp}
+    >
       <div className="canvas-panel">
+        {selectionBox ? <SelectionOverlay start={selectionBox.start} current={selectionBox.current} /> : null}
+        {groupConfirm ? (
+          <button
+            type="button"
+            className="group-confirm-button"
+            style={{ left: groupConfirm.screenPosition.x, top: groupConfirm.screenPosition.y }}
+            onClick={confirmGroup}
+          >
+            Create group
+          </button>
+        ) : null}
         <ReactFlow
           nodes={flowNodes}
           edges={flowEdges}
@@ -440,8 +766,7 @@ function CanvasApp() {
           zoomOnScroll
           zoomOnDoubleClick={false}
           onNodeClick={(_, node) => {
-            setSelectedNodeId(node.id);
-            setDeleteArmedNodeId(null);
+            setSingleSelection(node.id);
           }}
           onNodeDoubleClick={(event, node) => {
             event.stopPropagation();
@@ -454,8 +779,13 @@ function CanvasApp() {
           onNodeDragStop={(_, node) => updateDraggedNodePosition(node as CanvasFlowNode)}
           onPaneClick={(event) => {
             setDeleteArmedNodeId(null);
+            setSelectedNodeId("");
+            setSelectedNodeIds(new Set());
             onPaneClick(event);
           }}
+          onMouseDown={onPaneMouseDown}
+          onMouseMove={onPaneMouseMove}
+          onMouseUp={onPaneMouseUp}
           onConnect={onConnect}
           onConnectEnd={onConnectEnd}
         >
@@ -483,6 +813,18 @@ function CanvasApp() {
           </pre>
         </div>
         <div>
+          <h3>Group Summary</h3>
+          {selectedGroup ? (
+            <textarea
+              className="group-summary-editor"
+              value={selectedGroup.summary ?? ""}
+              onChange={(event) => updateGroupSummary(selectedGroup.id, event.target.value)}
+            />
+          ) : (
+            <p className="muted-line">Select a grouped node.</p>
+          )}
+        </div>
+        <div>
           <h3>Compiled Preview</h3>
           <pre className="markdown-preview">
             {compiledPreviewMarkdown ?? "Select a prompt node"}
@@ -508,6 +850,20 @@ function CanvasApp() {
       </aside>
     </div>
   );
+}
+
+function SelectionOverlay({
+  start,
+  current,
+}: {
+  start: { x: number; y: number };
+  current: { x: number; y: number };
+}) {
+  const left = Math.min(start.x, current.x);
+  const top = Math.min(start.y, current.y);
+  const width = Math.abs(current.x - start.x);
+  const height = Math.abs(current.y - start.y);
+  return <div className="selection-overlay" style={{ left, top, width, height }} />;
 }
 
 export function App() {

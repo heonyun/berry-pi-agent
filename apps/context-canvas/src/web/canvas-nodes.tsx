@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useRef, type KeyboardEvent, type PointerE
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { INITIAL_PROMPT_TEXT } from "../shared/domain.ts";
 import type { StanceBand } from "../shared/domain.ts";
-import type { AnswerNodeData, PromptNodeData } from "../adapters/react-flow.ts";
+import type { AnswerAction, AnswerNodeData, PromptNodeData } from "../adapters/react-flow.ts";
 import { ImeTextarea, stopNodeKeyPropagation } from "./ImeTextarea.tsx";
 
 function stanceClass(stance: StanceBand): string {
@@ -80,6 +80,32 @@ function DeleteButton({
     </button>
   );
 }
+
+const ANSWER_ACTIONS: Array<{
+  action: AnswerAction;
+  className: string;
+  label: string;
+  title: string;
+}> = [
+  {
+    action: "risks",
+    className: "answer-action-corner top-left",
+    label: "Ask for answer risks",
+    title: "Risks",
+  },
+  {
+    action: "positives",
+    className: "answer-action-corner top-right",
+    label: "Ask for answer positives",
+    title: "Positives",
+  },
+  {
+    action: "risk_retry",
+    className: "answer-action-corner bottom-left",
+    label: "Ask to rethink answer risks",
+    title: "Rethink risks",
+  },
+];
 
 function useLongPressDeleteArm(nodeId: string, onArmDelete: (nodeId: string) => void) {
   const timerRef = useRef<number | null>(null);
@@ -188,6 +214,7 @@ export const PromptInputNode = memo(function PromptInputNode({
       >
       <ImeTextarea
         className="nodrag nopan nowheel"
+        data-prompt-id={nodeId}
         value={text}
         disabled={interactionDisabled}
         clearOnFocusValue={INITIAL_PROMPT_TEXT}
@@ -219,10 +246,36 @@ export const AIAnswerNode = memo(function AIAnswerNode({
   selected,
 }: NodeProps<Node<AnswerNodeData>>) {
   const { handlePointerDown, clearTimer } = useLongPressDeleteArm(data.nodeId, data.onArmDelete);
+  const actionDisabled =
+    data.interactionDisabled ||
+    data.running ||
+    data.text.trim().length === 0 ||
+    !data.selected ||
+    data.multiSelected;
   return (
     <div className={`node-card answer ${dragging ? "dragging" : ""} ${selected ? "selected" : ""} ${data.isNew ? "is-new" : ""}`}>
       <Handle type="target" position={Position.Bottom} />
       <BranchDots />
+      {ANSWER_ACTIONS.map((item) => (
+        <button
+          key={item.action}
+          type="button"
+          className={`${item.className} nodrag nopan`}
+          aria-label={item.label}
+          title={item.title}
+          disabled={actionDisabled}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+          }}
+          onPointerUp={(event) => {
+            event.stopPropagation();
+            if (!actionDisabled) {
+              data.onAnswerAction(data.nodeId, item.action);
+            }
+          }}
+          onKeyDown={stopNodeKeyPropagation}
+        />
+      ))}
       <DeleteButton nodeId={data.nodeId} visible={data.deleteArmed} onDelete={data.onDelete} />
       <header className="node-drag-handle">
         <span>AI Answer</span>

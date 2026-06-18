@@ -2,6 +2,8 @@ import type { Connection, Edge, Node } from "@xyflow/react";
 import type { ContextCanvasDocument, FeedbackState, StanceBand } from "../shared/domain.ts";
 import { stanceForNode } from "../core/stance.ts";
 
+export type AnswerAction = "risks" | "positives" | "risk_retry";
+
 export interface PromptNodeData {
   nodeId: string;
   text: string;
@@ -28,10 +30,13 @@ export interface AnswerNodeData {
   interactionDisabled: boolean;
   deleteArmed: boolean;
   isNew: boolean;
+  selected?: boolean;
+  multiSelected?: boolean;
   onFeedback: (nodeId: string, feedback: FeedbackState) => void;
   onArmDelete: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
   onRetry: (nodeId: string) => void;
+  onAnswerAction: (nodeId: string, action: AnswerAction) => void;
   [key: string]: unknown;
 }
 
@@ -49,9 +54,11 @@ export interface ReactFlowAdapterInput {
     onDelete: PromptNodeData["onDelete"];
     onFeedback: AnswerNodeData["onFeedback"];
     onRetry: AnswerNodeData["onRetry"];
+    onAnswerAction: AnswerNodeData["onAnswerAction"];
   };
   deleteArmedNodeId?: string | null;
   newNodeIds?: ReadonlySet<string>;
+  selectedNodeIds?: ReadonlySet<string>;
 }
 
 export function toReactFlowNodes(input: ReactFlowAdapterInput): CanvasFlowNode[] {
@@ -62,6 +69,7 @@ export function toReactFlowNodes(input: ReactFlowAdapterInput): CanvasFlowNode[]
     callbacks,
     deleteArmedNodeId,
     newNodeIds,
+    selectedNodeIds,
   } = input;
   return document.nodes.map((node) => {
     const stance = stanceForNode(document, node);
@@ -106,10 +114,13 @@ export function toReactFlowNodes(input: ReactFlowAdapterInput): CanvasFlowNode[]
           node.stack?.versions.at(-1)?.text === "",
         deleteArmed: deleteArmedNodeId === node.id,
         isNew: newNodeIds?.has(node.id) ?? false,
+        selected: selectedNodeIds?.has(node.id) ?? false,
+        multiSelected: (selectedNodeIds?.size ?? 0) > 1,
         onFeedback: callbacks.onFeedback,
         onArmDelete: callbacks.onArmDelete,
         onDelete: callbacks.onDelete,
         onRetry: callbacks.onRetry,
+        onAnswerAction: callbacks.onAnswerAction,
       },
     } satisfies CanvasFlowNode;
   });

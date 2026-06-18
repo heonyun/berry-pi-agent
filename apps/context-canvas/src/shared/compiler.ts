@@ -42,7 +42,20 @@ export function compilePromptContext(
     ? calculateStanceBand(promptNode.position, parentNode.position)
     : "neutral";
   const references = findReferenceNodes(document, promptNode.id);
-  const contextText = renderContextText(references, stance);
+  const group = document.groups.find((candidate) => candidate.id === promptNode.groupId);
+  const referenceIds = new Set(references.map((node) => node.id));
+  const groupMembers = document.nodes.filter(
+    (node) =>
+      node.groupId === promptNode.groupId &&
+      node.id !== promptNode.id &&
+      !referenceIds.has(node.id),
+  );
+  const contextText = renderContextText({
+    references,
+    stance,
+    groupSummary: group?.summary ?? "",
+    groupMembers,
+  });
 
   return {
     promptNodeId: promptNode.id,
@@ -60,11 +73,21 @@ export function compilePromptContext(
         content: `${contextText}\n\nCurrent prompt:\n${promptNode.text}`,
       },
     ],
-    trace: references.map((node) => ({
-      nodeId: node.id,
-      reason: "context_reference",
-      feedback: node.kind === "ai_answer" ? node.feedback : undefined,
-    })),
+    trace: [
+      ...(group?.summary
+        ? [
+            {
+              nodeId: group.id,
+              reason: "group_summary",
+            },
+          ]
+        : []),
+      ...references.map((node) => ({
+        nodeId: node.id,
+        reason: "context_reference",
+        feedback: node.kind === "ai_answer" ? node.feedback : undefined,
+      })),
+    ],
   };
 }
 
@@ -100,9 +123,30 @@ function findReferenceNodes(document: ContextCanvasDocument, promptNodeId: strin
   return referenceIds.map((nodeId) => findNode(document, nodeId));
 }
 
-function renderContextText(references: ContextNode[], stance: StanceBand): string {
+function renderContextText({
+  references,
+  stance,
+  groupSummary,
+  groupMembers,
+}: {
+  references: ContextNode[];
+  stance: StanceBand;
+  groupSummary: string;
+  groupMembers: ContextNode[];
+}): string {
   const lines = [`stance: ${STANCE_LABELS[stance]}`];
   lines.push(`stance_intent: ${STANCE_INTENT[stance]}`);
+  if (groupSummary.trim()) {
+    lines.push(`group_summary: ${groupSummary.trim()}`);
+  }
+  for (const node of groupMembers) {
+    lines.push(`group_member: ${node.id}`);
+    lines.push(`kind: ${node.kind}`);
+    if (node.kind === "ai_answer" && node.feedback) {
+      lines.push(`feedback: ${node.feedback}`);
+    }
+    lines.push(`text: ${node.text}`);
+  }
   for (const node of references) {
     lines.push(`reference: ${node.id}`);
     lines.push(`kind: ${node.kind}`);
