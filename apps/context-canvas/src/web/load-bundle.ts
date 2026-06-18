@@ -7,6 +7,21 @@ export type BundleLoadResult = {
   errors: string[];
 };
 
+function formatErrorBody(text: string): string {
+  try {
+    const payload = JSON.parse(text) as { error?: unknown; errors?: unknown };
+    if (Array.isArray(payload.errors)) {
+      return payload.errors.map(String).join(" ");
+    }
+    if (typeof payload.error === "string") {
+      return payload.error;
+    }
+  } catch {
+    // Fall through to the raw response text.
+  }
+  return text;
+}
+
 export async function loadBundle(): Promise<BundleLoadResult> {
   const response = await fetch("/api/bundle/load", {
     method: "GET",
@@ -19,7 +34,7 @@ export async function loadBundle(): Promise<BundleLoadResult> {
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `Bundle load failed (${response.status})`);
+    throw new Error(text ? formatErrorBody(text) : `Bundle load failed (${response.status})`);
   }
 
   return (await response.json()) as BundleLoadResult;

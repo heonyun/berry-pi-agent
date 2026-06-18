@@ -90,7 +90,10 @@ describe("App bundle hydration", () => {
   it("keeps run blocked with the load failure reason after a non-404 load error", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       expect(url).toBe("/api/bundle/load");
-      return new Response("corrupt bundle", { status: 422 });
+      return new Response(JSON.stringify({ errors: ["corrupt bundle"] }), {
+        status: 422,
+        headers: { "Content-Type": "application/json" },
+      });
     });
     vi.stubGlobal("fetch", fetchMock);
 

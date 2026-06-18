@@ -179,4 +179,37 @@ describe("POST /api/bundle/export", () => {
       rmSync(corruptRoot, { recursive: true, force: true });
     }
   });
+
+  it("blocks load requests without the configured token", async () => {
+    const protectedRoot = mkdtempSync(path.join(tmpdir(), "context-canvas-protected-api-bundle-"));
+    const config = resolveContextCanvasServerConfig({
+      CONTEXT_CANVAS_BUNDLE_ROOT: protectedRoot,
+      CONTEXT_CANVAS_PORT: "0",
+      CONTEXT_CANVAS_TOKEN: "dev-secret",
+    });
+    const protectedServer = createContextCanvasServer({ ...config, port: 0 });
+
+    try {
+      handleBundleExport({ document: createInitialDocument() }, config);
+      await new Promise<void>((resolve) => {
+        protectedServer.listen(0, "127.0.0.1", () => resolve());
+      });
+      const address = protectedServer.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Failed to resolve test server port.");
+      }
+
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/bundle/load`, {
+        headers: { Origin: "http://localhost:5173" },
+      });
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: "Invalid context canvas token." });
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        protectedServer.close((error) => (error ? reject(error) : resolve()));
+      });
+      rmSync(protectedRoot, { recursive: true, force: true });
+    }
+  });
 });

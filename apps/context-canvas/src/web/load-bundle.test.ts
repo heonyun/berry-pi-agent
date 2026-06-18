@@ -35,8 +35,16 @@ describe("loadBundle", () => {
   });
 
   it("throws on non-404 load failures", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("forbidden", { status: 403 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ errors: ["Corrupt bundle", "No node markdown files found."] }), {
+          status: 422,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
 
-    await expect(loadBundle()).rejects.toThrow("forbidden");
+    await expect(loadBundle()).rejects.toThrow("Corrupt bundle No node markdown files found.");
   });
 });
