@@ -115,6 +115,51 @@ describe("POST /api/bundle/export", () => {
     expect(payload.warnings).toEqual(expect.any(Array));
   });
 
+  it("loads a saved bundle after a server restart with the same bundle root", async () => {
+    const restartRoot = mkdtempSync(path.join(tmpdir(), "context-canvas-restart-api-bundle-"));
+    const config = resolveContextCanvasServerConfig({
+      CONTEXT_CANVAS_ALLOW_UNAUTHENTICATED: "1",
+      CONTEXT_CANVAS_BUNDLE_ROOT: restartRoot,
+      CONTEXT_CANVAS_PORT: "0",
+    });
+    const document = {
+      ...createInitialDocument(),
+      nodes: [
+        {
+          ...createInitialDocument().nodes[0]!,
+          text: "saved before restart",
+        },
+      ],
+    };
+    let restartedServer: ReturnType<typeof createContextCanvasServer> | undefined;
+
+    try {
+      handleBundleExport({ document }, config);
+      restartedServer = createContextCanvasServer({ ...config, port: 0 });
+      await new Promise<void>((resolve) => {
+        restartedServer!.listen(0, "127.0.0.1", () => resolve());
+      });
+      const address = restartedServer.address();
+      if (!address || typeof address === "string") {
+        throw new Error("Failed to resolve test server port.");
+      }
+
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/bundle/load`);
+
+      expect(response.status).toBe(200);
+      const payload = (await response.json()) as { document: typeof document };
+      expect(payload.document.canvas.id).toBe("canvas-1");
+      expect(payload.document.nodes[0]?.text).toBe("saved before restart");
+    } finally {
+      if (restartedServer) {
+        await new Promise<void>((resolve, reject) => {
+          restartedServer!.close((error) => (error ? reject(error) : resolve()));
+        });
+      }
+      rmSync(restartRoot, { recursive: true, force: true });
+    }
+  });
+
   it("returns 404 when no saved bundle exists", async () => {
     const emptyRoot = mkdtempSync(path.join(tmpdir(), "context-canvas-empty-api-bundle-"));
     const config = resolveContextCanvasServerConfig({
