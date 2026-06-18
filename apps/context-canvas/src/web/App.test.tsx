@@ -117,6 +117,51 @@ describe("App bundle hydration", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("enables the starter canvas after a first-run 404 bundle load", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ errors: ["missing"] }), { status: 404 });
+      }
+      if (url === "/api/prompt") {
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.close();
+            },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+          },
+        );
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("No saved bundle found.")).toBeTruthy();
+    expect(screen.queryByText("disabled prompt-1")).toBeNull();
+
+    fireEvent.click(screen.getByText("Run prompt-1"));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/prompt",
+        expect.objectContaining({
+          method: "POST",
+        }),
+      );
+    });
+  });
+
   it("keeps run blocked with the load failure reason after a non-404 load error", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       expect(url).toBe("/api/bundle/load");
