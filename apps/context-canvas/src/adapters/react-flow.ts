@@ -112,7 +112,10 @@ export function toReactFlowEdges(document: ContextCanvasDocument): Edge[] {
     targetHandle: edge.targetHandle,
     animated: edge.meaning === "context_reference",
     style: {
-      stroke: edge.meaning === "context_reference" ? "#6ea8fe" : "#5f6c82",
+      stroke:
+        edge.meaning === "context_reference"
+          ? "var(--edge-context)"
+          : "var(--edge-lineage)",
       strokeDasharray: edge.meaning === "context_reference" ? "6 4" : undefined,
     },
     label: edge.meaning === "context_reference" ? "context" : "lineage",
