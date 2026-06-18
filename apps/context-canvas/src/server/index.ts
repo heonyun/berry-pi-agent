@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
@@ -7,6 +8,8 @@ import { getModel, type KnownProvider } from "@earendil-works/pi-ai";
 import { createAgentSession, SessionManager, type AgentSession } from "@earendil-works/pi-coding-agent";
 import { compilePromptContext, formatPromptForPi, type CompiledPromptContext } from "../shared/compiler.ts";
 import type { ContextCanvasDocument } from "../shared/domain.ts";
+import { DEFAULT_CANVAS_ID, createInitialDocument } from "../shared/domain.ts";
+import { loadBundleToDocument } from "../storage/markdown/load.ts";
 import { projectDocumentToBundle } from "../storage/markdown/project.ts";
 import { assertSafeId, resolveWithinBundle } from "../storage/markdown/paths.ts";
 import {
@@ -127,6 +130,35 @@ export function handleBundleExport(
   };
 }
 
+export function handleBundleLoad(config: ContextCanvasServerConfig): {
+  document?: ContextCanvasDocument;
+  warnings: string[];
+  errors: string[];
+  statusCode: 200 | 404 | 422 | 500;
+} {
+  const canvasId = DEFAULT_CANVAS_ID;
+  assertSafeId(canvasId, "canvasId");
+  const bundleRoot = resolveWithinBundle(resolveBundleRootBase(config), canvasId);
+  const bundleExists = fs.existsSync(bundleRoot);
+  try {
+    const result = loadBundleToDocument(bundleRoot);
+    if (result.document) {
+      if (result.document.canvas.id !== canvasId) {
+        return {
+          warnings: result.warnings,
+          errors: [`Bundle canvas id mismatch: expected ${canvasId}, loaded ${result.document.canvas.id}.`],
+          statusCode: 422,
+        };
+      }
+      return { ...result, statusCode: 200 };
+    }
+    return { ...result, statusCode: bundleExists ? 422 : 404 };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { warnings: [], errors: [message], statusCode: 500 };
+  }
+}
+
 async function handlePrompt(
   body: { document: ContextCanvasDocument; promptNodeId: string },
   res: ServerResponse,
@@ -218,6 +250,22 @@ export function createContextCanvasServer(config: ContextCanvasServerConfig = se
     if (req.method === "GET" && req.url === "/api/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/api/bundle/load") {
+      const routeAccess = verifyRequestAccess(
+        { method: req.method, origin, token: requestToken(req), url: req.url },
+        config,
+      );
+      if (!routeAccess.ok) {
+        res.writeHead(routeAccess.statusCode, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: routeAccess.message }));
+        return;
+      }
+      const result = handleBundleLoad(config);
+      res.writeHead(result.statusCode, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(result));
       return;
     }
 

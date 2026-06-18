@@ -1,0 +1,183 @@
+/** @vitest-environment jsdom */
+
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import React from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createInitialDocument } from "../shared/domain.ts";
+import { App } from "./App.tsx";
+
+vi.mock("@xyflow/react", () => ({
+  Background: () => null,
+  Controls: () => null,
+  MiniMap: () => null,
+  ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useReactFlow: () => ({
+    fitView: vi.fn(),
+    screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
+  }),
+  ReactFlow: ({
+    nodes,
+    children,
+  }: {
+    nodes: Array<{
+      id: string;
+      data: {
+        text?: string;
+        interactionDisabled?: boolean;
+        onRun?: (nodeId: string, text?: string) => void;
+        onTextChange?: (nodeId: string, text: string) => void;
+      };
+    }>;
+    children: React.ReactNode;
+  }) => (
+    <div>
+      {nodes.map((node) => (
+        <div key={node.id} data-testid="flow-node">
+          {node.data.text}
+          {node.data.interactionDisabled ? <span>disabled {node.id}</span> : null}
+          {node.data.onRun ? (
+            <button type="button" onClick={() => node.data.onRun?.(node.id, node.data.text)}>
+              Run {node.id}
+            </button>
+          ) : null}
+          {node.data.onTextChange ? (
+            <button type="button" onClick={() => node.data.onTextChange?.(node.id, "edited before load")}>
+              Edit {node.id}
+            </button>
+          ) : null}
+        </div>
+      ))}
+      {children}
+    </div>
+  ),
+}));
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+describe("App bundle hydration", () => {
+  it("renders the saved bundle instead of always starting from a new canvas", async () => {
+    const savedDocument = {
+      ...createInitialDocument(),
+      nodes: [
+        {
+          ...createInitialDocument().nodes[0]!,
+          text: "persisted prompt after reload",
+        },
+      ],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        expect(url).toBe("/api/bundle/load");
+        return new Response(JSON.stringify({ document: savedDocument, warnings: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("persisted prompt after reload")).toBeTruthy();
+    });
+    expect(screen.queryByText("What should we explore on this canvas?")).toBeNull();
+  });
+
+  it("does not run or save before bundle loading has completed", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      expect(url).toBe("/api/bundle/load");
+      return new Promise<Response>(() => undefined);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    fireEvent.click(screen.getByText("Run prompt-1"));
+
+    expect(await screen.findByText("Waiting for saved bundle to load...")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mutate the starter document before bundle loading has completed", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      expect(url).toBe("/api/bundle/load");
+      return new Promise<Response>(() => undefined);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    expect(screen.getByText("disabled prompt-1")).toBeTruthy();
+    fireEvent.click(screen.getByText("Edit prompt-1"));
+
+    expect(screen.queryByText("edited before load")).toBeNull();
+    expect(await screen.findByText("Waiting for saved bundle to load...")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("enables the starter canvas after a first-run 404 bundle load", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ errors: ["missing"] }), { status: 404 });
+      }
+      if (url === "/api/prompt") {
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.close();
+            },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+          },
+        );
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    expect(await screen.findByText("No saved bundle found.")).toBeTruthy();
+    expect(screen.queryByText("disabled prompt-1")).toBeNull();
+
+    fireEvent.click(screen.getByText("Run prompt-1"));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/prompt",
+        expect.objectContaining({
+          method: "POST",
+        }),
+      );
+    });
+  });
+
+  it("keeps run blocked with the load failure reason after a non-404 load error", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      expect(url).toBe("/api/bundle/load");
+      return new Response(JSON.stringify({ errors: ["corrupt bundle"] }), {
+        status: 422,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    expect(await screen.findByText("Bundle load failed: corrupt bundle")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Run prompt-1"));
+
+    expect(await screen.findByText("Bundle load failed: corrupt bundle")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

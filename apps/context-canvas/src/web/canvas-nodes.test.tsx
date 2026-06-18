@@ -20,6 +20,7 @@ describe("PromptInputNode", () => {
       text: "",
       stance: "neutral",
       running: false,
+      interactionDisabled: false,
       deleteArmed: false,
       isNew: false,
       onDraftChange,

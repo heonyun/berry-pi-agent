@@ -7,6 +7,7 @@ export interface PromptNodeData {
   text: string;
   stance: StanceBand;
   running: boolean;
+  interactionDisabled: boolean;
   onDraftChange: (nodeId: string, text: string) => void;
   onTextChange: (nodeId: string, text: string) => void;
   onRun: (nodeId: string, text?: string) => void;
@@ -24,6 +25,7 @@ export interface AnswerNodeData {
   feedback?: FeedbackState;
   versionCount: number;
   running: boolean;
+  interactionDisabled: boolean;
   deleteArmed: boolean;
   isNew: boolean;
   onFeedback: (nodeId: string, feedback: FeedbackState) => void;
@@ -38,6 +40,7 @@ export type CanvasFlowNode = Node<PromptNodeData | AnswerNodeData>;
 export interface ReactFlowAdapterInput {
   document: ContextCanvasDocument;
   runningPromptId: string | null;
+  interactionDisabled?: boolean;
   callbacks: {
     onDraftChange: PromptNodeData["onDraftChange"];
     onTextChange: PromptNodeData["onTextChange"];
@@ -52,7 +55,14 @@ export interface ReactFlowAdapterInput {
 }
 
 export function toReactFlowNodes(input: ReactFlowAdapterInput): CanvasFlowNode[] {
-  const { document, runningPromptId, callbacks, deleteArmedNodeId, newNodeIds } = input;
+  const {
+    document,
+    runningPromptId,
+    interactionDisabled = false,
+    callbacks,
+    deleteArmedNodeId,
+    newNodeIds,
+  } = input;
   return document.nodes.map((node) => {
     const stance = stanceForNode(document, node);
     if (node.kind === "prompt_input") {
@@ -66,6 +76,7 @@ export function toReactFlowNodes(input: ReactFlowAdapterInput): CanvasFlowNode[]
           text: node.text,
           stance,
           running: runningPromptId === node.id,
+          interactionDisabled,
           deleteArmed: deleteArmedNodeId === node.id,
           isNew: newNodeIds?.has(node.id) ?? false,
           onDraftChange: callbacks.onDraftChange,
@@ -88,6 +99,7 @@ export function toReactFlowNodes(input: ReactFlowAdapterInput): CanvasFlowNode[]
         stance,
         feedback: node.feedback,
         versionCount: node.stack?.versions.length ?? 1,
+        interactionDisabled,
         running:
           runningPromptId !== null &&
           node.text === "" &&

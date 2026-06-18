@@ -17,7 +17,7 @@ import {
   toReactFlowNodes,
   type CanvasFlowNode,
 } from "../adapters/react-flow.ts";
-import type { CanvasCommand } from "../core/commands.ts";
+import type { ApplyResult, CanvasCommand } from "../core/commands.ts";
 import { findLineageParentPromptId, roundedPosition } from "../core/mutations.ts";
 import { applyCommand } from "../core/reducer.ts";
 import { compilePromptContext } from "../shared/compiler.ts";
@@ -25,6 +25,7 @@ import { buildNodeBacklinks, formatCompiledPreviewMarkdown } from "../shared/com
 import { createInitialDocument, findNode } from "../shared/domain.ts";
 import { canvasNodeTypes } from "./canvas-nodes.tsx";
 import { exportBundle } from "./export-bundle.ts";
+import { loadBundle } from "./load-bundle.ts";
 import { streamPrompt } from "./stream-prompt.ts";
 
 function CanvasApp() {
@@ -38,13 +39,51 @@ function CanvasApp() {
   const [deleteArmedNodeId, setDeleteArmedNodeId] = useState<string | null>(null);
   const [newNodeIds, setNewNodeIds] = useState<ReadonlySet<string>>(() => new Set());
   const [runningPromptId, setRunningPromptId] = useState<string | null>(null);
-  const [status, setStatus] = useState<string>("Ready");
+  const [status, setStatus] = useState<string>("Loading saved bundle...");
+  const bundleLoadCompleteRef = useRef(false);
+  const bundleLoadFailureRef = useRef<string | null>(null);
   const nodeCount = document.nodes.length;
   const edgeCount = document.edges.length;
+  const interactionDisabled = !bundleLoadCompleteRef.current || bundleLoadFailureRef.current !== null;
 
   useEffect(() => {
     documentRef.current = document;
   }, [document]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadBundle()
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+        bundleLoadCompleteRef.current = true;
+        bundleLoadFailureRef.current = null;
+        if (!result.document) {
+          setStatus(result.errors.length > 0 ? result.errors.join(" ") : "Ready");
+          return;
+        }
+        documentRef.current = result.document;
+        setDocument(result.document);
+        const firstPrompt = result.document.nodes.find((node) => node.kind === "prompt_input");
+        setSelectedNodeId(firstPrompt?.id ?? result.document.nodes[0]?.id ?? "");
+        fitViewOnLayoutRef.current = true;
+        const warningCount = result.warnings.length;
+        setStatus(warningCount > 0 ? `Saved bundle loaded (${warningCount} warnings).` : "Saved bundle loaded.");
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        const statusMessage = `Bundle load failed: ${message}`;
+        bundleLoadFailureRef.current = statusMessage;
+        setStatus(statusMessage);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -76,7 +115,16 @@ function CanvasApp() {
     }, 220);
   }, []);
 
+  const blockUntilBundleReady = useCallback((): ApplyResult => {
+    const message = bundleLoadFailureRef.current ?? "Waiting for saved bundle to load...";
+    setStatus(message);
+    return { document: documentRef.current, meta: { statusMessage: message } };
+  }, []);
+
   const dispatch = useCallback((command: CanvasCommand) => {
+    if (!bundleLoadCompleteRef.current || bundleLoadFailureRef.current) {
+      return blockUntilBundleReady();
+    }
     const result = applyCommand(documentRef.current, command);
     documentRef.current = result.document;
     setDocument(result.document);
@@ -104,11 +152,15 @@ function CanvasApp() {
       setStatus(result.meta.statusMessage);
     }
     return result;
-  }, [markNodeAsNew]);
+  }, [blockUntilBundleReady, markNodeAsNew]);
 
   const updatePromptDraft = useCallback((nodeId: string, text: string) => {
+    if (!bundleLoadCompleteRef.current || bundleLoadFailureRef.current) {
+      blockUntilBundleReady();
+      return;
+    }
     promptDraftsRef.current.set(nodeId, text);
-  }, []);
+  }, [blockUntilBundleReady]);
 
   const updatePromptText = useCallback(
     (nodeId: string, text: string) => {
@@ -126,6 +178,14 @@ function CanvasApp() {
   );
 
   const saveBundle = useCallback(async (promptNodeId?: string) => {
+    if (bundleLoadFailureRef.current) {
+      setStatus(bundleLoadFailureRef.current);
+      return;
+    }
+    if (!bundleLoadCompleteRef.current) {
+      setStatus("Waiting for saved bundle to load...");
+      return;
+    }
     try {
       const result = await exportBundle(documentRef.current, promptNodeId);
       const fileCount = result.pathsWritten.length;
@@ -143,6 +203,14 @@ function CanvasApp() {
 
   const runPrompt = useCallback(
     async (promptNodeId: string, retryAnswerId?: string, promptTextOverride?: string) => {
+      if (bundleLoadFailureRef.current) {
+        setStatus(bundleLoadFailureRef.current);
+        return;
+      }
+      if (!bundleLoadCompleteRef.current) {
+        setStatus("Waiting for saved bundle to load...");
+        return;
+      }
       setRunningPromptId(promptNodeId);
       setStatus("Running agent...");
 
@@ -296,6 +364,7 @@ function CanvasApp() {
       toReactFlowNodes({
         document,
         runningPromptId,
+        interactionDisabled,
         callbacks: {
           onDraftChange: updatePromptDraft,
           onTextChange: updatePromptText,
@@ -313,6 +382,7 @@ function CanvasApp() {
       deleteArmedNodeId,
       deleteNode,
       document,
+      interactionDisabled,
       newNodeIds,
       onFeedback,
       onRetry,
