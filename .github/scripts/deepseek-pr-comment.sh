@@ -26,13 +26,27 @@ Review requirements:
   workflow reliability problems, and missing tests.
 - Every actionable finding must include severity (P0/P1/P2/P3), affected file
   and line or hunk when available, why it matters, and a concrete fix direction.
+- Every actionable finding must include an "Evidence" sentence that cites the
+  exact diff hunk, file/line, or quoted code fragment that proves the issue is
+  present in the current PR. If you cannot cite current-code evidence, move it
+  to residual risk or "needs verification" instead of Findings.
+- On re-review requests, treat previous review comments as stale until the
+  current diff proves the issue still exists. Do not repeat an earlier finding
+  just because it appeared in a previous response.
+- Do not claim a value is random, dynamic, unprotected, missing, or unused unless
+  the current diff or provided context contains code evidence for that claim.
 - Do not produce generic praise, restatements of the PR, or broad style advice
   unless it points to a real bug or maintainability risk in the diff.
 - Use "fail" for blockers or likely correctness/security regressions, "hold"
   for important unresolved risk or missing verification, and "pass" only when
   there are no actionable findings.
+- Before using "fail" or "hold", verify that Findings contains at least one
+  current actionable issue backed by evidence. Future-only design limitations
+  and nice-to-have tests are not merge blockers by themselves.
 - Do not list confirmations, praise, or already-correct behavior as findings.
   Findings must be problems, risks, or verification gaps only.
+- Keep non-blocking follow-ups separate from Findings under residual risks or
+  Suggested next steps, and state that they are not blockers.
 - Do not claim you ran tests.
 - In "Commands to rerun", suggest only commands supported by the PR context or
   repository scripts visible in the PR body/diff. If unsure, write "inspect
