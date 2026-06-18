@@ -134,16 +134,22 @@ export function handleBundleLoad(config: ContextCanvasServerConfig): {
   document?: ContextCanvasDocument;
   warnings: string[];
   errors: string[];
-  statusCode: 200 | 404 | 422;
+  statusCode: 200 | 404 | 422 | 500;
 } {
   const canvasId = createInitialDocument().canvas.id;
   assertSafeId(canvasId, "canvasId");
   const bundleRoot = resolveWithinBundle(resolveBundleRootBase(config), canvasId);
-  const result = loadBundleToDocument(bundleRoot);
-  if (result.document) {
-    return { ...result, statusCode: 200 };
+  const bundleExists = fs.existsSync(bundleRoot);
+  try {
+    const result = loadBundleToDocument(bundleRoot);
+    if (result.document) {
+      return { ...result, statusCode: 200 };
+    }
+    return { ...result, statusCode: bundleExists ? 422 : 404 };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { warnings: [], errors: [message], statusCode: 500 };
   }
-  return { ...result, statusCode: fs.existsSync(bundleRoot) ? 422 : 404 };
 }
 
 async function handlePrompt(
@@ -241,13 +247,17 @@ export function createContextCanvasServer(config: ContextCanvasServerConfig = se
     }
 
     if (req.method === "GET" && req.url === "/api/bundle/load") {
-      const result = handleBundleLoad(config);
-      if (!result.document) {
-        res.writeHead(result.statusCode, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(result));
+      const routeAccess = verifyRequestAccess(
+        { method: req.method, origin, token: requestToken(req), url: req.url },
+        config,
+      );
+      if (!routeAccess.ok) {
+        res.writeHead(routeAccess.statusCode, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: routeAccess.message }));
         return;
       }
-      res.writeHead(200, { "Content-Type": "application/json" });
+      const result = handleBundleLoad(config);
+      res.writeHead(result.statusCode, { "Content-Type": "application/json" });
       res.end(JSON.stringify(result));
       return;
     }
