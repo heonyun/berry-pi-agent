@@ -25,6 +25,7 @@ import { buildNodeBacklinks, formatCompiledPreviewMarkdown } from "../shared/com
 import { createInitialDocument, findNode } from "../shared/domain.ts";
 import { canvasNodeTypes } from "./canvas-nodes.tsx";
 import { exportBundle } from "./export-bundle.ts";
+import { loadBundle } from "./load-bundle.ts";
 import { streamPrompt } from "./stream-prompt.ts";
 
 function CanvasApp() {
@@ -38,13 +39,46 @@ function CanvasApp() {
   const [deleteArmedNodeId, setDeleteArmedNodeId] = useState<string | null>(null);
   const [newNodeIds, setNewNodeIds] = useState<ReadonlySet<string>>(() => new Set());
   const [runningPromptId, setRunningPromptId] = useState<string | null>(null);
-  const [status, setStatus] = useState<string>("Ready");
+  const [status, setStatus] = useState<string>("Loading saved bundle...");
+  const bundleLoadCompleteRef = useRef(false);
   const nodeCount = document.nodes.length;
   const edgeCount = document.edges.length;
 
   useEffect(() => {
     documentRef.current = document;
   }, [document]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadBundle()
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+        bundleLoadCompleteRef.current = true;
+        if (!result.document) {
+          setStatus(result.errors.length > 0 ? result.errors.join(" ") : "Ready");
+          return;
+        }
+        documentRef.current = result.document;
+        setDocument(result.document);
+        const firstPrompt = result.document.nodes.find((node) => node.kind === "prompt_input");
+        setSelectedNodeId(firstPrompt?.id ?? result.document.nodes[0]?.id ?? "");
+        fitViewOnLayoutRef.current = true;
+        const warningCount = result.warnings.length;
+        setStatus(warningCount > 0 ? `Saved bundle loaded (${warningCount} warnings).` : "Saved bundle loaded.");
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        setStatus(`Bundle load failed: ${message}`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -126,6 +160,10 @@ function CanvasApp() {
   );
 
   const saveBundle = useCallback(async (promptNodeId?: string) => {
+    if (!bundleLoadCompleteRef.current) {
+      setStatus("Waiting for saved bundle to load...");
+      return;
+    }
     try {
       const result = await exportBundle(documentRef.current, promptNodeId);
       const fileCount = result.pathsWritten.length;
@@ -143,6 +181,10 @@ function CanvasApp() {
 
   const runPrompt = useCallback(
     async (promptNodeId: string, retryAnswerId?: string, promptTextOverride?: string) => {
+      if (!bundleLoadCompleteRef.current) {
+        setStatus("Waiting for saved bundle to load...");
+        return;
+      }
       setRunningPromptId(promptNodeId);
       setStatus("Running agent...");
 

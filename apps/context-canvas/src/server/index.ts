@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
@@ -7,6 +8,8 @@ import { getModel, type KnownProvider } from "@earendil-works/pi-ai";
 import { createAgentSession, SessionManager, type AgentSession } from "@earendil-works/pi-coding-agent";
 import { compilePromptContext, formatPromptForPi, type CompiledPromptContext } from "../shared/compiler.ts";
 import type { ContextCanvasDocument } from "../shared/domain.ts";
+import { createInitialDocument } from "../shared/domain.ts";
+import { loadBundleToDocument } from "../storage/markdown/load.ts";
 import { projectDocumentToBundle } from "../storage/markdown/project.ts";
 import { assertSafeId, resolveWithinBundle } from "../storage/markdown/paths.ts";
 import {
@@ -127,6 +130,22 @@ export function handleBundleExport(
   };
 }
 
+export function handleBundleLoad(config: ContextCanvasServerConfig): {
+  document?: ContextCanvasDocument;
+  warnings: string[];
+  errors: string[];
+  statusCode: 200 | 404 | 422;
+} {
+  const canvasId = createInitialDocument().canvas.id;
+  assertSafeId(canvasId, "canvasId");
+  const bundleRoot = resolveWithinBundle(resolveBundleRootBase(config), canvasId);
+  const result = loadBundleToDocument(bundleRoot);
+  if (result.document) {
+    return { ...result, statusCode: 200 };
+  }
+  return { ...result, statusCode: fs.existsSync(bundleRoot) ? 422 : 404 };
+}
+
 async function handlePrompt(
   body: { document: ContextCanvasDocument; promptNodeId: string },
   res: ServerResponse,
@@ -218,6 +237,18 @@ export function createContextCanvasServer(config: ContextCanvasServerConfig = se
     if (req.method === "GET" && req.url === "/api/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/api/bundle/load") {
+      const result = handleBundleLoad(config);
+      if (!result.document) {
+        res.writeHead(result.statusCode, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(result));
       return;
     }
 

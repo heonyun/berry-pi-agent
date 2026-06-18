@@ -10,7 +10,7 @@ export type ContextCanvasServerConfig = {
   token?: string;
 };
 
-const PROTECTED_API_PATHS = new Set(["/api/prompt", "/api/bundle/export"]);
+const PROTECTED_API_PATHS = new Set(["/api/prompt", "/api/bundle/export", "/api/bundle/load"]);
 
 type Env = Partial<Record<string, string>>;
 
