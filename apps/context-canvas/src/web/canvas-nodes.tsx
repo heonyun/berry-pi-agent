@@ -119,6 +119,7 @@ export const PromptInputNode = memo(function PromptInputNode({
     text,
     stance,
     running,
+    interactionDisabled,
     deleteArmed,
     onDraftChange,
     onTextChange,
@@ -188,6 +189,7 @@ export const PromptInputNode = memo(function PromptInputNode({
       <ImeTextarea
         className="nodrag nopan nowheel"
         value={text}
+        disabled={interactionDisabled}
         clearOnFocusValue={INITIAL_PROMPT_TEXT}
         onLocalChange={handleLocalChange}
         onValueChange={handleCommit}
@@ -199,7 +201,7 @@ export const PromptInputNode = memo(function PromptInputNode({
         <button
           className="primary nodrag nopan"
           type="button"
-          disabled={running}
+          disabled={running || interactionDisabled}
           onKeyDown={stopNodeKeyPropagation}
           onClick={handleRun}
         >
@@ -243,6 +245,7 @@ export const AIAnswerNode = memo(function AIAnswerNode({
             key={feedback}
             type="button"
             className={`nodrag nopan ${data.feedback === feedback ? "active" : ""}`}
+            disabled={data.interactionDisabled}
             onKeyDown={stopNodeKeyPropagation}
             onClick={() => data.onFeedback(data.nodeId, feedback)}
           >
@@ -254,7 +257,7 @@ export const AIAnswerNode = memo(function AIAnswerNode({
         <button
           type="button"
           className="nodrag nopan"
-          disabled={data.running}
+          disabled={data.running || data.interactionDisabled}
           onKeyDown={stopNodeKeyPropagation}
           onClick={() => data.onRetry(data.nodeId)}
         >

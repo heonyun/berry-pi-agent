@@ -17,7 +17,7 @@ import {
   toReactFlowNodes,
   type CanvasFlowNode,
 } from "../adapters/react-flow.ts";
-import type { CanvasCommand } from "../core/commands.ts";
+import type { ApplyResult, CanvasCommand } from "../core/commands.ts";
 import { findLineageParentPromptId, roundedPosition } from "../core/mutations.ts";
 import { applyCommand } from "../core/reducer.ts";
 import { compilePromptContext } from "../shared/compiler.ts";
@@ -44,6 +44,7 @@ function CanvasApp() {
   const bundleLoadFailureRef = useRef<string | null>(null);
   const nodeCount = document.nodes.length;
   const edgeCount = document.edges.length;
+  const interactionDisabled = !bundleLoadCompleteRef.current || bundleLoadFailureRef.current !== null;
 
   useEffect(() => {
     documentRef.current = document;
@@ -114,7 +115,16 @@ function CanvasApp() {
     }, 220);
   }, []);
 
+  const blockUntilBundleReady = useCallback((): ApplyResult => {
+    const message = bundleLoadFailureRef.current ?? "Waiting for saved bundle to load...";
+    setStatus(message);
+    return { document: documentRef.current, meta: { statusMessage: message } };
+  }, []);
+
   const dispatch = useCallback((command: CanvasCommand) => {
+    if (!bundleLoadCompleteRef.current || bundleLoadFailureRef.current) {
+      return blockUntilBundleReady();
+    }
     const result = applyCommand(documentRef.current, command);
     documentRef.current = result.document;
     setDocument(result.document);
@@ -142,11 +152,15 @@ function CanvasApp() {
       setStatus(result.meta.statusMessage);
     }
     return result;
-  }, [markNodeAsNew]);
+  }, [blockUntilBundleReady, markNodeAsNew]);
 
   const updatePromptDraft = useCallback((nodeId: string, text: string) => {
+    if (!bundleLoadCompleteRef.current || bundleLoadFailureRef.current) {
+      blockUntilBundleReady();
+      return;
+    }
     promptDraftsRef.current.set(nodeId, text);
-  }, []);
+  }, [blockUntilBundleReady]);
 
   const updatePromptText = useCallback(
     (nodeId: string, text: string) => {
@@ -350,6 +364,7 @@ function CanvasApp() {
       toReactFlowNodes({
         document,
         runningPromptId,
+        interactionDisabled,
         callbacks: {
           onDraftChange: updatePromptDraft,
           onTextChange: updatePromptText,
@@ -367,6 +382,7 @@ function CanvasApp() {
       deleteArmedNodeId,
       deleteNode,
       document,
+      interactionDisabled,
       newNodeIds,
       onFeedback,
       onRetry,

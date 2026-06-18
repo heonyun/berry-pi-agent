@@ -19,16 +19,30 @@ vi.mock("@xyflow/react", () => ({
     nodes,
     children,
   }: {
-    nodes: Array<{ id: string; data: { text?: string; onRun?: (nodeId: string, text?: string) => void } }>;
+    nodes: Array<{
+      id: string;
+      data: {
+        text?: string;
+        interactionDisabled?: boolean;
+        onRun?: (nodeId: string, text?: string) => void;
+        onTextChange?: (nodeId: string, text: string) => void;
+      };
+    }>;
     children: React.ReactNode;
   }) => (
     <div>
       {nodes.map((node) => (
         <div key={node.id} data-testid="flow-node">
           {node.data.text}
+          {node.data.interactionDisabled ? <span>disabled {node.id}</span> : null}
           {node.data.onRun ? (
             <button type="button" onClick={() => node.data.onRun?.(node.id, node.data.text)}>
               Run {node.id}
+            </button>
+          ) : null}
+          {node.data.onTextChange ? (
+            <button type="button" onClick={() => node.data.onTextChange?.(node.id, "edited before load")}>
+              Edit {node.id}
             </button>
           ) : null}
         </div>
@@ -83,6 +97,22 @@ describe("App bundle hydration", () => {
     render(<App />);
     fireEvent.click(screen.getByText("Run prompt-1"));
 
+    expect(await screen.findByText("Waiting for saved bundle to load...")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mutate the starter document before bundle loading has completed", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      expect(url).toBe("/api/bundle/load");
+      return new Promise<Response>(() => undefined);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    expect(screen.getByText("disabled prompt-1")).toBeTruthy();
+    fireEvent.click(screen.getByText("Edit prompt-1"));
+
+    expect(screen.queryByText("edited before load")).toBeNull();
     expect(await screen.findByText("Waiting for saved bundle to load...")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
