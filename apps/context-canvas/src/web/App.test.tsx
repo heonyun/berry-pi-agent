@@ -86,4 +86,20 @@ describe("App bundle hydration", () => {
     expect(await screen.findByText("Waiting for saved bundle to load...")).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps run blocked with the load failure reason after a non-404 load error", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      expect(url).toBe("/api/bundle/load");
+      return new Response("corrupt bundle", { status: 422 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    expect(await screen.findByText("Bundle load failed: corrupt bundle")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Run prompt-1"));
+
+    expect(await screen.findByText("Bundle load failed: corrupt bundle")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

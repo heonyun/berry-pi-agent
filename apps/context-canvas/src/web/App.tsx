@@ -41,6 +41,7 @@ function CanvasApp() {
   const [runningPromptId, setRunningPromptId] = useState<string | null>(null);
   const [status, setStatus] = useState<string>("Loading saved bundle...");
   const bundleLoadCompleteRef = useRef(false);
+  const bundleLoadFailureRef = useRef<string | null>(null);
   const nodeCount = document.nodes.length;
   const edgeCount = document.edges.length;
 
@@ -56,6 +57,7 @@ function CanvasApp() {
           return;
         }
         bundleLoadCompleteRef.current = true;
+        bundleLoadFailureRef.current = null;
         if (!result.document) {
           setStatus(result.errors.length > 0 ? result.errors.join(" ") : "Ready");
           return;
@@ -73,7 +75,9 @@ function CanvasApp() {
           return;
         }
         const message = error instanceof Error ? error.message : String(error);
-        setStatus(`Bundle load failed: ${message}`);
+        const statusMessage = `Bundle load failed: ${message}`;
+        bundleLoadFailureRef.current = statusMessage;
+        setStatus(statusMessage);
       });
     return () => {
       cancelled = true;
@@ -160,6 +164,10 @@ function CanvasApp() {
   );
 
   const saveBundle = useCallback(async (promptNodeId?: string) => {
+    if (bundleLoadFailureRef.current) {
+      setStatus(bundleLoadFailureRef.current);
+      return;
+    }
     if (!bundleLoadCompleteRef.current) {
       setStatus("Waiting for saved bundle to load...");
       return;
@@ -181,6 +189,10 @@ function CanvasApp() {
 
   const runPrompt = useCallback(
     async (promptNodeId: string, retryAnswerId?: string, promptTextOverride?: string) => {
+      if (bundleLoadFailureRef.current) {
+        setStatus(bundleLoadFailureRef.current);
+        return;
+      }
       if (!bundleLoadCompleteRef.current) {
         setStatus("Waiting for saved bundle to load...");
         return;

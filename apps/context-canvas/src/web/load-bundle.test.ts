@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createInitialDocument } from "../shared/domain.ts";
 import { loadBundle } from "./load-bundle.ts";
 
 afterEach(() => {
@@ -6,6 +7,21 @@ afterEach(() => {
 });
 
 describe("loadBundle", () => {
+  it("returns the loaded document on success", async () => {
+    const document = createInitialDocument();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(JSON.stringify({ document, warnings: ["loaded"], errors: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    await expect(loadBundle()).resolves.toEqual({ document, warnings: ["loaded"], errors: [] });
+  });
+
   it("treats 404 as an empty first-run canvas", async () => {
     vi.stubGlobal(
       "fetch",
