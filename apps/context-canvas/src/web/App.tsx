@@ -389,10 +389,10 @@ function CanvasApp() {
           onConnect={onConnect}
           onConnectEnd={onConnectEnd}
         >
-          <Background gap={22} color="var(--canvas-grid)" />
+          <Background gap={22} color="#dccab8" />
           <MiniMap
             maskColor="rgba(245, 234, 220, 0.64)"
-            nodeColor={(node) => (node.type === "promptInput" ? "var(--prompt)" : "var(--answer)")}
+            nodeColor={(node) => (node.type === "promptInput" ? "#f6d8c8" : "#dce7ce")}
             pannable
             zoomable
           />
