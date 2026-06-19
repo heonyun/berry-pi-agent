@@ -100,6 +100,17 @@ canonical_repo: "C:\\Dev\\pi-agent"
 - Verified with Playwright against Chrome: `http://localhost:5174/api/prompt` returned 200 SSE text deltas, the answer node filled with text, and bundle export succeeded.
 - Verified commands: `npm run test --workspace=@berry-pi/context-canvas` passed 57 tests; `npm run build --workspace=@berry-pi/context-canvas` passed.
 
+## Follow-up Issue Management
+
+- Asked Cursor CLI for one read-only advisory pass on how to split remaining PR #23 review work. Raw output: `cursor-runs/20260619-125327-issue-planning/`.
+- Created follow-up issues under the #22 planning umbrella:
+  - #24 drag-selection, pan, selection lifecycle: merge-blocking for PR #23.
+  - #25 answer-action keyboard shortcuts: merge-blocking for PR #23.
+  - #26 group/action/focus/persistence tests: partial for PR #23, broader coverage follow-up.
+  - #27 group UX polish and markdown path consistency: follow-up-only unless reproduced as a regression.
+- Added a tracking comment to #22 with Cursor summary and focused review requests for `@gemini-code-assist` and `/deepseek`.
+- Attempted real GitHub sub-issue linking, but local `gh` lacks `--parent` and REST sub-issue linking was unavailable in this repo/session, so links are recorded through issue bodies and the #22 tracking comment for now.
+
 ## Decisions
 
 - Group summaries are local editable drafts, not AI-generated in v1.
