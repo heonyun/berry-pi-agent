@@ -17,12 +17,22 @@ agent_output_sections_prompt() {
   cat <<'EOF'
 Return markdown with exactly these sections (in this order):
 ## Conclusion
-pass | hold | fail
+pass | hold | hold (truncated) | fail
 
 ## Summary
 
 ## Findings
-1. ...
+Use numbered findings. Each actionable finding MUST use this structure:
+1. [P1][evidence:diff|issue|heuristic][blocker:yes|no] Short title
+   - Evidence: `path:line` — "quoted fragment, diff hunk, or issue text"
+   - Why: one sentence on impact
+   - Fix: concrete direction
+
+Rules:
+- Put non-actionable residual risks under Suggested next steps, not Findings.
+- Use evidence:heuristic only when the issue/diff does not contain direct proof.
+- Use blocker:no for P2/P3 follow-ups that must not block merge.
+- If there are no actionable findings, write "None." under Findings.
 
 ## Suggested next steps
 
@@ -68,8 +78,9 @@ Include these points inside the required sections:
 - In Summary: add "Implementation readiness: Ready now | Needs design decision
   | Needs prototype | Too ambiguous".
 - In Findings: for each important finding include P0/P1/P2/P3 severity,
-  affected area or likely file/function named in the issue, why it matters,
-  concrete recommendation, and needed verification.
+  evidence type (issue|heuristic), blocker yes/no, affected area or likely
+  file/function named in the issue, why it matters, an Evidence line, concrete
+  recommendation, and needed verification.
 - Do not list confirmations or praise as findings.
 - In Suggested next steps: order the smallest safe patch/prototype first.
 - In Commands to rerun: prefer exact workspace commands from the issue body
@@ -104,8 +115,12 @@ Review requirements:
 - Do not produce generic praise, restatements of the PR, or broad style advice
   unless it points to a real bug or maintainability risk in the diff.
 - Use "fail" for blockers or likely correctness/security regressions, "hold"
-  for important unresolved risk or missing verification, and "pass" only when
-  there are no actionable findings.
+  for important unresolved risk or missing verification, "hold (truncated)"
+  when diff coverage is incomplete and findings depend on unseen hunks, and
+  "pass" only when there are no actionable findings.
+- When the user message says the diff was truncated, never use "fail" for
+  issues in files or hunks not present in the provided Diff section. Use
+  "hold (truncated)" instead and list unseen paths under Suggested next steps.
 - Before using "fail" or "hold", verify that Findings contains at least one
   current actionable issue backed by evidence. Future-only design limitations
   and nice-to-have tests are not merge blockers by themselves.
@@ -164,6 +179,120 @@ $(agent_ci_explain_instructions)
 
 $(agent_output_sections_prompt)
 EOF
+}
+
+# Extract the first non-empty line under ## Conclusion (lowercased, trimmed).
+agent_extract_conclusion() {
+  local body="${1:-}"
+  awk '
+    /^## Conclusion[[:space:]]*$/ { in_section=1; next }
+    in_section && /^## / { exit }
+    in_section && NF {
+      line=$0
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+      gsub(/^`+|`+$/, "", line)
+      print tolower(line)
+      exit
+    }
+  ' <<<"${body}"
+}
+
+# Count numbered findings (lines like "1. ...") inside the Findings section.
+agent_count_numbered_findings() {
+  local body="${1:-}"
+  awk '
+    /^## Findings[[:space:]]*$/ { in_section=1; next }
+    in_section && /^## / { exit }
+    in_section && /^[0-9]+\.[[:space:]]/ { count++ }
+    END { print count + 0 }
+  ' <<<"${body}"
+}
+
+# Exit 0 when at least one finding includes an Evidence line.
+agent_findings_have_evidence() {
+  local body="${1:-}"
+  awk '
+    /^## Findings[[:space:]]*$/ { in_section=1; next }
+    in_section && /^## / { exit }
+    in_section && tolower($0) ~ /^[[:space:]]*- evidence:/ { found=1 }
+    END { exit(found ? 0 : 1) }
+  ' <<<"${body}"
+}
+
+# Normalize model output before posting to GitHub.
+# Args: comment_body diff_truncated(0|1)
+agent_post_process_review_comment() {
+  local body="${1:-}"
+  local diff_truncated="${2:-0}"
+  local notes=()
+  local conclusion
+  local finding_count
+
+  conclusion="$(agent_extract_conclusion "${body}")"
+  finding_count="$(agent_count_numbered_findings "${body}")"
+
+  if [[ "${diff_truncated}" == "1" ]] && [[ "${conclusion}" == "fail" ]]; then
+    body="$(printf '%s\n' "${body}" | sed '0,/^## Conclusion$/{n;s/^fail[[:space:]]*$/hold (truncated)/;s/^`fail`[[:space:]]*$/hold (truncated)/}')"
+    notes+=("Diff was truncated; Conclusion downgraded from \`fail\` to \`hold (truncated)\`.")
+  fi
+
+  if [[ "${finding_count}" -eq 0 ]] && [[ "${conclusion}" =~ ^(fail|hold)$ ]]; then
+    notes+=("Conclusion is \`${conclusion}\` but Findings has no numbered actionable items; treat as non-blocking unless Codex verifies.")
+  fi
+
+  if [[ "${finding_count}" -gt 0 ]] && ! agent_findings_have_evidence "${body}"; then
+    notes+=("Findings lack explicit \`- Evidence:\` lines; treat as needs-verification.")
+  fi
+
+  if [[ ${#notes[@]} -eq 0 ]]; then
+    printf '%s' "${body}"
+    return 0
+  fi
+
+  {
+    echo "> **Review note (automated):** ${notes[0]}"
+    if [[ ${#notes[@]} -gt 1 ]]; then
+      local idx
+      for ((idx = 1; idx < ${#notes[@]}; idx++)); do
+        echo "> ${notes[idx]}"
+      done
+    fi
+    echo ""
+    printf '%s' "${body}"
+  }
+}
+
+# Build PR diff metadata for the user prompt.
+# Writes to stdout: changed file list block and truncation note.
+# Args: diff_file max_diff_chars repo pr_number
+agent_pr_diff_metadata() {
+  local diff_file="${1:?diff file required}"
+  local max_diff_chars="${2:?max chars required}"
+  local repo="${3:?repo required}"
+  local pr_number="${4:?pr number required}"
+
+  local diff_chars
+  diff_chars="$(wc -c < "${diff_file}" | tr -d ' ')"
+  local changed_files
+  changed_files="$(gh api "repos/${repo}/pulls/${pr_number}/files" --jq '.[].filename' 2>/dev/null || true)"
+  local file_count=0
+  if [[ -n "${changed_files}" ]]; then
+    file_count="$(printf '%s\n' "${changed_files}" | sed '/^$/d' | wc -l | tr -d ' ')"
+    echo "Changed files (${file_count}):"
+    printf '%s\n' "${changed_files}"
+    echo ""
+  fi
+
+  if [[ "${diff_chars}" -gt "${max_diff_chars}" ]]; then
+    echo "Diff coverage: first ${max_diff_chars} of ${diff_chars} characters."
+    echo "Diff was truncated. Use Conclusion: hold (truncated) when findings depend on unseen hunks."
+    echo "Do not use Conclusion: fail for code outside the Diff section below."
+    if [[ -n "${changed_files}" ]]; then
+      echo "Unverified paths (may be missing from Diff section):"
+      printf '%s\n' "${changed_files}"
+    fi
+    echo ""
+  fi
 }
 
 # Log DeepSeek prompt cache usage from a chat/completions response JSON file.

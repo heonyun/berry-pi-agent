@@ -88,6 +88,8 @@ if [[ -z "${comment_body}" ]]; then
   exit 1
 fi
 
+comment_body="$(agent_post_process_review_comment "${comment_body}" "0")"
+
 {
   echo "${comment_body}"
   agent_footer "${WORKFLOW_ID}" "${MODEL}"
