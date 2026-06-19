@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
-import { getModel, type KnownProvider } from "@earendil-works/pi-ai";
+import { getModel, type AssistantMessage, type KnownProvider } from "@earendil-works/pi-ai";
 import { createAgentSession, SessionManager, type AgentSession } from "@earendil-works/pi-coding-agent";
 import { compilePromptContext, formatPromptForPi, type CompiledPromptContext } from "../shared/compiler.ts";
 import type { ContextCanvasDocument } from "../shared/domain.ts";
@@ -91,6 +91,13 @@ function writeSse(res: ServerResponse, event: SseEvent): void {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
+export function assistantMessageText(message: AssistantMessage): string {
+  return message.content
+    .filter((entry): entry is Extract<(typeof message.content)[number], { type: "text" }> => entry.type === "text")
+    .map((entry) => entry.text)
+    .join("");
+}
+
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = [];
   let totalLength = 0;
@@ -174,6 +181,7 @@ async function handlePrompt(
     const compiled = compilePromptContext(body.document, body.promptNodeId);
     const promptText = formatPromptForPi(compiled);
     const session = await getSession();
+    let streamedText = "";
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -192,7 +200,21 @@ async function handlePrompt(
 
       unsubscribe = session.subscribe((event: Parameters<Parameters<AgentSession["subscribe"]>[0]>[0]) => {
         if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+          streamedText += event.assistantMessageEvent.delta;
           writeSse(res, { type: "text_delta", delta: event.assistantMessageEvent.delta });
+        } else if (event.type === "message_end" && event.message.role === "assistant") {
+          if (event.message.errorMessage) {
+            writeSse(res, { type: "error", message: event.message.errorMessage });
+            return;
+          }
+          const finalText = assistantMessageText(event.message);
+          if (finalText.length > streamedText.length && finalText.startsWith(streamedText)) {
+            writeSse(res, { type: "text_delta", delta: finalText.slice(streamedText.length) });
+            streamedText = finalText;
+          } else if (!streamedText && finalText) {
+            writeSse(res, { type: "text_delta", delta: finalText });
+            streamedText = finalText;
+          }
         } else if (event.type === "tool_execution_start") {
           writeSse(res, {
             type: "tool_start",

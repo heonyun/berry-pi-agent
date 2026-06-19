@@ -92,6 +92,14 @@ canonical_repo: "C:\\Dev\\pi-agent"
 - Fix: dev startup now finds an available API port starting at 3001 and passes the same target to Vite through `CONTEXT_CANVAS_API_TARGET`.
 - Verified after fix: the dev server selected `http://127.0.0.1:3002`, Vite stayed on `http://localhost:5174/`, and Context Canvas tests/build still passed.
 
+## Follow-up Fix: Empty AI Answers
+
+- Root cause: when Vite selected a non-default port such as 5174, the API still only allowed `http://localhost:5173` and rejected `/api/prompt` with `403 Origin is not allowed`.
+- Related robustness fix: the server now sends final assistant `message_end` text as a fallback when the SDK does not emit text deltas.
+- Fix: dev startup now selects the Vite port explicitly, passes matching `CONTEXT_CANVAS_ALLOWED_ORIGINS` to the API server, and checks both IPv4 and IPv6 localhost port occupancy.
+- Verified with Playwright against Chrome: `http://localhost:5174/api/prompt` returned 200 SSE text deltas, the answer node filled with text, and bundle export succeeded.
+- Verified commands: `npm run test --workspace=@berry-pi/context-canvas` passed 57 tests; `npm run build --workspace=@berry-pi/context-canvas` passed.
+
 ## Decisions
 
 - Group summaries are local editable drafts, not AI-generated in v1.
