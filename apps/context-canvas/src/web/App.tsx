@@ -32,7 +32,7 @@ import { findLineageParentPromptId, roundedPosition } from "../core/mutations.ts
 import { applyCommand } from "../core/reducer.ts";
 import { compilePromptContext } from "../shared/compiler.ts";
 import { buildNodeBacklinks, formatCompiledPreviewMarkdown } from "../shared/compile-preview.ts";
-import { createInitialDocument, findNode, type ContextNode, type Vec2 } from "../shared/domain.ts";
+import { createInitialDocument, type ContextNode, type Vec2 } from "../shared/domain.ts";
 import { canvasNodeTypes } from "./canvas-nodes.tsx";
 import { exportBundle } from "./export-bundle.ts";
 import { loadBundle } from "./load-bundle.ts";
@@ -346,7 +346,11 @@ function CanvasApp() {
       return undefined;
     }
     const nodeId = [...selectedNodeIds][0]!;
-    const node = findNode(documentRef.current, nodeId);
+    const node = documentRef.current.nodes.find((candidate) => candidate.id === nodeId);
+    if (!node) {
+      setStatus("Selected node is no longer available.");
+      return undefined;
+    }
     if (node.kind !== "ai_answer") {
       setStatus("Select an AI answer node for this action.");
       return undefined;
@@ -404,8 +408,8 @@ function CanvasApp() {
         setStatus("Select exactly one answer node for this action.");
         return;
       }
-      const answer = findNode(documentRef.current, nodeId);
-      if (answer.kind !== "ai_answer" || runningPromptId !== null || answer.text.trim().length === 0) {
+      const answer = documentRef.current.nodes.find((candidate) => candidate.id === nodeId);
+      if (!answer || answer.kind !== "ai_answer" || runningPromptId !== null || answer.text.trim().length === 0) {
         setStatus("Answer action is unavailable while the answer is empty or running.");
         return;
       }
@@ -786,13 +790,10 @@ function CanvasApp() {
 
   const flowEdges = useMemo(() => toReactFlowEdges(document), [document]);
 
-  const selectedNode = useMemo(() => {
-    try {
-      return findNode(document, selectedNodeId);
-    } catch {
-      return undefined;
-    }
-  }, [document, selectedNodeId]);
+  const selectedNode = useMemo(
+    () => document.nodes.find((node) => node.id === selectedNodeId),
+    [document, selectedNodeId],
+  );
 
   const selectedGroup = useMemo(() => {
     if (!selectedNode || selectedNodeIds.size !== 1) {
@@ -846,6 +847,9 @@ function CanvasApp() {
       data-testid="app-shell"
       tabIndex={0}
       onPointerDownCapture={() => {
+        userInteractionVersionRef.current += 1;
+      }}
+      onKeyDownCapture={() => {
         userInteractionVersionRef.current += 1;
       }}
       onKeyDown={handleAppKeyDown}

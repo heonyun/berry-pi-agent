@@ -109,6 +109,18 @@ describe("applyCommand", () => {
     expect(result.meta.groupId).toBe(createdGroup?.id);
   });
 
+  it("does not create a group when no nodes are selected", () => {
+    const initial = createInitialDocument();
+    const result = applyCommand(initial, {
+      type: "create_group_from_nodes",
+      nodeIds: [],
+      origin: { x: 50, y: 20 },
+    });
+
+    expect(result.document).toBe(initial);
+    expect(result.meta.statusMessage).toBe("No nodes selected for group.");
+  });
+
   it("updates group summaries without changing node membership", () => {
     const initial = createInitialDocument();
     const result = applyCommand(initial, {
