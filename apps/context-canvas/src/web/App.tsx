@@ -6,6 +6,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
   Background,
@@ -38,12 +39,16 @@ import { loadBundle } from "./load-bundle.ts";
 import { streamPrompt } from "./stream-prompt.ts";
 
 function CanvasApp() {
+  const ANSWER_SHORTCUT_SEQUENCE_MS = 400;
+  const APPROX_NODE_WIDTH = 320;
+  const APPROX_NODE_HEIGHT = 180;
   const { fitView, screenToFlowPosition } = useReactFlow();
   const [document, setDocument] = useState(() => createInitialDocument());
   const documentRef = useRef(document);
   const promptDraftsRef = useRef(new Map<string, string>());
   const fitViewOnLayoutRef = useRef(true);
   const nextPromptTimeoutRef = useRef<number | null>(null);
+  const groupSummarySaveTimeoutRef = useRef<number | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string>("prompt-1");
   const [selectedNodeIds, setSelectedNodeIds] = useState<ReadonlySet<string>>(() => new Set(["prompt-1"]));
   const [deleteArmedNodeId, setDeleteArmedNodeId] = useState<string | null>(null);
@@ -61,11 +66,13 @@ function CanvasApp() {
   const bundleLoadCompleteRef = useRef(false);
   const bundleLoadFailureRef = useRef<string | null>(null);
   const pressedArrowsRef = useRef(new Set<string>());
-  const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pendingShortcutRef = useRef<{ key: "ArrowLeft" | "ArrowRight"; at: number } | null>(null);
+  const selectionStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null);
   const selectionBoxRef = useRef<{
     start: { x: number; y: number };
     current: { x: number; y: number };
   } | null>(null);
+  const dragJustCompletedRef = useRef(false);
   const userInteractionVersionRef = useRef(0);
   const nodeCount = document.nodes.length;
   const edgeCount = document.edges.length;
@@ -117,8 +124,23 @@ function CanvasApp() {
       if (nextPromptTimeoutRef.current !== null) {
         window.clearTimeout(nextPromptTimeoutRef.current);
       }
+      if (groupSummarySaveTimeoutRef.current !== null) {
+        window.clearTimeout(groupSummarySaveTimeoutRef.current);
+      }
     };
   }, []);
+
+  const resetAnswerShortcutState = useCallback(() => {
+    pressedArrowsRef.current.clear();
+    pendingShortcutRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("blur", resetAnswerShortcutState);
+    return () => {
+      window.removeEventListener("blur", resetAnswerShortcutState);
+    };
+  }, [resetAnswerShortcutState]);
 
   useEffect(() => {
     if (!fitViewOnLayoutRef.current) {
@@ -315,6 +337,7 @@ function CanvasApp() {
     setSelectedNodeId(nodeId);
     setSelectedNodeIds(new Set([nodeId]));
     setDeleteArmedNodeId(null);
+    setGroupConfirm(null);
   }, []);
 
   const selectedAnswerForAction = useCallback((): ContextNode | undefined => {
@@ -403,12 +426,23 @@ function CanvasApp() {
     if (!(target instanceof HTMLElement)) {
       return false;
     }
-    return Boolean(target.closest("textarea, input, button, [contenteditable='true']"));
+    return Boolean(target.closest("textarea, input, button, [contenteditable]:not([contenteditable='false'])"));
   }, []);
 
   const handleAppKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       if (isTextEntryTarget(event.target)) {
+        return;
+      }
+      if (event.key === "Escape") {
+        setGroupConfirm(null);
+        setSelectionBox(null);
+        selectionStartRef.current = null;
+        selectionBoxRef.current = null;
+        resetAnswerShortcutState();
+        return;
+      }
+      if (event.repeat) {
         return;
       }
       if (event.key.startsWith("Arrow")) {
@@ -426,34 +460,47 @@ function CanvasApp() {
         return;
       }
       if (!event.ctrlKey || !event.key.startsWith("Arrow")) {
+        if (!event.key.startsWith("Arrow")) {
+          resetAnswerShortcutState();
+        }
         return;
       }
-      const arrows = pressedArrowsRef.current;
+      const now = performance.now();
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        pendingShortcutRef.current = { key: event.key, at: now };
+        return;
+      }
+      const pending = pendingShortcutRef.current;
+      const pendingIsFresh = Boolean(pending && now - pending.at <= ANSWER_SHORTCUT_SEQUENCE_MS);
       const action =
-        event.key === "ArrowUp" && arrows.has("ArrowLeft")
+        event.key === "ArrowUp" && pendingIsFresh && pending?.key === "ArrowLeft"
           ? "risks"
-          : event.key === "ArrowUp" && arrows.has("ArrowRight")
+          : event.key === "ArrowUp" && pendingIsFresh && pending?.key === "ArrowRight"
             ? "positives"
-            : event.key === "ArrowDown" && arrows.has("ArrowLeft")
+            : event.key === "ArrowDown" && pendingIsFresh && pending?.key === "ArrowLeft"
               ? "risk_retry"
               : undefined;
       if (!action && event.key !== "ArrowDown") {
+        resetAnswerShortcutState();
         return;
       }
       const answer = selectedAnswerForAction();
       if (!answer || answer.kind !== "ai_answer") {
+        resetAnswerShortcutState();
         return;
       }
       if (action) {
         event.preventDefault();
         event.stopPropagation();
         createAnswerFollowUp(answer, action);
+        resetAnswerShortcutState();
         return;
       }
       if (event.key === "ArrowDown") {
         event.preventDefault();
         event.stopPropagation();
         retrySelectedAnswer();
+        resetAnswerShortcutState();
       }
     },
     [
@@ -461,6 +508,7 @@ function CanvasApp() {
       dispatch,
       groupConfirm,
       isTextEntryTarget,
+      resetAnswerShortcutState,
       retrySelectedAnswer,
       screenToFlowPosition,
       selectedAnswerForAction,
@@ -468,8 +516,9 @@ function CanvasApp() {
   );
 
   const handleAppKeyUp = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.key.startsWith("Arrow")) {
+    if (event.key === "Control" || event.key === "Meta" || event.key.startsWith("Arrow")) {
       pressedArrowsRef.current.delete(event.key);
+      pendingShortcutRef.current = null;
     }
   }, []);
 
@@ -534,63 +583,113 @@ function CanvasApp() {
         y: Math.max(start.y, end.y),
       });
       return documentRef.current.nodes
-        .filter(
-          (node) =>
-            node.position.x >= leftTop.x &&
-            node.position.x <= rightBottom.x &&
-            node.position.y >= leftTop.y &&
-            node.position.y <= rightBottom.y,
-        )
+        .filter((node) => {
+          const nodeLeft = node.position.x - APPROX_NODE_WIDTH / 2;
+          const nodeRight = node.position.x + APPROX_NODE_WIDTH / 2;
+          const nodeTop = node.position.y - APPROX_NODE_HEIGHT / 2;
+          const nodeBottom = node.position.y + APPROX_NODE_HEIGHT / 2;
+          return nodeRight >= leftTop.x && nodeLeft <= rightBottom.x && nodeBottom >= leftTop.y && nodeTop <= rightBottom.y;
+        })
         .map((node) => node.id);
     },
     [screenToFlowPosition],
   );
 
-  const onPaneMouseDown = useCallback((event: ReactMouseEvent) => {
-    if (event.button !== 0 || event.detail > 1) {
-      return;
-    }
-    if (event.target instanceof HTMLElement && event.target.closest(".react-flow__node")) {
-      return;
-    }
-    selectionStartRef.current = { x: event.clientX, y: event.clientY };
-    setGroupConfirm(null);
+  const clearSelectionDragState = useCallback(() => {
+    selectionStartRef.current = null;
+    selectionBoxRef.current = null;
+    setSelectionBox(null);
   }, []);
 
-  const onPaneMouseMove = useCallback((event: ReactMouseEvent) => {
-    const start = selectionStartRef.current;
-    if (!start) {
+  const pointerCoordinate = useCallback((event: ReactPointerEvent, axis: "x" | "y", fallback = 0) => {
+    const nativeEvent = event.nativeEvent as PointerEvent & { x?: number; y?: number };
+    const clientKey = axis === "x" ? "clientX" : "clientY";
+    const pageKey = axis === "x" ? "pageX" : "pageY";
+    const screenKey = axis === "x" ? "screenX" : "screenY";
+    for (const value of [
+      event[clientKey],
+      nativeEvent[clientKey],
+      nativeEvent[axis],
+      nativeEvent[pageKey],
+      nativeEvent[screenKey],
+      fallback,
+    ]) {
+      if (Number.isFinite(value)) {
+        return value;
+      }
+    }
+    return fallback;
+  }, []);
+
+  const onPanePointerDown = useCallback((event: ReactPointerEvent) => {
+    if (event.button > 0 || event.detail > 1) {
       return;
     }
-    const current = { x: event.clientX, y: event.clientY };
+    if (event.target instanceof HTMLElement && event.target.closest(".react-flow__node, textarea, input, button, [contenteditable]")) {
+      return;
+    }
+    const pointerId = event.pointerId ?? 0;
+    event.currentTarget.setPointerCapture?.(pointerId);
+    selectionStartRef.current = {
+      x: pointerCoordinate(event, "x"),
+      y: pointerCoordinate(event, "y"),
+      pointerId,
+    };
+    selectionBoxRef.current = null;
+    setSelectionBox(null);
+    setGroupConfirm(null);
+  }, [pointerCoordinate]);
+
+  const onPanePointerMove = useCallback((event: ReactPointerEvent) => {
+    const start = selectionStartRef.current;
+    const pointerId = event.pointerId ?? 0;
+    if (!start || start.pointerId !== pointerId) {
+      return;
+    }
+    const current = {
+      x: pointerCoordinate(event, "x", start.x),
+      y: pointerCoordinate(event, "y", start.y),
+    };
     if (Math.abs(current.x - start.x) < 6 && Math.abs(current.y - start.y) < 6) {
       return;
     }
     const nextBox = { start, current };
     selectionBoxRef.current = nextBox;
     setSelectionBox(nextBox);
-  }, []);
+  }, [pointerCoordinate]);
 
-  const onPaneMouseUp = useCallback(
-    (event: ReactMouseEvent) => {
+  const onPanePointerUp = useCallback(
+    (event: ReactPointerEvent) => {
       const start = selectionStartRef.current;
+      const pointerId = event.pointerId ?? 0;
+      event.currentTarget.releasePointerCapture?.(pointerId);
       selectionStartRef.current = null;
       const box = selectionBoxRef.current;
       selectionBoxRef.current = null;
       setSelectionBox(null);
-      if (!start || !box) {
+      if (!start || start.pointerId !== pointerId || !box) {
         return;
       }
-      const nodeIds = selectedNodesInRect(start, { x: event.clientX, y: event.clientY });
+      const releasePoint = {
+        x: pointerCoordinate(event, "x", box.current.x),
+        y: pointerCoordinate(event, "y", box.current.y),
+      };
+      const nodeIds = selectedNodesInRect(start, releasePoint);
       if (nodeIds.length === 0) {
         return;
       }
+      dragJustCompletedRef.current = true;
       setSelectedNodeIds(new Set(nodeIds));
       setSelectedNodeId(nodeIds[0] ?? "");
-      setGroupConfirm({ nodeIds, screenPosition: { x: event.clientX, y: event.clientY } });
+      setGroupConfirm({ nodeIds, screenPosition: releasePoint });
     },
-    [selectedNodesInRect],
+    [pointerCoordinate, selectedNodesInRect],
   );
+
+  const onPanePointerCancel = useCallback((event: ReactPointerEvent) => {
+    event.currentTarget.releasePointerCapture?.(event.pointerId ?? 0);
+    clearSelectionDragState();
+  }, [clearSelectionDragState]);
 
   const confirmGroup = useCallback(() => {
     if (!groupConfirm) {
@@ -705,8 +804,15 @@ function CanvasApp() {
   const updateGroupSummary = useCallback(
     (groupId: string, summary: string) => {
       dispatch({ type: "update_group_summary", groupId, summary });
+      if (groupSummarySaveTimeoutRef.current !== null) {
+        window.clearTimeout(groupSummarySaveTimeoutRef.current);
+      }
+      groupSummarySaveTimeoutRef.current = window.setTimeout(() => {
+        void saveBundle();
+        groupSummarySaveTimeoutRef.current = null;
+      }, 500);
     },
-    [dispatch],
+    [dispatch, saveBundle],
   );
 
   const compiledPreview = useMemo(() => {
@@ -765,6 +871,7 @@ function CanvasApp() {
           panOnScroll={false}
           zoomOnScroll
           zoomOnDoubleClick={false}
+          panOnDrag={[1]}
           onNodeClick={(_, node) => {
             setSingleSelection(node.id);
           }}
@@ -778,14 +885,20 @@ function CanvasApp() {
           }}
           onNodeDragStop={(_, node) => updateDraggedNodePosition(node as CanvasFlowNode)}
           onPaneClick={(event) => {
+            if (dragJustCompletedRef.current) {
+              dragJustCompletedRef.current = false;
+              return;
+            }
+            setGroupConfirm(null);
             setDeleteArmedNodeId(null);
             setSelectedNodeId("");
             setSelectedNodeIds(new Set());
             onPaneClick(event);
           }}
-          onMouseDown={onPaneMouseDown}
-          onMouseMove={onPaneMouseMove}
-          onMouseUp={onPaneMouseUp}
+          onPointerDown={onPanePointerDown}
+          onPointerMove={onPanePointerMove}
+          onPointerUp={onPanePointerUp}
+          onPointerCancel={onPanePointerCancel}
           onConnect={onConnect}
           onConnectEnd={onConnectEnd}
         >

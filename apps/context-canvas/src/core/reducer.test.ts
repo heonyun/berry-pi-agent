@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { createInitialDocument } from "../shared/domain.ts";
+import { createInitialDocument, normalizeDocument } from "../shared/domain.ts";
 import { applyCommand } from "./reducer.ts";
 
 describe("applyCommand", () => {
@@ -122,5 +122,50 @@ describe("applyCommand", () => {
       summary: "Edited group summary",
     });
     expect(result.document.nodes[0]?.groupId).toBe("group-1");
+  });
+
+  it("assigns nodes to an existing group", () => {
+    let document = createInitialDocument();
+    document = applyCommand(document, {
+      type: "create_group_from_nodes",
+      nodeIds: ["prompt-1"],
+      origin: { x: 0, y: 0 },
+    }).document;
+    const targetGroupId = document.groups.at(-1)!.id;
+    document = applyCommand(document, {
+      type: "create_prompt_at",
+      position: { x: 120, y: 40 },
+    }).document;
+    const newPromptId = document.nodes.at(-1)!.id;
+
+    const result = applyCommand(document, {
+      type: "assign_nodes_to_group",
+      groupId: targetGroupId,
+      nodeIds: [newPromptId],
+    });
+
+    expect(result.document.nodes.find((node) => node.id === newPromptId)?.groupId).toBe(targetGroupId);
+    expect(result.meta.groupId).toBe(targetGroupId);
+  });
+
+  it("rejects assignment to an unknown group", () => {
+    expect(() =>
+      applyCommand(createInitialDocument(), {
+        type: "assign_nodes_to_group",
+        groupId: "missing-group",
+        nodeIds: ["prompt-1"],
+      }),
+    ).toThrow("Unknown group");
+  });
+});
+
+describe("normalizeDocument", () => {
+  it("defaults missing group summaries to an empty string", () => {
+    const legacy = {
+      ...createInitialDocument(),
+      groups: createInitialDocument().groups.map(({ summary: _summary, ...group }) => group),
+    };
+
+    expect(normalizeDocument(legacy).groups[0]?.summary).toBe("");
   });
 });
