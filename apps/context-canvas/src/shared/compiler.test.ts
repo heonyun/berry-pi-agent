@@ -41,4 +41,47 @@ describe("formatPromptForPi", () => {
     expect(prompt.match(/reference: answer-1/g)).toHaveLength(1);
     expect(prompt.match(/text: Prior answer/g)).toHaveLength(1);
   });
+
+  it("includes editable group summaries and group member context for prompts in a group", () => {
+    const document: ContextCanvasDocument = {
+      ...createInitialDocument(),
+      groups: [
+        {
+          id: "group-1",
+          title: "Conversation",
+          origin: { x: 0, y: 0 },
+          summary: "User-edited summary of the group.",
+        },
+      ],
+      nodes: [
+        {
+          id: "answer-1",
+          kind: "ai_answer",
+          groupId: "group-1",
+          text: "Prior group answer",
+          position: { x: 0, y: -240 },
+          metadata: { stance: "neutral" },
+        },
+        {
+          id: "prompt-2",
+          kind: "prompt_input",
+          groupId: "group-1",
+          text: "Follow up",
+          position: { x: 0, y: -480 },
+          metadata: { stance: "neutral" },
+        },
+      ],
+      edges: [],
+    };
+
+    const compiled = compilePromptContext(document, "prompt-2");
+
+    expect(compiled.contextText).toContain("group_summary: User-edited summary of the group.");
+    expect(compiled.contextText).toContain("group_member: answer-1");
+    expect(compiled.contextText).toContain("text: Prior group answer");
+    expect(compiled.trace).toContainEqual({
+      nodeId: "group-1",
+      reason: "group_summary",
+    });
+  });
 });

@@ -1,13 +1,40 @@
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
+import net from "node:net";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(root, "..");
 const contextCanvasToken = process.env.CONTEXT_CANVAS_TOKEN || crypto.randomBytes(32).toString("hex");
+const bindHost = process.env.CONTEXT_CANVAS_BIND_HOST || "127.0.0.1";
+const viteHost = process.env.CONTEXT_CANVAS_VITE_HOST || "127.0.0.1";
 
-function run(command, args, name) {
+function canListen(port, host) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    if (host) {
+      server.listen(port, host);
+    } else {
+      server.listen(port);
+    }
+  });
+}
+
+async function findAvailablePort(startPort, host) {
+  for (let port = startPort; port < startPort + 100; port += 1) {
+    if (await canListen(port, host)) {
+      return port;
+    }
+  }
+  throw new Error(`No available Context Canvas API port found from ${startPort} to ${startPort + 99}.`);
+}
+
+function run(command, args, name, extraEnv = {}) {
   const child = spawn(command, args, {
     cwd: appRoot,
     stdio: "inherit",
@@ -16,6 +43,7 @@ function run(command, args, name) {
       ...process.env,
       CONTEXT_CANVAS_TOKEN: contextCanvasToken,
       VITE_CONTEXT_CANVAS_TOKEN: contextCanvasToken,
+      ...extraEnv,
     },
   });
   child.on("exit", (code, signal) => {
@@ -28,8 +56,23 @@ function run(command, args, name) {
   return child;
 }
 
-const server = run("npx", ["tsx", "src/server/index.ts"], "server");
-const vite = run("npx", ["vite"], "vite");
+const apiPort = await findAvailablePort(Number(process.env.CONTEXT_CANVAS_PORT || 3001), bindHost);
+const vitePort = await findAvailablePort(Number(process.env.CONTEXT_CANVAS_VITE_PORT || 5173), viteHost);
+const apiTarget = `http://${bindHost}:${apiPort}`;
+const allowedOrigins =
+  process.env.CONTEXT_CANVAS_ALLOWED_ORIGINS ||
+  Array.from(new Set([`http://${viteHost}:${vitePort}`, `http://localhost:${vitePort}`])).join(",");
+console.log(`Context Canvas dev API target: ${apiTarget}`);
+console.log(`Context Canvas dev allowed origins: ${allowedOrigins}`);
+
+const server = run("npx", ["tsx", "src/server/index.ts"], "server", {
+  CONTEXT_CANVAS_ALLOWED_ORIGINS: allowedOrigins,
+  CONTEXT_CANVAS_BIND_HOST: bindHost,
+  CONTEXT_CANVAS_PORT: String(apiPort),
+});
+const vite = run("npx", ["vite", "--host", viteHost, "--port", String(vitePort), "--strictPort"], "vite", {
+  CONTEXT_CANVAS_API_TARGET: apiTarget,
+});
 
 function shutdown() {
   server.kill();

@@ -17,6 +17,7 @@ import { parse, validate, type MarkdownDocument } from "./document.ts";
 import { readBodyMainText } from "./helpers.ts";
 import {
   CANVAS_SIDECAR,
+  GROUPS_DIR,
   nodesDir,
   pathToNodeId,
 } from "./paths.ts";
@@ -90,7 +91,7 @@ export function loadBundleToDocument(bundleRoot: string): LoadResult {
   }
 
   const edges = buildEdgesFromFrontmatter(nodes, parsedFiles, warnings);
-  const groups = buildGroups(nodes, warnings);
+  const groups = buildGroups(bundleRoot, nodes, warnings);
   const canvasId = readCanvasId(parsedFiles, warnings);
   const document: ContextCanvasDocument = {
     schemaVersion: 1,
@@ -221,22 +222,60 @@ function addEdge(
   edges.push({ id, source, target, meaning });
 }
 
-function buildGroups(nodes: ContextNode[], warnings: string[]): ContextGroup[] {
+function buildGroups(bundleRoot: string, nodes: ContextNode[], warnings: string[]): ContextGroup[] {
   const groups = new Map<string, ContextGroup>();
+  for (const group of readGroupIndexes(bundleRoot, warnings)) {
+    groups.set(group.id, group);
+  }
   for (const node of nodes) {
     if (!groups.has(node.groupId)) {
       groups.set(node.groupId, {
         id: node.groupId,
         title: node.groupId,
         origin: { x: 0, y: 0 },
+        summary: "",
       });
     }
   }
   if (groups.size === 0) {
     warnings.push("No groups inferred from nodes; using default group.");
-    groups.set("group-1", { id: "group-1", title: "Conversation", origin: { x: 0, y: 0 } });
+    groups.set("group-1", { id: "group-1", title: "Conversation", origin: { x: 0, y: 0 }, summary: "" });
   }
   return [...groups.values()];
+}
+
+function readGroupIndexes(bundleRoot: string, warnings: string[]): ContextGroup[] {
+  const groupsRoot = path.join(bundleRoot, GROUPS_DIR);
+  if (!fs.existsSync(groupsRoot)) {
+    return [];
+  }
+  const groups: ContextGroup[] = [];
+  for (const groupId of fs.readdirSync(groupsRoot).sort()) {
+    const indexPath = path.join(groupsRoot, groupId, "index.md");
+    if (!fs.existsSync(indexPath)) {
+      continue;
+    }
+    try {
+      const markdown = parse(fs.readFileSync(indexPath, "utf8"));
+      if (markdown.frontmatter.type !== "context_group") {
+        continue;
+      }
+      groups.push({
+        id: String(markdown.frontmatter.group ?? groupId),
+        title: String(markdown.frontmatter.title ?? groupId),
+        origin: readPosition(markdown.frontmatter.origin, groupId, warnings),
+        summary: String(markdown.frontmatter.summary ?? ""),
+        updatedAt:
+          typeof markdown.frontmatter.updated_at === "string"
+            ? markdown.frontmatter.updated_at
+            : undefined,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      warnings.push(`${path.relative(bundleRoot, indexPath)}: ${message}`);
+    }
+  }
+  return groups;
 }
 
 function readNodeKind(value: unknown, nodeId: string, warnings: string[]): NodeKind | undefined {

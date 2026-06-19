@@ -63,6 +63,8 @@ export interface ContextGroup {
   id: string;
   title: string;
   origin: Vec2;
+  summary?: string;
+  updatedAt?: string;
 }
 
 export interface ContextCanvasDocument {
@@ -123,6 +125,7 @@ export function createInitialDocument(): ContextCanvasDocument {
         id: "group-1",
         title: "Conversation",
         origin: { x: 0, y: 0 },
+        summary: "",
       },
     ],
     nodes: [
@@ -145,6 +148,16 @@ export function findNode(document: ContextCanvasDocument, nodeId: string): Conte
     throw new Error(`Unknown node: ${nodeId}`);
   }
   return node;
+}
+
+export function normalizeDocument(document: ContextCanvasDocument): ContextCanvasDocument {
+  return {
+    ...document,
+    groups: document.groups.map((group) => ({
+      ...group,
+      summary: group.summary ?? "",
+    })),
+  };
 }
 
 export function updateNode(

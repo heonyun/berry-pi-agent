@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { ContextCanvasDocument, ContextNode } from "../../shared/domain.ts";
 import { nodeDescription, nodeTitle } from "./helpers.ts";
+import { serialize } from "./document.ts";
 import { groupIndexPath, groupIdToDir, rootIndexPath } from "./paths.ts";
 
 const INDEX_FILE = "index.md";
@@ -54,10 +55,14 @@ function buildRootIndexText(document: ContextCanvasDocument): string {
 }
 
 function buildGroupIndexText(group: ContextCanvasDocument["groups"][number], nodes: ContextNode[]): string {
-  const lines = [
+  const bodyLines = [
     `# ${group.title}`,
     "",
     `Group ID: \`${group.id}\``,
+    "",
+    "# Summary",
+    "",
+    group.summary?.trim() || "(empty)",
     "",
     "# Nodes",
     "",
@@ -67,7 +72,18 @@ function buildGroupIndexText(group: ContextCanvasDocument["groups"][number], nod
     ),
     "",
   ];
-  return lines.join("\n");
+  return serialize({
+    frontmatter: {
+      type: "context_group",
+      title: group.title,
+      group: group.id,
+      origin: group.origin,
+      summary: group.summary ?? "",
+      member_ids: nodes.map((node) => node.id),
+      updated_at: group.updatedAt,
+    },
+    body: bodyLines.join("\n"),
+  });
 }
 
 function groupNodesByType(nodes: ContextNode[]): Array<[string, ContextNode[]]> {

@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createInitialDocument } from "../shared/domain.ts";
 import { CANVAS_SIDECAR } from "../storage/markdown/sidecar.ts";
-import { createContextCanvasServer, handleBundleExport, handleBundleLoad } from "./index.ts";
+import { assistantMessageText, createContextCanvasServer, handleBundleExport, handleBundleLoad } from "./index.ts";
 import { resolveContextCanvasServerConfig } from "./security.ts";
 
 describe("handleBundleExport", () => {
@@ -65,6 +65,34 @@ describe("handleBundleExport", () => {
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
+  });
+});
+
+describe("assistantMessageText", () => {
+  it("extracts final assistant text for streams that do not emit text deltas", () => {
+    expect(
+      assistantMessageText({
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "internal" },
+          { type: "text", text: "Hello" },
+          { type: "text", text: " world." },
+        ],
+        api: "openai-codex-responses",
+        provider: "openai-codex",
+        model: "gpt-5.4-mini",
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "stop",
+        timestamp: Date.now(),
+      }),
+    ).toBe("Hello world.");
   });
 });
 

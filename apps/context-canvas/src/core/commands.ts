@@ -6,6 +6,9 @@ export type CanvasCommand =
   | { type: "move_node"; nodeId: string; position: Vec2 }
   | { type: "delete_node"; nodeId: string }
   | { type: "set_feedback"; nodeId: string; feedback: import("../shared/domain.ts").FeedbackState }
+  | { type: "create_group_from_nodes"; nodeIds: string[]; origin: Vec2; title?: string; summary?: string }
+  | { type: "assign_nodes_to_group"; groupId: string; nodeIds: string[] }
+  | { type: "update_group_summary"; groupId: string; summary: string }
   | { type: "create_prompt_from_source"; sourceNodeId: string; position: Vec2; sourceHandle?: string }
   | { type: "create_prompt_at"; position: Vec2; parentAnswerId?: string }
   | { type: "connect_context_reference"; source: string; target: string; sourceHandle?: string; targetHandle?: string }
@@ -16,6 +19,7 @@ export type CanvasCommand =
 export interface CommandMeta {
   promptId?: string;
   answerId?: string;
+  groupId?: string;
   createdAnswer?: boolean;
   statusMessage?: string;
 }

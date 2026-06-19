@@ -3,6 +3,7 @@ import {
   findNode,
   type ContextCanvasDocument,
   type ContextEdge,
+  type ContextNode,
   updateNode,
 } from "../shared/domain.ts";
 import type { ApplyResult, CanvasCommand } from "./commands.ts";
@@ -57,6 +58,65 @@ export function applyCommand(document: ContextCanvasDocument, command: CanvasCom
           node.kind === "ai_answer" ? { ...node, feedback: command.feedback } : node,
         ),
         meta: {},
+      };
+
+    case "create_group_from_nodes": {
+      const nodeIds = [...new Set(command.nodeIds)];
+      if (nodeIds.length === 0) {
+        return { document, meta: { statusMessage: "No nodes selected for group." } };
+      }
+      const groupId = nextGroupId(document);
+      const selectedNodes = orderNodesForSummary(
+        document.nodes.filter((node) => nodeIds.includes(node.id)),
+      );
+      const now = new Date().toISOString();
+      const group = {
+        id: groupId,
+        title: command.title ?? `Group ${document.groups.length + 1}`,
+        origin: command.origin,
+        summary: command.summary ?? buildGroupSummaryDraft(selectedNodes),
+        updatedAt: now,
+      };
+      return {
+        document: {
+          ...document,
+          groups: [...document.groups, group],
+          nodes: document.nodes.map((node) =>
+            nodeIds.includes(node.id) ? { ...node, groupId } : node,
+          ),
+        },
+        meta: { groupId, statusMessage: "Group created" },
+      };
+    }
+
+    case "assign_nodes_to_group": {
+      const groupExists = document.groups.some((group) => group.id === command.groupId);
+      if (!groupExists) {
+        throw new Error(`Unknown group: ${command.groupId}`);
+      }
+      const nodeIds = new Set(command.nodeIds);
+      return {
+        document: {
+          ...document,
+          nodes: document.nodes.map((node) =>
+            nodeIds.has(node.id) ? { ...node, groupId: command.groupId } : node,
+          ),
+        },
+        meta: { groupId: command.groupId, statusMessage: "Nodes assigned to group" },
+      };
+    }
+
+    case "update_group_summary":
+      return {
+        document: {
+          ...document,
+          groups: document.groups.map((group) =>
+            group.id === command.groupId
+              ? { ...group, summary: command.summary, updatedAt: new Date().toISOString() }
+              : group,
+          ),
+        },
+        meta: { groupId: command.groupId },
       };
 
     case "create_prompt_at": {
@@ -149,4 +209,37 @@ export function applyCommand(document: ContextCanvasDocument, command: CanvasCom
       throw new Error(`Unhandled command: ${(exhaustive as CanvasCommand).type}`);
     }
   }
+}
+
+function nextGroupId(document: ContextCanvasDocument): string {
+  let index = document.groups.length + 1;
+  const existing = new Set(document.groups.map((group) => group.id));
+  while (existing.has(`group-${index}`)) {
+    index += 1;
+  }
+  return `group-${index}`;
+}
+
+function orderNodesForSummary(nodes: ContextNode[]): ContextNode[] {
+  return [...nodes].sort((left, right) => {
+    const y = left.position.y - right.position.y;
+    if (y !== 0) {
+      return y;
+    }
+    const x = left.position.x - right.position.x;
+    if (x !== 0) {
+      return x;
+    }
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function buildGroupSummaryDraft(nodes: ContextNode[]): string {
+  return nodes
+    .map((node) => {
+      const label = node.kind === "prompt_input" ? "Prompt" : "AI Answer";
+      const text = node.text.trim() || "(empty)";
+      return `${label} ${node.id}: ${text}`;
+    })
+    .join("\n\n");
 }

@@ -7,7 +7,7 @@ import { compilePromptContext } from "../../shared/compiler.ts";
 import { createInitialDocument, type ContextCanvasDocument } from "../../shared/domain.ts";
 import { parse } from "./document.ts";
 import { loadBundleToDocument } from "./load.ts";
-import { nodeIdToPath, rootIndexPath } from "./paths.ts";
+import { groupIndexPath, nodeIdToPath, rootIndexPath } from "./paths.ts";
 import { projectDocumentToBundle } from "./project.ts";
 import { CANVAS_SIDECAR } from "./sidecar.ts";
 
@@ -125,6 +125,35 @@ describe("loadBundleToDocument", () => {
     expect(loaded.document?.nodes).toHaveLength(2);
     expect(loaded.document?.edges).toHaveLength(2);
     expect(loaded.warnings.some((warning) => warning.includes(CANVAS_SIDECAR))).toBe(true);
+  });
+
+  it("round-trips group summaries through markdown group indexes without a sidecar", () => {
+    const bundleRoot = makeTempDir();
+    const document: ContextCanvasDocument = {
+      ...sampleDocument(),
+      groups: [
+        {
+          id: "group-1",
+          title: "Conversation",
+          origin: { x: 0, y: 0 },
+          summary: "Editable group summary",
+        },
+      ],
+    };
+
+    const result = projectDocumentToBundle(document, bundleRoot, { writeCanvasSidecar: false });
+    expect(result.pathsWritten).toContain("groups/group-1/index.md");
+
+    const groupMarkdown = parse(fs.readFileSync(groupIndexPath(bundleRoot, "group-1"), "utf8"));
+    expect(groupMarkdown.frontmatter.type).toBe("context_group");
+    expect(groupMarkdown.frontmatter.summary).toBe("Editable group summary");
+    expect(groupMarkdown.frontmatter.member_ids).toEqual(["answer-1", "prompt-2"]);
+
+    const loaded = loadBundleToDocument(bundleRoot);
+    expect(loaded.document?.groups[0]).toMatchObject({
+      id: "group-1",
+      summary: "Editable group summary",
+    });
   });
 });
 

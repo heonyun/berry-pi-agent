@@ -113,7 +113,11 @@ export function projectDocumentToBundle(
   }
 
   for (const indexPath of regenerateIndexes(bundleRoot, document)) {
-    pathsWritten.push(toBundleRelativePath(bundleRoot, indexPath));
+    pathsWritten.push(
+      path.isAbsolute(indexPath)
+        ? toBundleRelativePath(bundleRoot, indexPath)
+        : indexPath.split(path.sep).join("/"),
+    );
   }
 
   return { pathsWritten, errors };

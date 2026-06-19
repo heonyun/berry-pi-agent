@@ -116,4 +116,17 @@ describe("ImeTextarea", () => {
     expect(onLocalChange).not.toHaveBeenCalled();
     expect(onValueChange).not.toHaveBeenCalled();
   });
+
+  it("forwards data attributes to the underlying textarea", () => {
+    render(
+      <ImeTextarea
+        value="prompt"
+        onValueChange={vi.fn()}
+        aria-label="prompt"
+        data-prompt-id="prompt-123"
+      />,
+    );
+
+    expect(screen.getByLabelText("prompt").getAttribute("data-prompt-id")).toBe("prompt-123");
+  });
 });
