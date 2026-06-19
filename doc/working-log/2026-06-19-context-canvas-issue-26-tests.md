@@ -59,6 +59,6 @@ canonical_repo: "C:\\Dev\\pi-agent"
 
 1. Merge PR and close #26.
 2. Continue #27 group UX polish and markdown path consistency.
-3. Keep `.github/*` dirty changes in a separate PR.
+3. Keep GitHub agent dirty changes in a separate PR.
 
-#업무일지 #pi-agent #context-canvas #issue-26
+Tags: 업무일지, pi-agent, context-canvas, issue-26

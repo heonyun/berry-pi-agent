@@ -91,6 +91,7 @@ vi.mock("@xyflow/react", () => ({
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -443,7 +444,9 @@ describe("App bundle hydration", () => {
 
     fireEvent.keyDown(await screen.findByTestId("app-shell"), { key: "Enter" });
 
-    expect(screen.queryByText("Create group")).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByText("Create group")).toBeNull();
+    });
     expect(await screen.findByText("Group created")).toBeTruthy();
   });
 
@@ -467,7 +470,7 @@ describe("App bundle hydration", () => {
     fireEvent.keyDown(shell, { key: "ArrowUp", ctrlKey: true });
 
     expect(screen.queryByText("좋아. 너의 답에서 예상 문제와 위험을 말해.")).toBeNull();
-    expect(screen.getByText("Select exactly one answer node for this action.")).toBeTruthy();
+    expect(await screen.findByText("Select exactly one answer node for this action.")).toBeTruthy();
   });
 
   it("dismisses group confirmation on Escape", async () => {
@@ -488,7 +491,9 @@ describe("App bundle hydration", () => {
 
     fireEvent.keyDown(shell, { key: "Escape" });
 
-    expect(screen.queryByText("Create group")).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByText("Create group")).toBeNull();
+    });
     expect(screen.queryByText("Group created")).toBeNull();
   });
 
@@ -536,14 +541,17 @@ describe("App bundle hydration", () => {
 
     render(<App />);
     const shell = await screen.findByTestId("app-shell");
-    fireEvent.click(await screen.findByText("Run prompt-1"));
-    expect(await screen.findByText("Running agent...")).toBeTruthy();
+    try {
+      fireEvent.click(await screen.findByText("Run prompt-1"));
+      expect(await screen.findByText("Running agent...")).toBeTruthy();
 
-    fireEvent.click(screen.getByText("Select answer-1"));
-    fireEvent.keyDown(shell, { key: "ArrowDown", ctrlKey: true });
+      fireEvent.click(screen.getByText("Select answer-1"));
+      fireEvent.keyDown(shell, { key: "ArrowDown", ctrlKey: true });
 
-    expect(await screen.findByText("Answer action is unavailable while the answer is empty or running.")).toBeTruthy();
-    resolvePrompt?.();
+      expect(await screen.findByText("Answer action is unavailable while the answer is empty or running.")).toBeTruthy();
+    } finally {
+      resolvePrompt?.();
+    }
   });
 
   it("saves group summary edits after a short debounce", async () => {
