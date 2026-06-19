@@ -65,6 +65,72 @@ PR. Useful output should include severity, affected file/line or hunk, concrete
 fix direction, and verification commands grounded in repository scripts. Generic
 praise, broad style notes, or invented package-manager commands are low-value.
 
+## Request templates (improve bot output)
+
+Structured mentions help the bot cite files, scope work, and avoid truncation noise.
+
+### New issue body (recommended fields)
+
+```md
+## Goal
+One sentence outcome.
+
+## Affected
+- apps/context-canvas/src/server/index.ts
+
+## Repro / expected vs actual
+(steps or symptoms)
+
+## Out of scope
+(unrelated areas)
+
+## Verification
+- [ ] npm run test --workspace=@berry-pi/context-canvas
+```
+
+Trusted authors and Antigravity-marked issues receive automatic planning review on open.
+
+### Issue follow-up (`/deepseek` preferred)
+
+```md
+/deepseek
+- Goal: smallest safe fix for provider error surfacing
+- Affected: apps/context-canvas/src/web/App.tsx
+- Already tried: setAnswerText in catch block (PR #30)
+- Review focus: tests | workflow | correctness
+- Out of scope: GitHub agent scripts
+```
+
+`/deepseek` avoids notifying unrelated accounts. `@deepseek` and `@github-actions` remain supported aliases.
+
+### PR description (recommended fields)
+
+```md
+## Summary
+(bullets)
+
+## Test plan
+- [x] npm run test --workspace=@berry-pi/context-canvas (76 passed)
+
+## Risk areas
+- SSE error path when stopReason=error
+
+## Not in this PR
+- docs-only harness changes (separate PR)
+```
+
+### PR re-review request
+
+```md
+@deepseek-review
+Addressed in <commit-sha>:
+- P1 async assertion → findByText / waitFor
+Still open: none
+Please re-check: apps/context-canvas/src/web/App.test.tsx only
+```
+
+Include commit SHA and resolved finding list so stale comments are not repeated.
+
 ## Labels
 
 See [../.github/AGENT_LABELS.md](../.github/AGENT_LABELS.md).

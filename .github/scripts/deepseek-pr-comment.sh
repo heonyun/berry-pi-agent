@@ -31,10 +31,12 @@ gh api \
 
 diff_text="$(head -c "${MAX_DIFF_CHARS}" "${diff_file}")"
 diff_chars="$(wc -c < "${diff_file}" | tr -d ' ')"
-truncated_note=""
+diff_truncated=0
 if [[ "${diff_chars}" -gt "${MAX_DIFF_CHARS}" ]]; then
-  truncated_note="Diff was truncated to ${MAX_DIFF_CHARS} characters from ${diff_chars} total characters."
+  diff_truncated=1
 fi
+
+diff_metadata="$(agent_pr_diff_metadata "${diff_file}" "${MAX_DIFF_CHARS}" "${REPO}" "${PR_NUMBER}")"
 
 user_content="$(cat <<EOF
 Repository: ${REPO}
@@ -46,7 +48,7 @@ ${BODY}
 Additional request:
 ${EXTRA}
 
-${truncated_note}
+${diff_metadata}
 
 Review the PR diff for correctness, regression risk, security/privacy issues, workflow reliability, and missing tests.
 
@@ -89,6 +91,8 @@ if [[ -z "${comment_body}" ]]; then
   cat "${response_file}" >&2
   exit 1
 fi
+
+comment_body="$(agent_post_process_review_comment "${comment_body}" "${diff_truncated}")"
 
 {
   echo "${comment_body}"

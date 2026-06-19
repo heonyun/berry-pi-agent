@@ -116,6 +116,51 @@ assert_contains "${footer}" "workflow: deepseek-pr-review" "footer workflow id"
 sections="$(agent_output_sections_prompt)"
 assert_contains "${sections}" "## Conclusion" "output sections prompt"
 assert_contains "${sections}" "## Commands to rerun" "rerun section prompt"
+assert_contains "${sections}" "evidence:diff" "findings evidence schema"
+assert_contains "${sections}" "hold (truncated)" "truncated conclusion option"
+
+sample_issue_comment=$'## Conclusion\nhold\n\n## Summary\nNeeds work\n\n## Findings\n1. [P1][evidence:issue][blocker:yes] Missing test\n   - Evidence: `App.tsx` — issue names the file\n   - Why: regression risk\n   - Fix: add test\n\n## Suggested next steps\nAdd test\n\n## Commands to rerun\nnone'
+
+conclusion="$(agent_extract_conclusion "${sample_issue_comment}")"
+if [[ "${conclusion}" == "hold" ]]; then
+  pass_count=$((pass_count + 1))
+  echo "PASS: extract conclusion"
+else
+  fail_count=$((fail_count + 1))
+  echo "FAIL: extract conclusion (got: ${conclusion})" >&2
+fi
+
+finding_count="$(agent_count_numbered_findings "${sample_issue_comment}")"
+if [[ "${finding_count}" == "1" ]]; then
+  pass_count=$((pass_count + 1))
+  echo "PASS: count numbered findings"
+else
+  fail_count=$((fail_count + 1))
+  echo "FAIL: count numbered findings (got: ${finding_count})" >&2
+fi
+
+fail_comment=$'## Conclusion\nfail\n\n## Summary\nBlocker\n\n## Findings\nNone.\n\n## Suggested next steps\nnone\n\n## Commands to rerun\nnone'
+processed="$(agent_post_process_review_comment "${fail_comment}" "1")"
+assert_contains "${processed}" "hold (truncated)" "downgrade fail on truncated diff"
+assert_contains "${processed}" "Review note (automated)" "truncation review note"
+
+issue_context="$(agent_issue_assistant_context_from_comment "@deepseek focus on server error path")"
+if [[ "${issue_context}" == "focus on server error path" ]]; then
+  pass_count=$((pass_count + 1))
+  echo "PASS: issue assistant @deepseek context"
+else
+  fail_count=$((fail_count + 1))
+  echo "FAIL: issue assistant @deepseek context (got: ${issue_context})" >&2
+fi
+
+slash_context="$(agent_issue_assistant_context_from_comment "/deepseek check reducer guards")"
+if [[ "${slash_context}" == "check reducer guards" ]]; then
+  pass_count=$((pass_count + 1))
+  echo "PASS: issue assistant /deepseek context"
+else
+  fail_count=$((fail_count + 1))
+  echo "FAIL: issue assistant /deepseek context (got: ${slash_context})" >&2
+fi
 
 assert_issue_context() {
   local body="$1"
