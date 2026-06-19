@@ -75,9 +75,14 @@ body,
   pointer-events: none;
 }
 
-.group-confirm-button {
+.group-confirm-toolbar {
   position: fixed;
   z-index: 9;
+  display: flex;
+  gap: 6px;
+}
+
+.group-confirm-button {
   min-width: 112px;
   padding: 7px 10px;
   border: 1px solid var(--ink);
@@ -86,6 +91,11 @@ body,
   box-shadow: 2px 3px 0 rgba(69, 61, 57, 0.18);
   color: var(--ink);
   font-size: 12px;
+}
+
+.group-confirm-cancel {
+  min-width: 72px;
+  background: #f3ece4;
 }
 
 .side-panel {

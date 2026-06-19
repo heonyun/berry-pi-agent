@@ -861,14 +861,17 @@ function CanvasApp() {
       <div className="canvas-panel">
         {selectionBox ? <SelectionOverlay start={selectionBox.start} current={selectionBox.current} /> : null}
         {groupConfirm ? (
-          <button
-            type="button"
-            className="group-confirm-button"
+          <div
+            className="group-confirm-toolbar"
             style={{ left: groupConfirm.screenPosition.x, top: groupConfirm.screenPosition.y }}
-            onClick={confirmGroup}
           >
-            Create group
-          </button>
+            <button type="button" className="group-confirm-button" onClick={confirmGroup}>
+              Create group
+            </button>
+            <button type="button" className="group-confirm-button group-confirm-cancel" onClick={() => setGroupConfirm(null)}>
+              Cancel
+            </button>
+          </div>
         ) : null}
         <ReactFlow
           nodes={flowNodes}

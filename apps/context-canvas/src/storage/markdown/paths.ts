@@ -21,13 +21,24 @@ export function assertSafeId(id: string, label: string): void {
   }
 }
 
+function normalizeForBundleRootCheck(filePath: string): string {
+  return path.resolve(filePath).replace(/\\/g, "/");
+}
+
 export function resolveWithinBundle(bundleRoot: string, ...segments: string[]): string {
   const resolved = path.resolve(bundleRoot, ...segments);
   const root = path.resolve(bundleRoot);
-  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+  const normalizedResolved = normalizeForBundleRootCheck(resolved);
+  const normalizedRoot = normalizeForBundleRootCheck(root);
+  if (normalizedResolved !== normalizedRoot && !normalizedResolved.startsWith(`${normalizedRoot}/`)) {
     throw new BundlePathError(`Path escapes bundle root: ${resolved}`);
   }
   return resolved;
+}
+
+export function normalizeBundleRelativePath(bundleRoot: string, targetPath: string): string {
+  const absolutePath = path.isAbsolute(targetPath) ? targetPath : path.resolve(bundleRoot, targetPath);
+  return path.relative(bundleRoot, absolutePath).split(path.sep).join("/");
 }
 
 export function nodeIdToPath(bundleRoot: string, nodeId: string): string {

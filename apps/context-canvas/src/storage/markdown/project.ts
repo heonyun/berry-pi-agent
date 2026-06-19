@@ -20,13 +20,10 @@ import {
   compiledPromptPath,
   groupIdToDir,
   nodeIdToPath,
+  normalizeBundleRelativePath,
 } from "./paths.ts";
 import { CANVAS_SIDECAR, writeBundleDocument } from "./sidecar.ts";
 import type { NodeProjectionFrontmatter, ProjectOptions, ProjectResult, ProjectionError } from "./types.ts";
-
-function toBundleRelativePath(bundleRoot: string, absolutePath: string): string {
-  return path.relative(bundleRoot, absolutePath).split(path.sep).join("/");
-}
 
 export function projectDocumentToBundle(
   document: ContextCanvasDocument,
@@ -74,7 +71,7 @@ export function projectDocumentToBundle(
       nodePath,
     });
     fs.writeFileSync(nodePath, serialize(markdown), "utf8");
-    pathsWritten.push(toBundleRelativePath(bundleRoot, nodePath));
+    pathsWritten.push(normalizeBundleRelativePath(bundleRoot, nodePath));
   }
 
   if (includeCompiled) {
@@ -103,7 +100,7 @@ export function projectDocumentToBundle(
         ].join("\n"),
       };
       fs.writeFileSync(compiledPath, serialize(compiledDoc), "utf8");
-      pathsWritten.push(toBundleRelativePath(bundleRoot, compiledPath));
+      pathsWritten.push(normalizeBundleRelativePath(bundleRoot, compiledPath));
     }
   }
 
@@ -113,11 +110,7 @@ export function projectDocumentToBundle(
   }
 
   for (const indexPath of regenerateIndexes(bundleRoot, document)) {
-    pathsWritten.push(
-      path.isAbsolute(indexPath)
-        ? toBundleRelativePath(bundleRoot, indexPath)
-        : indexPath.split(path.sep).join("/"),
-    );
+    pathsWritten.push(normalizeBundleRelativePath(bundleRoot, indexPath));
   }
 
   return { pathsWritten, errors };

@@ -7,7 +7,7 @@ import { compilePromptContext } from "../../shared/compiler.ts";
 import { createInitialDocument, type ContextCanvasDocument } from "../../shared/domain.ts";
 import { parse } from "./document.ts";
 import { loadBundleToDocument } from "./load.ts";
-import { groupIndexPath, nodeIdToPath, rootIndexPath } from "./paths.ts";
+import { groupIndexPath, nodeIdToPath, normalizeBundleRelativePath, rootIndexPath } from "./paths.ts";
 import { projectDocumentToBundle } from "./project.ts";
 import { CANVAS_SIDECAR } from "./sidecar.ts";
 
@@ -154,6 +154,33 @@ describe("loadBundleToDocument", () => {
       id: "group-1",
       summary: "Editable group summary",
     });
+  });
+
+  it("reports forward-slash bundle-relative paths from projection", () => {
+    const bundleRoot = makeTempDir();
+    const document: ContextCanvasDocument = {
+      ...sampleDocument(),
+      groups: [
+        {
+          id: "group-1",
+          title: "Conversation",
+          origin: { x: 0, y: 0 },
+          summary: "Editable group summary",
+        },
+      ],
+    };
+
+    const result = projectDocumentToBundle(document, bundleRoot, { writeCanvasSidecar: false });
+    expect(result.pathsWritten.every((entry) => !entry.includes("\\"))).toBe(true);
+    expect(result.pathsWritten).toContain("groups/group-1/index.md");
+  });
+});
+
+describe("normalizeBundleRelativePath", () => {
+  it("uses forward slashes for bundle-relative paths", () => {
+    const bundleRoot = makeTempDir();
+    const absolutePath = path.join(bundleRoot, "groups", "group-1", "index.md");
+    expect(normalizeBundleRelativePath(bundleRoot, absolutePath)).toBe("groups/group-1/index.md");
   });
 });
 
