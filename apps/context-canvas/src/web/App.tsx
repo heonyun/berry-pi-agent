@@ -307,6 +307,9 @@ function CanvasApp() {
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         setStatus(`Error: ${message}`);
+        if (answerId) {
+          setAnswerText(answerId, message);
+        }
       } finally {
         setRunningPromptId(null);
       }

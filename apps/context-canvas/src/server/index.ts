@@ -98,6 +98,33 @@ export function assistantMessageText(message: AssistantMessage): string {
     .join("");
 }
 
+export function assistantRunErrorMessage(message: AssistantMessage): string | undefined {
+  if (message.errorMessage) {
+    return message.errorMessage;
+  }
+  if (message.stopReason === "error") {
+    return "Agent run failed before producing an answer.";
+  }
+  if (message.stopReason === "aborted") {
+    return "Agent run was aborted.";
+  }
+  return undefined;
+}
+
+export function findAssistantRunError(messages: Array<{ role: string; errorMessage?: string; stopReason?: string }>): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== "assistant") {
+      continue;
+    }
+    const error = assistantRunErrorMessage(message as AssistantMessage);
+    if (error) {
+      return error;
+    }
+  }
+  return undefined;
+}
+
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
   const chunks: Buffer[] = [];
   let totalLength = 0;
@@ -182,6 +209,7 @@ async function handlePrompt(
     const promptText = formatPromptForPi(compiled);
     const session = await getSession();
     let streamedText = "";
+    let promptErrorSent = false;
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -203,8 +231,10 @@ async function handlePrompt(
           streamedText += event.assistantMessageEvent.delta;
           writeSse(res, { type: "text_delta", delta: event.assistantMessageEvent.delta });
         } else if (event.type === "message_end" && event.message.role === "assistant") {
-          if (event.message.errorMessage) {
-            writeSse(res, { type: "error", message: event.message.errorMessage });
+          const runError = assistantRunErrorMessage(event.message);
+          if (runError) {
+            writeSse(res, { type: "error", message: runError });
+            promptErrorSent = true;
             return;
           }
           const finalText = assistantMessageText(event.message);
@@ -229,6 +259,13 @@ async function handlePrompt(
             isError: event.isError,
           });
         } else if (event.type === "agent_end") {
+          if (!promptErrorSent && !streamedText) {
+            const runError = findAssistantRunError(event.messages);
+            if (runError) {
+              writeSse(res, { type: "error", message: runError });
+              promptErrorSent = true;
+            }
+          }
           writeSse(res, { type: "done" });
           finish();
         }

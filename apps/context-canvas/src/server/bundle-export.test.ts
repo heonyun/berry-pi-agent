@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createInitialDocument } from "../shared/domain.ts";
 import { CANVAS_SIDECAR } from "../storage/markdown/sidecar.ts";
-import { assistantMessageText, createContextCanvasServer, handleBundleExport, handleBundleLoad } from "./index.ts";
+import { assistantMessageText, findAssistantRunError, assistantRunErrorMessage, createContextCanvasServer, handleBundleExport, handleBundleLoad } from "./index.ts";
 import { resolveContextCanvasServerConfig } from "./security.ts";
 
 describe("handleBundleExport", () => {
@@ -93,6 +93,67 @@ describe("assistantMessageText", () => {
         timestamp: Date.now(),
       }),
     ).toBe("Hello world.");
+  });
+});
+
+describe("assistantRunErrorMessage", () => {
+  it("returns explicit provider auth errors", () => {
+    expect(
+      assistantRunErrorMessage({
+        role: "assistant",
+        content: [],
+        api: "openai-codex-responses",
+        provider: "openai-codex",
+        model: "gpt-5.4-mini",
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "error",
+        errorMessage: "Your authentication token has been invalidated. Please try signing in again.",
+        timestamp: Date.now(),
+      }),
+    ).toBe("Your authentication token has been invalidated. Please try signing in again.");
+  });
+
+  it("returns a fallback message when stopReason is error without errorMessage", () => {
+    expect(
+      assistantRunErrorMessage({
+        role: "assistant",
+        content: [],
+        api: "openai-codex-responses",
+        provider: "openai-codex",
+        model: "gpt-5.4-mini",
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "error",
+        timestamp: Date.now(),
+      }),
+    ).toBe("Agent run failed before producing an answer.");
+  });
+});
+
+describe("findAssistantRunError", () => {
+  it("finds the latest assistant failure from agent_end messages", () => {
+    expect(
+      findAssistantRunError([
+        {
+          role: "assistant",
+          stopReason: "error",
+          errorMessage: "Provider quota exceeded.",
+        },
+      ]),
+    ).toBe("Provider quota exceeded.");
   });
 });
 
