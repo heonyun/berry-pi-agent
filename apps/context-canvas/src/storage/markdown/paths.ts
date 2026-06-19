@@ -21,10 +21,16 @@ export function assertSafeId(id: string, label: string): void {
   }
 }
 
+function normalizeForBundleRootCheck(filePath: string): string {
+  return path.resolve(filePath).replace(/\\/g, "/");
+}
+
 export function resolveWithinBundle(bundleRoot: string, ...segments: string[]): string {
   const resolved = path.resolve(bundleRoot, ...segments);
   const root = path.resolve(bundleRoot);
-  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) {
+  const normalizedResolved = normalizeForBundleRootCheck(resolved);
+  const normalizedRoot = normalizeForBundleRootCheck(root);
+  if (normalizedResolved !== normalizedRoot && !normalizedResolved.startsWith(`${normalizedRoot}/`)) {
     throw new BundlePathError(`Path escapes bundle root: ${resolved}`);
   }
   return resolved;
