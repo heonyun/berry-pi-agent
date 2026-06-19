@@ -91,6 +91,7 @@ vi.mock("@xyflow/react", () => ({
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -142,6 +143,24 @@ describe("App bundle hydration", () => {
         headers: { "Content-Type": "text/event-stream" },
       },
     );
+  }
+
+  function documentWithEmptyAnswer(): ContextCanvasDocument {
+    const document = documentWithAnswer();
+    const answer = document.nodes.find((node) => node.id === "answer-1");
+    if (answer) {
+      answer.text = "   ";
+    }
+    return document;
+  }
+
+  async function dragSelectNodes() {
+    const pane = await screen.findByTestId("flow-pane");
+    fireEvent(pane, panePointerEvent("pointerdown", { button: 0, buttons: 1, pointerId: 1, clientX: 0, clientY: 0 }));
+    fireEvent(pane, panePointerEvent("pointermove", { button: 0, buttons: 1, pointerId: 1, clientX: 250, clientY: 300 }));
+    fireEvent(pane, panePointerEvent("pointerup", { button: 0, pointerId: 1, clientX: 250, clientY: 300 }));
+    expect(await screen.findByText("Create group")).toBeTruthy();
+    return pane;
   }
 
   function panePointerEvent(type: string, init: { button?: number; buttons?: number; pointerId?: number; clientX: number; clientY: number }) {
@@ -406,6 +425,133 @@ describe("App bundle hydration", () => {
     fireEvent.keyDown(contenteditableFalse, { key: "ArrowLeft", ctrlKey: true });
     fireEvent.keyDown(contenteditableFalse, { key: "ArrowUp", ctrlKey: true });
     expect(await screen.findByText("좋아. 너의 답에서 예상 문제와 위험을 말해.")).toBeTruthy();
+  });
+
+  it("creates a group when Enter confirms drag selection", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await dragSelectNodes();
+
+    fireEvent.keyDown(await screen.findByTestId("app-shell"), { key: "Enter" });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Create group")).toBeNull();
+    });
+    expect(await screen.findByText("Group created")).toBeTruthy();
+  });
+
+  it("blocks answer shortcuts when multiple nodes are selected", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    const shell = await screen.findByTestId("app-shell");
+    await dragSelectNodes();
+
+    fireEvent.keyDown(shell, { key: "ArrowLeft", ctrlKey: true });
+    fireEvent.keyDown(shell, { key: "ArrowUp", ctrlKey: true });
+
+    expect(screen.queryByText("좋아. 너의 답에서 예상 문제와 위험을 말해.")).toBeNull();
+    expect(await screen.findByText("Select exactly one answer node for this action.")).toBeTruthy();
+  });
+
+  it("dismisses group confirmation on Escape", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    const shell = await screen.findByTestId("app-shell");
+    await dragSelectNodes();
+
+    fireEvent.keyDown(shell, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Create group")).toBeNull();
+    });
+    expect(screen.queryByText("Group created")).toBeNull();
+  });
+
+  it("blocks answer shortcuts for empty answers", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithEmptyAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    const shell = await screen.findByTestId("app-shell");
+    fireEvent.click(await screen.findByText("Select answer-1"));
+
+    fireEvent.keyDown(shell, { key: "ArrowDown", ctrlKey: true });
+
+    expect(await screen.findByText("Answer action is unavailable while the answer is empty or running.")).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/prompt", expect.anything());
+  });
+
+  it("blocks answer shortcuts while a prompt is running", async () => {
+    let resolvePrompt: (() => void) | undefined;
+    const promptGate = new Promise<void>((resolve) => {
+      resolvePrompt = resolve;
+    });
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), { status: 200 });
+      }
+      if (url === "/api/prompt") {
+        await promptGate;
+        return streamResponse("still running");
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    const shell = await screen.findByTestId("app-shell");
+    try {
+      fireEvent.click(await screen.findByText("Run prompt-1"));
+      expect(await screen.findByText("Running agent...")).toBeTruthy();
+
+      fireEvent.click(screen.getByText("Select answer-1"));
+      fireEvent.keyDown(shell, { key: "ArrowDown", ctrlKey: true });
+
+      expect(await screen.findByText("Answer action is unavailable while the answer is empty or running.")).toBeTruthy();
+    } finally {
+      resolvePrompt?.();
+    }
   });
 
   it("saves group summary edits after a short debounce", async () => {
