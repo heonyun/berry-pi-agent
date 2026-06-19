@@ -13,7 +13,7 @@ TRUNCATED_NOTE="${5:-}"
 MODEL="${DEEPSEEK_MODEL:-deepseek-v4-flash}"
 REPO="${GITHUB_REPOSITORY:?}"
 WORKFLOW_ID="ci-failure-explain"
-OUTPUT_SECTIONS="$(agent_output_sections_prompt)"
+SYSTEM_CONTENT="$(agent_ci_explain_system_prompt)"
 
 if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
   echo "DEEPSEEK_API_KEY is not set" >&2
@@ -32,12 +32,6 @@ Head SHA: ${HEAD_SHA}
 
 ${TRUNCATED_NOTE}
 
-Analyze the failed CI logs below. Identify the failing step/command, likely root cause, suspect files, and concrete rerun commands.
-
-Set Conclusion to fail.
-
-${OUTPUT_SECTIONS}
-
 Failed CI logs:
 ${LOG_TEXT}
 EOF
@@ -45,16 +39,14 @@ EOF
 
 jq -n \
   --arg model "${MODEL}" \
+  --arg system "${SYSTEM_CONTENT}" \
   --arg user "${user_content}" \
   '{
     model: $model,
     stream: false,
     temperature: 0.2,
     messages: [
-      {
-        role: "system",
-        content: "You are a CI failure analysis assistant for berry-pi-agent. Base findings on the provided logs only. Do not claim you ran commands. Prefer concise Korean when surrounding context is Korean."
-      },
+      {role: "system", content: $system},
       {role: "user", content: $user}
     ]
   }' > "${payload_file}"
@@ -70,6 +62,8 @@ if [[ "${http_code}" != "200" ]]; then
   cat "${response_file}" >&2
   exit 1
 fi
+
+agent_log_deepseek_usage "${response_file}"
 
 comment_body="$(jq -r '.choices[0].message.content // empty' "${response_file}")"
 if [[ -z "${comment_body}" ]]; then

@@ -107,11 +107,10 @@ jobs:
           elif [[ "${EVENT}" == "issue_comment.created" ]]; then
             if agent_should_skip_comment "${COMMENT_ACTOR}" "${COMMENT_BODY}"; then
               echo "Skipping bot or agent-marked comment"
-            elif [[ "${COMMENT_BODY}" == @deepseek* ]] && [[ "${COMMENT_ASSOCIATION}" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]]; then
+            elif [[ "${COMMENT_ASSOCIATION}" =~ ^(OWNER|MEMBER|COLLABORATOR)$ ]] &&
+                 additional_context="$(agent_issue_assistant_context_from_comment "${COMMENT_BODY}")"; then
               should_run=true
               mode="invoke"
-              additional_context="${COMMENT_BODY#@deepseek}"
-              additional_context="${additional_context# }"
             fi
           fi
 
