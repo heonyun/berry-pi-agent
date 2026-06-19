@@ -155,6 +155,19 @@ describe("loadBundleToDocument", () => {
       summary: "Editable group summary",
     });
   });
+
+  it("uses forward-slash bundle-relative paths when path.sep is backslash", () => {
+    const bundleRoot = makeTempDir();
+    const originalSep = path.sep;
+    Object.defineProperty(path, "sep", { configurable: true, value: "\\" });
+    try {
+      const result = projectDocumentToBundle(sampleDocument(), bundleRoot);
+      expect(result.pathsWritten.every((entry) => !entry.includes("\\"))).toBe(true);
+      expect(result.pathsWritten).toContain("groups/group-1/index.md");
+    } finally {
+      Object.defineProperty(path, "sep", { configurable: true, value: originalSep });
+    }
+  });
 });
 
 describe("bundle path safety", () => {

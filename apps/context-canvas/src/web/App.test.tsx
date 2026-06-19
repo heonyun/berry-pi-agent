@@ -473,6 +473,50 @@ describe("App bundle hydration", () => {
     expect(await screen.findByText("Select exactly one answer node for this action.")).toBeTruthy();
   });
 
+  it("dismisses group confirmation when Cancel is clicked", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await dragSelectNodes();
+    fireEvent.click(screen.getByText("Cancel"));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Create group")).toBeNull();
+    });
+    expect(screen.queryByText("Group created")).toBeNull();
+  });
+
+  it("dismisses group confirmation when a node is clicked", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    await dragSelectNodes();
+    fireEvent.click(screen.getByText("Select prompt-1"));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Create group")).toBeNull();
+    });
+    expect(screen.queryByText("Group created")).toBeNull();
+  });
+
   it("dismisses group confirmation on Escape", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url === "/api/bundle/load") {

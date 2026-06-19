@@ -30,6 +30,11 @@ export function resolveWithinBundle(bundleRoot: string, ...segments: string[]): 
   return resolved;
 }
 
+export function normalizeBundleRelativePath(bundleRoot: string, targetPath: string): string {
+  const absolutePath = path.isAbsolute(targetPath) ? targetPath : path.resolve(bundleRoot, targetPath);
+  return path.relative(bundleRoot, absolutePath).split(path.sep).join("/");
+}
+
 export function nodeIdToPath(bundleRoot: string, nodeId: string): string {
   assertSafeId(nodeId, "nodeId");
   return resolveWithinBundle(bundleRoot, NODES_DIR, `${nodeId}.md`);
