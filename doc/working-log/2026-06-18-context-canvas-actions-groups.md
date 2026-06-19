@@ -85,6 +85,13 @@ canonical_repo: "C:\\Dev\\pi-agent"
 - Root test failure appears unrelated to this feature and is concentrated in non-context-canvas packages.
 - Qwen artifacts are stored under ignored `qwen-runs/`.
 
+## Follow-up Fix: Dev Server Startup
+
+- Root cause: `scripts/dev.mjs` always started the Context Canvas API on `127.0.0.1:3001`, while `vite.config.ts` also hard-coded `/api` proxying to that port.
+- Symptom: the Vite UI could start on `http://localhost:5174/`, but the API server crashed with `EADDRINUSE` when another local process already owned port 3001.
+- Fix: dev startup now finds an available API port starting at 3001 and passes the same target to Vite through `CONTEXT_CANVAS_API_TARGET`.
+- Verified after fix: the dev server selected `http://127.0.0.1:3002`, Vite stayed on `http://localhost:5174/`, and Context Canvas tests/build still passed.
+
 ## Decisions
 
 - Group summaries are local editable drafts, not AI-generated in v1.
