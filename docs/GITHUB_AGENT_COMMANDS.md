@@ -33,7 +33,8 @@ Reasonix, Qwen, and Cursor workers must not post `@deepseek*` mentions or run `g
 | Trigger | Workflow | Action |
 | --- | --- | --- |
 | Issue opened/reopened (trusted author or Antigravity marker) | `deepseek-issue-assistant` | Post pre-implementation review comment |
-| `@deepseek ...` on issue comment | `deepseek-issue-assistant` | Follow-up pre-implementation review reply |
+| `/deepseek ...` on issue comment | `deepseek-issue-assistant` | Follow-up pre-implementation review reply without mentioning an external account |
+| `@deepseek ...` or `@github-actions ...` on issue comment | `deepseek-issue-assistant` | Backward-compatible follow-up trigger |
 | Manual `workflow_dispatch` with issue number | `deepseek-issue-assistant` | Pre-implementation review comment on demand |
 | PR opened/reopened/synchronize (same-repo) | `deepseek-pr-review` | Post strict diff review comment |
 | `@deepseek-review ...` on PR comment | `deepseek-pr-review` | Strict diff review with extra context |
@@ -43,6 +44,8 @@ Reasonix, Qwen, and Cursor workers must not post `@deepseek*` mentions or run `g
 ## Trust rules
 
 - Issue/PR comment triggers require `author_association` of `OWNER`, `MEMBER`, or `COLLABORATOR`.
+- Prefer `/deepseek ...` for issue follow-ups. It avoids notifying or linking an unrelated GitHub account.
+- `@github-actions ...` is a repository-local alias for the DeepSeek issue assistant. GitHub Actions itself is not a conversational bot; replies are still posted by `github-actions[bot]`.
 - Automatic issue planning also runs when the issue body contains `<!-- pi-agent:created-by:antigravity -->` (Antigravity-delegated issues, including bot-opened issues).
 - Ineligible issues are skipped **silently** (no DeepSeek call, no decline comment).
 - PR review and CI explain run only for same-repository PR heads (not fork PRs).
@@ -65,3 +68,48 @@ praise, broad style notes, or invented package-manager commands are low-value.
 ## Labels
 
 See [../.github/AGENT_LABELS.md](../.github/AGENT_LABELS.md).
+
+## DeepSeek context caching
+
+DeepSeek [context caching](https://api-docs.deepseek.com/guides/kv_cache) is automatic. No workflow or API flag is required. Billing uses `prompt_cache_hit_tokens` (cheaper) and `prompt_cache_miss_tokens` (full input rate) in each `chat/completions` response.
+
+### What to expect
+
+| Pattern | Typical cache behavior |
+| --- | --- |
+| First call for a workflow type | **All miss** — prefix is not persisted yet |
+| Later issue/PR/CI calls of the **same workflow** | **Partial hit** on the stable `system` prompt (~700 tokens) |
+| Each unique issue body or PR diff | **Miss** — variable user content diverges early in the prefix |
+| PR `synchronize` with changed diff | Most input tokens miss again |
+| Low traffic (hours between runs) | Cache may expire before reuse |
+
+For GitHub Actions review bots, **high miss ratio is normal**. Most tokens are unique issue/PR/diff content. The goal of prompt layout is to keep review instructions in the stable `system` message so repeat runs within the same workflow can reuse that prefix.
+
+### Prompt layout (berry-pi-agent)
+
+Scripts in `.github/scripts/` build messages as:
+
+- `system`: persona + review instructions + output section template (stable per workflow)
+- `user`: repository metadata, issue/PR body, diff, or CI logs (variable)
+
+Do not put timestamps, run IDs, or other volatile values in `system`. Those belong in `user` only.
+
+### Observability
+
+After each DeepSeek call, workflows log a line like:
+
+```text
+DeepSeek usage: cache_hit=704 cache_miss=4120 prompt=4824 completion=260
+```
+
+Check this in the GitHub Actions step log when validating cache behavior. The DeepSeek usage dashboard aggregates the same `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens` fields.
+
+### Local cache check
+
+Optional manual verification (requires `DEEPSEEK_API_KEY`):
+
+```bash
+.github/scripts/test-deepseek-cache.sh
+```
+
+This sends two identical minimal requests and expects `cache_hit > 0` on the second response.
