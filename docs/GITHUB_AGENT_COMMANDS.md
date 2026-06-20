@@ -28,25 +28,6 @@ Labels (`agent:planned`, `agent:reviewed`, `ci:failed`) are visibility hints. Se
 
 Reasonix, Qwen, and Cursor workers must not post `@deepseek*` mentions or run `gh` mutations. Codex owns GitHub side effects.
 
-## GitHub CLI (fork)
-
-The default `gh` repo for this clone is often **`earendil-works/pi`** (upstream). Pi-agent issue/PR/check commands must target **`heonyun/berry-pi-agent`**.
-
-```powershell
-pwsh -NoProfile -File scripts/gh-fork.ps1 issue view 22
-pwsh -NoProfile -File scripts/gh-fork.ps1 pr checks 32
-```
-
-`scripts/gh-fork.ps1` sets `GH_REPO=heonyun/berry-pi-agent` for the invocation. PR loop scripts and Codex must not assume upstream when resolving PR numbers.
-
-## Path test policy (Context Canvas)
-
-Cross-platform markdown bundle path tests:
-
-- Do not mock global `path.sep` or replace `path.win32` in integration tests; that breaks `path.resolve` root checks on Linux CI.
-- Test normalization helpers directly (for example `normalizeBundleRelativePath()`).
-- Use `it.runIf(process.platform === "win32")` for OS-specific filesystem behavior.
-
 ## Triggers
 
 | Trigger | Workflow | Action |
