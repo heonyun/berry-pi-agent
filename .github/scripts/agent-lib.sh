@@ -110,6 +110,18 @@ Review requirements:
 - On re-review requests, treat previous review comments as stale until the
   current diff proves the issue still exists. Do not repeat an earlier finding
   just because it appeared in a previous response.
+- Unified diff lines that start with a space are unchanged context in the same
+  file. Read them before claiming a guard, early return, or helper call is
+  missing. Keyboard handlers often place `event.repeat`, Escape, or similar
+  guards above the changed Delete/Backspace branch.
+- Before claiming a helper function lacks behavior (for example arm clearing on
+  re-select), check whether that helper's definition appears in the Diff
+  section. If only the call site changed and the helper body is outside the
+  diff, use evidence:heuristic and blocker:no unless the diff contradicts the
+  claim.
+- If the PR body Test plan or Summary claims specific tests passed, do not
+  assert those tests fail unless the diff directly contradicts that claim.
+  Prefer residual risk or needs verification instead of blocker:yes.
 - Do not claim a value is random, dynamic, unprotected, missing, or unused unless
   the current diff or provided context contains code evidence for that claim.
 - Do not produce generic praise, restatements of the PR, or broad style advice

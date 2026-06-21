@@ -199,6 +199,8 @@ fi
 pr_system="$(agent_pr_review_system_prompt)"
 assert_contains "${pr_system}" "strict diff review assistant" "pr system persona"
 assert_contains "${pr_system}" "Evidence" "pr review instructions in system"
+assert_contains "${pr_system}" "Unified diff lines that start with a space" "pr diff context guard rule"
+assert_contains "${pr_system}" "Test plan" "pr test plan cross-check rule"
 if [[ "${pr_system}" == *"Diff:"* ]]; then
   fail_count=$((fail_count + 1))
   echo "FAIL: pr system prompt must not contain diff placeholder" >&2

@@ -38,6 +38,8 @@ fi
 
 diff_metadata="$(agent_pr_diff_metadata "${diff_file}" "${MAX_DIFF_CHARS}" "${REPO}" "${PR_NUMBER}")"
 
+ci_checks="$(gh pr checks "${PR_NUMBER}" --repo "${REPO}" 2>/dev/null | head -20 || echo "unavailable")"
+
 user_content="$(cat <<EOF
 Repository: ${REPO}
 Pull request #${PR_NUMBER}: ${TITLE}
@@ -51,6 +53,9 @@ ${EXTRA}
 ${diff_metadata}
 
 Review the PR diff for correctness, regression risk, security/privacy issues, workflow reliability, and missing tests.
+
+Latest CI checks (informational; do not claim you ran them):
+${ci_checks}
 
 Diff:
 ${diff_text}
