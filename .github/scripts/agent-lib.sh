@@ -122,6 +122,8 @@ Review requirements:
 - If the PR body Test plan or Summary claims specific tests passed, do not
   assert those tests fail unless the diff directly contradicts that claim.
   Prefer residual risk or needs verification instead of blocker:yes.
+- When a "Surrounding file context" section is present, read it before claiming
+  guards, helpers, or early returns are missing outside the diff hunks.
 - Do not claim a value is random, dynamic, unprotected, missing, or unused unless
   the current diff or provided context contains code evidence for that claim.
 - Do not produce generic praise, restatements of the PR, or broad style advice
@@ -303,6 +305,143 @@ agent_pr_diff_metadata() {
       echo "Unverified paths (may be missing from Diff section):"
       printf '%s\n' "${changed_files}"
     fi
+    echo ""
+  fi
+}
+
+# Fetch ±N lines around the first diff hunk per changed file (PR head).
+# Args: repo pr_number [context_lines] [max_files] [max_chars]
+agent_pr_surrounding_context() {
+  local repo="${1:?repo required}"
+  local pr_number="${2:?pr number required}"
+  local context_lines="${3:-25}"
+  local max_files="${4:-4}"
+  local max_chars="${5:-14000}"
+
+  if ! command -v gh >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local head_sha
+  head_sha="$(gh api "repos/${repo}/pulls/${pr_number}" --jq '.head.sha' 2>/dev/null || true)"
+  if [[ -z "${head_sha}" ]]; then
+    return 0
+  fi
+
+  local filenames
+  filenames="$(gh api "repos/${repo}/pulls/${pr_number}/files" --jq '.[].filename' 2>/dev/null || true)"
+  if [[ -z "${filenames}" ]]; then
+    return 0
+  fi
+
+  local file_count=0
+  local total_chars=0
+  local snippets=""
+
+  while IFS= read -r filename; do
+    [[ -z "${filename}" ]] && continue
+    if [[ "${file_count}" -ge "${max_files}" ]]; then
+      break
+    fi
+
+    local patch start_line
+    patch="$(gh api "repos/${repo}/pulls/${pr_number}/files" --paginate \
+      --jq ".[] | select(.filename==\"${filename}\") | .patch // empty" 2>/dev/null || true)"
+    if [[ -z "${patch}" ]]; then
+      continue
+    fi
+
+    start_line="$(printf '%s\n' "${patch}" | sed -n 's/^@@ -[0-9,]* +\([0-9]*\).*/\1/p' | head -1)"
+    if [[ -z "${start_line}" ]]; then
+      continue
+    fi
+
+    local encoded_path content_b64 content from to excerpt block block_len
+    encoded_path="$(jq -rn --arg v "${filename}" '$v|@uri')"
+    content_b64="$(gh api "repos/${repo}/contents/${encoded_path}?ref=${head_sha}" \
+      --jq '.content // empty' 2>/dev/null | tr -d '\n' || true)"
+    if [[ -z "${content_b64}" ]]; then
+      continue
+    fi
+
+    content="$(printf '%s' "${content_b64}" | base64 -d 2>/dev/null || true)"
+    if [[ -z "${content}" ]]; then
+      continue
+    fi
+
+    from=$(( start_line > context_lines ? start_line - context_lines : 1 ))
+    to=$(( start_line + context_lines ))
+    excerpt="$(printf '%s\n' "${content}" | awk -v from="${from}" -v to="${to}" \
+      'NR >= from && NR <= to { printf "%5d| %s\n", NR, $0 }')"
+
+    block="$(cat <<EOF
+
+### ${filename} (HEAD ±${context_lines} around first hunk @ line ${start_line})
+\`\`\`
+${excerpt}
+\`\`\`
+EOF
+)"
+
+    block_len="${#block}"
+    if [[ $(( total_chars + block_len )) -gt "${max_chars}" ]]; then
+      break
+    fi
+
+    snippets="${snippets}${block}"
+    total_chars=$(( total_chars + block_len ))
+    file_count=$(( file_count + 1 ))
+  done <<<"${filenames}"
+
+  if [[ -n "${snippets}" ]]; then
+    echo "Surrounding file context (from PR head; use with Diff section):"
+    printf '%s\n' "${snippets}"
+    echo ""
+  fi
+}
+
+# When CI checks failed on the PR head, attach a truncated failed-job log excerpt.
+# Args: repo pr_number [max_chars]
+agent_pr_failed_ci_logs() {
+  local repo="${1:?repo required}"
+  local pr_number="${2:?pr number required}"
+  local max_chars="${3:-8000}"
+
+  if ! command -v gh >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local checks failed_checks
+  checks="$(gh pr checks "${pr_number}" --repo "${repo}" 2>/dev/null || true)"
+  if [[ -z "${checks}" ]]; then
+    return 0
+  fi
+
+  failed_checks="$(printf '%s\n' "${checks}" | awk 'tolower($2) ~ /^(fail|failure)$/ { print }')"
+  if [[ -z "${failed_checks}" ]]; then
+    return 0
+  fi
+
+  echo "Failed CI checks (informational; do not claim you ran them):"
+  printf '%s\n' "${failed_checks}"
+  echo ""
+
+  local head_sha run_id log_excerpt
+  head_sha="$(gh api "repos/${repo}/pulls/${pr_number}" --jq '.head.sha' 2>/dev/null || true)"
+  if [[ -z "${head_sha}" ]]; then
+    return 0
+  fi
+
+  run_id="$(gh api "repos/${repo}/actions/runs?head_sha=${head_sha}&status=completed" \
+    --jq '.workflow_runs[] | select(.conclusion=="failure") | .id' 2>/dev/null | head -1 || true)"
+  if [[ -z "${run_id}" ]]; then
+    return 0
+  fi
+
+  log_excerpt="$(gh run view "${run_id}" --repo "${repo}" --log-failed 2>/dev/null | tail -n 150 | head -c "${max_chars}" || true)"
+  if [[ -n "${log_excerpt}" ]]; then
+    echo "Failed job log excerpt (truncated):"
+    printf '%s\n' "${log_excerpt}"
     echo ""
   fi
 }
