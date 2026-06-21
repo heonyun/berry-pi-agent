@@ -440,14 +440,13 @@ function CanvasApp() {
     (nodeId: string) => {
       const result = dispatch({ type: "delete_node", nodeId });
       const remainingNodeIds = new Set(result.document.nodes.map((node) => node.id));
-      const remainingSelected = [...selectedNodeIds].filter(
-        (selectedId) => selectedId !== nodeId && remainingNodeIds.has(selectedId),
+      const remainingSelected = [...selectedNodeIds].filter((selectedId) =>
+        remainingNodeIds.has(selectedId),
       );
-      const currentStillSelected = selectedNodeId !== nodeId && remainingNodeIds.has(selectedNodeId);
-      const nextSelectedId =
-        currentStillSelected
-          ? selectedNodeId
-          : remainingSelected[0] ?? result.document.nodes.find((node) => node.id !== nodeId)?.id ?? "";
+      const currentStillSelected = remainingNodeIds.has(selectedNodeId);
+      const nextSelectedId = currentStillSelected
+        ? selectedNodeId
+        : remainingSelected[0] ?? result.document.nodes[0]?.id ?? "";
       setDeleteArmedNodeId(null);
       setSelectedNodeId(nextSelectedId);
       setSelectedNodeIds(
