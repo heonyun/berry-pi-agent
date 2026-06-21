@@ -436,6 +436,29 @@ function CanvasApp() {
     return Boolean(target.closest("textarea, input, button, [contenteditable]:not([contenteditable='false'])"));
   }, []);
 
+  const deleteNode = useCallback(
+    (nodeId: string) => {
+      const result = dispatch({ type: "delete_node", nodeId });
+      const remainingNodeIds = new Set(result.document.nodes.map((node) => node.id));
+      const remainingSelected = [...selectedNodeIds].filter(
+        (selectedId) => selectedId !== nodeId && remainingNodeIds.has(selectedId),
+      );
+      const currentStillSelected = selectedNodeId !== nodeId && remainingNodeIds.has(selectedNodeId);
+      const nextSelectedId =
+        currentStillSelected
+          ? selectedNodeId
+          : remainingSelected[0] ?? result.document.nodes.find((node) => node.id !== nodeId)?.id ?? "";
+      setDeleteArmedNodeId(null);
+      setSelectedNodeId(nextSelectedId);
+      setSelectedNodeIds(
+        nextSelectedId
+          ? new Set(remainingSelected.includes(nextSelectedId) ? remainingSelected : [nextSelectedId])
+          : new Set(),
+      );
+    },
+    [dispatch, selectedNodeId, selectedNodeIds],
+  );
+
   const handleAppKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       if (isTextEntryTarget(event.target)) {
@@ -443,6 +466,9 @@ function CanvasApp() {
       }
       if (event.key === "Escape") {
         setGroupConfirm(null);
+        // WHY: Escape cancels pending delete confirm without deleting the node.
+        // RELATED: App.test.tsx — "clears the delete arm on Escape; second Delete re-arms without deleting"
+        setDeleteArmedNodeId(null);
         setSelectionBox(null);
         selectionStartRef.current = null;
         selectionBoxRef.current = null;
@@ -457,7 +483,13 @@ function CanvasApp() {
         if (selectedId) {
           event.preventDefault();
           event.stopPropagation();
-          setDeleteArmedNodeId(selectedId);
+          // INVARIANT: first Delete arms; second Delete on same armed selection deletes (keyboard-only path).
+          // RELATED: App.test.tsx — "deletes the armed node when Delete is pressed a second time"
+          if (deleteArmedNodeId === selectedId) {
+            deleteNode(selectedId);
+          } else {
+            setDeleteArmedNodeId(selectedId);
+          }
         }
         return;
       }
@@ -527,6 +559,8 @@ function CanvasApp() {
       resetAnswerShortcutState,
       retrySelectedAnswer,
       screenToFlowPosition,
+      deleteArmedNodeId,
+      deleteNode,
       selectedAnswerForAction,
       selectedNodeIds,
     ],
@@ -554,29 +588,6 @@ function CanvasApp() {
     setSingleSelection(nodeId);
     setDeleteArmedNodeId(nodeId);
   }, [setSingleSelection]);
-
-  const deleteNode = useCallback(
-    (nodeId: string) => {
-      const result = dispatch({ type: "delete_node", nodeId });
-      const remainingNodeIds = new Set(result.document.nodes.map((node) => node.id));
-      const remainingSelected = [...selectedNodeIds].filter(
-        (selectedId) => selectedId !== nodeId && remainingNodeIds.has(selectedId),
-      );
-      const currentStillSelected = selectedNodeId !== nodeId && remainingNodeIds.has(selectedNodeId);
-      const nextSelectedId =
-        currentStillSelected
-          ? selectedNodeId
-          : remainingSelected[0] ?? result.document.nodes.find((node) => node.id !== nodeId)?.id ?? "";
-      setDeleteArmedNodeId(null);
-      setSelectedNodeId(nextSelectedId);
-      setSelectedNodeIds(
-        nextSelectedId
-          ? new Set(remainingSelected.includes(nextSelectedId) ? remainingSelected : [nextSelectedId])
-          : new Set(),
-      );
-    },
-    [dispatch, selectedNodeId, selectedNodeIds],
-  );
 
   const onPaneClick = useCallback(
     (event: ReactMouseEvent) => {

@@ -454,6 +454,128 @@ describe("App bundle hydration", () => {
     expect(screen.getByText("Answer text")).toBeTruthy();
   });
 
+  it("deletes the armed node when Delete is pressed a second time", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    const shell = await screen.findByTestId("app-shell");
+    fireEvent.click(screen.getByText("Select answer-1"));
+    fireEvent.keyDown(shell, { key: "Delete" });
+    expect(document.querySelector('[data-node-id="answer-1"]')?.getAttribute("data-delete-armed")).toBe("true");
+
+    fireEvent.keyDown(shell, { key: "Delete" });
+    await waitFor(() => {
+      expect(document.querySelector('[data-node-id="answer-1"]')).toBeNull();
+    });
+    expect(screen.queryByText("Answer text")).toBeNull();
+  });
+
+  it("clears the delete arm when the same node is selected again", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    const shell = await screen.findByTestId("app-shell");
+    fireEvent.click(screen.getByText("Select answer-1"));
+    fireEvent.keyDown(shell, { key: "Delete" });
+    expect(document.querySelector('[data-node-id="answer-1"]')?.getAttribute("data-delete-armed")).toBe("true");
+
+    fireEvent.click(screen.getByText("Select answer-1"));
+    expect(document.querySelector('[data-node-id="answer-1"]')?.getAttribute("data-delete-armed")).toBe("false");
+  });
+
+  it("clears the delete arm on Escape; second Delete re-arms without deleting", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    const shell = await screen.findByTestId("app-shell");
+    fireEvent.click(screen.getByText("Select answer-1"));
+    fireEvent.keyDown(shell, { key: "Delete" });
+    expect(document.querySelector('[data-node-id="answer-1"]')?.getAttribute("data-delete-armed")).toBe("true");
+
+    fireEvent.keyDown(shell, { key: "Escape" });
+    expect(document.querySelector('[data-node-id="answer-1"]')?.getAttribute("data-delete-armed")).toBe("false");
+
+    fireEvent.keyDown(shell, { key: "Delete" });
+    expect(document.querySelector('[data-node-id="answer-1"]')?.getAttribute("data-delete-armed")).toBe("true");
+    expect(screen.getByText("Answer text")).toBeTruthy();
+  });
+
+  it("arms then deletes the next selected node after keyboard deletion", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    const shell = await screen.findByTestId("app-shell");
+    fireEvent.click(screen.getByText("Select answer-1"));
+    fireEvent.keyDown(shell, { key: "Delete" });
+    fireEvent.keyDown(shell, { key: "Delete" });
+    await waitFor(() => {
+      expect(document.querySelector('[data-node-id="answer-1"]')).toBeNull();
+    });
+
+    fireEvent.keyDown(shell, { key: "Delete" });
+    expect(document.querySelector('[data-node-id="prompt-1"]')?.getAttribute("data-delete-armed")).toBe("true");
+    fireEvent.keyDown(shell, { key: "Delete" });
+    await waitFor(() => {
+      expect(document.querySelector('[data-node-id="prompt-1"]')).toBeNull();
+    });
+  });
+
+  it("ignores repeated Delete keydown events", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    const shell = await screen.findByTestId("app-shell");
+    fireEvent.click(screen.getByText("Select answer-1"));
+    fireEvent.keyDown(shell, { key: "Delete", repeat: true });
+    expect(document.querySelector('[data-node-id="answer-1"]')?.getAttribute("data-delete-armed")).toBe("false");
+    expect(screen.getByText("Answer text")).toBeTruthy();
+  });
+
   it("does not arm deletion with no selection, from text entry, or with multi-selection", async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url === "/api/bundle/load") {
