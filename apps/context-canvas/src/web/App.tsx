@@ -436,6 +436,29 @@ function CanvasApp() {
     return Boolean(target.closest("textarea, input, button, [contenteditable]:not([contenteditable='false'])"));
   }, []);
 
+  const deleteNode = useCallback(
+    (nodeId: string) => {
+      const result = dispatch({ type: "delete_node", nodeId });
+      const remainingNodeIds = new Set(result.document.nodes.map((node) => node.id));
+      const remainingSelected = [...selectedNodeIds].filter(
+        (selectedId) => selectedId !== nodeId && remainingNodeIds.has(selectedId),
+      );
+      const currentStillSelected = selectedNodeId !== nodeId && remainingNodeIds.has(selectedNodeId);
+      const nextSelectedId =
+        currentStillSelected
+          ? selectedNodeId
+          : remainingSelected[0] ?? result.document.nodes.find((node) => node.id !== nodeId)?.id ?? "";
+      setDeleteArmedNodeId(null);
+      setSelectedNodeId(nextSelectedId);
+      setSelectedNodeIds(
+        nextSelectedId
+          ? new Set(remainingSelected.includes(nextSelectedId) ? remainingSelected : [nextSelectedId])
+          : new Set(),
+      );
+    },
+    [dispatch, selectedNodeId, selectedNodeIds],
+  );
+
   const handleAppKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       if (isTextEntryTarget(event.target)) {
@@ -457,7 +480,11 @@ function CanvasApp() {
         if (selectedId) {
           event.preventDefault();
           event.stopPropagation();
-          setDeleteArmedNodeId(selectedId);
+          if (deleteArmedNodeId === selectedId) {
+            deleteNode(selectedId);
+          } else {
+            setDeleteArmedNodeId(selectedId);
+          }
         }
         return;
       }
@@ -527,6 +554,8 @@ function CanvasApp() {
       resetAnswerShortcutState,
       retrySelectedAnswer,
       screenToFlowPosition,
+      deleteArmedNodeId,
+      deleteNode,
       selectedAnswerForAction,
       selectedNodeIds,
     ],
@@ -554,29 +583,6 @@ function CanvasApp() {
     setSingleSelection(nodeId);
     setDeleteArmedNodeId(nodeId);
   }, [setSingleSelection]);
-
-  const deleteNode = useCallback(
-    (nodeId: string) => {
-      const result = dispatch({ type: "delete_node", nodeId });
-      const remainingNodeIds = new Set(result.document.nodes.map((node) => node.id));
-      const remainingSelected = [...selectedNodeIds].filter(
-        (selectedId) => selectedId !== nodeId && remainingNodeIds.has(selectedId),
-      );
-      const currentStillSelected = selectedNodeId !== nodeId && remainingNodeIds.has(selectedNodeId);
-      const nextSelectedId =
-        currentStillSelected
-          ? selectedNodeId
-          : remainingSelected[0] ?? result.document.nodes.find((node) => node.id !== nodeId)?.id ?? "";
-      setDeleteArmedNodeId(null);
-      setSelectedNodeId(nextSelectedId);
-      setSelectedNodeIds(
-        nextSelectedId
-          ? new Set(remainingSelected.includes(nextSelectedId) ? remainingSelected : [nextSelectedId])
-          : new Set(),
-      );
-    },
-    [dispatch, selectedNodeId, selectedNodeIds],
-  );
 
   const onPaneClick = useCallback(
     (event: ReactMouseEvent) => {
