@@ -480,6 +480,8 @@ function CanvasApp() {
         if (selectedId) {
           event.preventDefault();
           event.stopPropagation();
+          // INVARIANT: first Delete arms; second Delete on same armed selection deletes (keyboard-only path).
+          // RELATED: App.test.tsx — "deletes the armed node when Delete is pressed a second time"
           if (deleteArmedNodeId === selectedId) {
             deleteNode(selectedId);
           } else {
