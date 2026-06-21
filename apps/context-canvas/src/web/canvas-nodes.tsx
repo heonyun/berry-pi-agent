@@ -55,10 +55,12 @@ function DeleteButton({
   nodeId,
   visible,
   onDelete,
+  className,
 }: {
   nodeId: string;
   visible: boolean;
   onDelete: (nodeId: string) => void;
+  className?: string;
 }) {
   if (!visible) {
     return null;
@@ -67,7 +69,7 @@ function DeleteButton({
   return (
     <button
       type="button"
-      className="delete-node-button nodrag nopan"
+      className={`delete-node-button nodrag nopan ${className ?? ""}`}
       aria-label="Delete node"
       title="Delete node"
       onClick={(event) => {
@@ -276,7 +278,12 @@ export const AIAnswerNode = memo(function AIAnswerNode({
           onKeyDown={stopNodeKeyPropagation}
         />
       ))}
-      <DeleteButton nodeId={data.nodeId} visible={data.deleteArmed} onDelete={data.onDelete} />
+      <DeleteButton
+        nodeId={data.nodeId}
+        visible={data.deleteArmed}
+        onDelete={data.onDelete}
+        className="answer-delete-node-button"
+      />
       <header className="node-drag-handle">
         <span>AI Answer</span>
         <span className={stanceClass(data.stance)}>{data.stance}</span>

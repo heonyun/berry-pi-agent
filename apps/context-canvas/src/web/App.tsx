@@ -452,6 +452,15 @@ function CanvasApp() {
       if (event.repeat) {
         return;
       }
+      if (event.key === "Delete" && selectedNodeIds.size === 1) {
+        const selectedId = selectedNodeIds.values().next().value;
+        if (selectedId) {
+          event.preventDefault();
+          event.stopPropagation();
+          setDeleteArmedNodeId(selectedId);
+        }
+        return;
+      }
       if (event.key.startsWith("Arrow")) {
         pressedArrowsRef.current.add(event.key);
       }
@@ -519,6 +528,7 @@ function CanvasApp() {
       retrySelectedAnswer,
       screenToFlowPosition,
       selectedAnswerForAction,
+      selectedNodeIds,
     ],
   );
 

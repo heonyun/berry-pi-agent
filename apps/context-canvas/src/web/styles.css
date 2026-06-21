@@ -362,6 +362,11 @@ body,
   font-weight: 700;
 }
 
+.node-card.answer .answer-delete-node-button {
+  right: -38px;
+  z-index: 6;
+}
+
 .streaming-dot {
   display: inline-block;
   width: 10px;

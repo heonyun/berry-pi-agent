@@ -32,6 +32,7 @@ vi.mock("@xyflow/react", () => ({
       data: {
         text?: string;
         interactionDisabled?: boolean;
+        deleteArmed?: boolean;
         onRun?: (nodeId: string, text?: string) => void;
         onTextChange?: (nodeId: string, text: string) => void;
       };
@@ -55,7 +56,12 @@ vi.mock("@xyflow/react", () => ({
       onPointerCancel={(event) => onPointerCancel?.(event)}
     >
       {nodes.map((node) => (
-        <div key={node.id} data-testid="flow-node" data-node-id={node.id}>
+        <div
+          key={node.id}
+          data-testid="flow-node"
+          data-node-id={node.id}
+          data-delete-armed={node.data.deleteArmed ? "true" : "false"}
+        >
           {node.data.text}
           {node.data.onTextChange ? (
             <input aria-label={`mock text ${node.id}`} value={node.data.text ?? ""} readOnly />
@@ -425,6 +431,53 @@ describe("App bundle hydration", () => {
     fireEvent.keyDown(contenteditableFalse, { key: "ArrowLeft", ctrlKey: true });
     fireEvent.keyDown(contenteditableFalse, { key: "ArrowUp", ctrlKey: true });
     expect(await screen.findByText("좋아. 너의 답에서 예상 문제와 위험을 말해.")).toBeTruthy();
+  });
+
+  it("arms the delete affordance for exactly one selected node when Delete is pressed", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [], errors: [] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    const shell = await screen.findByTestId("app-shell");
+    fireEvent.click(screen.getByText("Select answer-1"));
+    fireEvent.keyDown(shell, { key: "Delete" });
+
+    expect(document.querySelector('[data-node-id="answer-1"]')?.getAttribute("data-delete-armed")).toBe("true");
+    expect(screen.getByText("Answer text")).toBeTruthy();
+  });
+
+  it("does not arm deletion with no selection, from text entry, or with multi-selection", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/bundle/load") {
+        return new Response(JSON.stringify({ document: documentWithAnswer(), warnings: [] }), { status: 200 });
+      }
+      if (url === "/api/bundle/export") {
+        return new Response(JSON.stringify({ pathsWritten: [], warnings: [] }), { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+    const shell = await screen.findByTestId("app-shell");
+    fireEvent.click(await screen.findByTestId("flow-pane"));
+    fireEvent.keyDown(shell, { key: "Delete" });
+    expect(document.querySelector('[data-delete-armed="true"]')).toBeNull();
+
+    fireEvent.keyDown(screen.getByLabelText("mock text prompt-1"), { key: "Delete" });
+    expect(document.querySelector('[data-delete-armed="true"]')).toBeNull();
+
+    await dragSelectNodes();
+    fireEvent.keyDown(shell, { key: "Delete" });
+    expect(document.querySelector('[data-delete-armed="true"]')).toBeNull();
   });
 
   it("creates a group when Enter confirms drag selection", async () => {
