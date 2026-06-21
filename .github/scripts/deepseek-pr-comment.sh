@@ -38,6 +38,12 @@ fi
 
 diff_metadata="$(agent_pr_diff_metadata "${diff_file}" "${MAX_DIFF_CHARS}" "${REPO}" "${PR_NUMBER}")"
 
+surrounding_context="$(agent_pr_surrounding_context "${REPO}" "${PR_NUMBER}" "${SURROUNDING_CONTEXT_LINES:-25}" "${SURROUNDING_CONTEXT_MAX_FILES:-4}" "${SURROUNDING_CONTEXT_MAX_CHARS:-14000}")"
+
+ci_checks="$(gh pr checks "${PR_NUMBER}" --repo "${REPO}" 2>/dev/null | head -20 || echo "unavailable")"
+
+failed_ci_logs="$(agent_pr_failed_ci_logs "${REPO}" "${PR_NUMBER}" "${FAILED_CI_LOG_MAX_CHARS:-8000}")"
+
 user_content="$(cat <<EOF
 Repository: ${REPO}
 Pull request #${PR_NUMBER}: ${TITLE}
@@ -50,7 +56,14 @@ ${EXTRA}
 
 ${diff_metadata}
 
+${surrounding_context}
+
 Review the PR diff for correctness, regression risk, security/privacy issues, workflow reliability, and missing tests.
+
+Latest CI checks (informational; do not claim you ran them):
+${ci_checks}
+
+${failed_ci_logs}
 
 Diff:
 ${diff_text}
