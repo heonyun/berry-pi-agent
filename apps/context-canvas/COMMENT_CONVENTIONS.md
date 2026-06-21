@@ -1,5 +1,7 @@
 # Context Canvas — agent comment conventions
 
+Agents: see [AGENTS.md](./AGENTS.md) for when to load this file.
+
 Read this when editing non-obvious behavior in `apps/context-canvas/`. Full templates live workstation-local under `.orchestrator/templates/agent-code-comments.md`.
 
 ## Rules
