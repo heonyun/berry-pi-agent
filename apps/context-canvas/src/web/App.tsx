@@ -466,6 +466,9 @@ function CanvasApp() {
       }
       if (event.key === "Escape") {
         setGroupConfirm(null);
+        // WHY: Escape cancels pending delete confirm without deleting the node.
+        // RELATED: App.test.tsx — "clears the delete arm on Escape; second Delete re-arms without deleting"
+        setDeleteArmedNodeId(null);
         setSelectionBox(null);
         selectionStartRef.current = null;
         selectionBoxRef.current = null;
