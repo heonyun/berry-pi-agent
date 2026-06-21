@@ -60,6 +60,51 @@ describe("PromptInputNode", () => {
 });
 
 describe("AIAnswerNode", () => {
+  it("places an armed delete control immediately right of the positive action and deletes when clicked", () => {
+    const onDelete = vi.fn();
+    const data: AnswerNodeData = {
+      nodeId: "answer-1",
+      text: "Answer text",
+      stance: "neutral",
+      versionCount: 1,
+      running: false,
+      interactionDisabled: false,
+      deleteArmed: true,
+      isNew: false,
+      selected: true,
+      multiSelected: false,
+      onFeedback: vi.fn(),
+      onArmDelete: vi.fn(),
+      onDelete,
+      onRetry: vi.fn(),
+      onAnswerAction: vi.fn(),
+    };
+
+    render(
+      <ReactFlowProvider>
+        <AIAnswerNode
+          id="answer-1"
+          type="aiAnswer"
+          selected
+          dragging={false}
+          draggable
+          selectable
+          deletable
+          zIndex={0}
+          isConnectable
+          positionAbsoluteX={0}
+          positionAbsoluteY={0}
+          data={data}
+        />
+      </ReactFlowProvider>,
+    );
+
+    const deleteButton = screen.getByLabelText("Delete node");
+    expect(deleteButton.classList.contains("answer-delete-node-button")).toBe(true);
+    fireEvent.click(deleteButton);
+    expect(onDelete).toHaveBeenCalledWith("answer-1");
+  });
+
   it("renders enabled corner action handles for non-empty selected answers", () => {
     const onAnswerAction = vi.fn();
     const data: AnswerNodeData = {
