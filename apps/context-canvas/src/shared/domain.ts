@@ -170,3 +170,103 @@ export function updateNode(
     nodes: document.nodes.map((node) => (node.id === nodeId ? updater(node) : node)),
   };
 }
+
+/** WHY: schema v2 is a clean break from prompt_input + ai_answer pairs; v1 converter is deferred. */
+export const QA_BLOCK_SCHEMA_VERSION = 2 as const;
+/** WHY: v2 blocks are ~50% larger than v1 nodes (320×180); gap scales with block size (issue-39). */
+export const QA_BLOCK_APPROX_WIDTH = 480;
+export const QA_BLOCK_APPROX_HEIGHT = 270;
+export const QA_BLOCK_VERTICAL_GAP = 360;
+/** Visual gap between stacked blocks after height-aware reflow (issue #44). */
+export const QA_BLOCK_STACK_GAP = 20;
+export const QA_BLOCK_HORIZONTAL_GAP = 540;
+export const QA_BLOCK_COLUMN_TOLERANCE = 72;
+/** TODO: issue-39 — tentative snap/detach threshold; confirm in manual UX pass. */
+export const QA_BLOCK_MAGNETIC_DETACH_THRESHOLD = 30;
+
+export interface QABlock {
+  id: string;
+  kind: "qa_block";
+  groupId: string;
+  question: string;
+  answer: string;
+  position: Vec2;
+  /** Magnetic anchor; edges show when position drifts beyond detach threshold. */
+  snapPosition: Vec2;
+  metadata: NodeMetadata;
+  stack?: AnswerStack;
+}
+
+export interface QABlockCanvasDocument {
+  schemaVersion: typeof QA_BLOCK_SCHEMA_VERSION;
+  canvas: { id: string; title: string };
+  groups: ContextGroup[];
+  blocks: QABlock[];
+  edges: ContextEdge[];
+}
+
+/** Minimal canvas sidecar for Obsidian/external-tool observability (viewport optional). */
+export interface CanvasSidecar {
+  id: string;
+  title: string;
+  schemaVersion: typeof QA_BLOCK_SCHEMA_VERSION;
+  viewport?: { x: number; y: number; zoom: number };
+}
+
+/** TODO: issue-39 — replace v1 initial document once App reads v2 only. */
+export function createEmptyQABlockDocument(): QABlockCanvasDocument {
+  return {
+    schemaVersion: QA_BLOCK_SCHEMA_VERSION,
+    canvas: { id: DEFAULT_CANVAS_ID, title: "Context Canvas" },
+    groups: [
+      {
+        id: "group-1",
+        title: "Conversation",
+        origin: { x: 0, y: 0 },
+        summary: "",
+      },
+    ],
+    blocks: [],
+    edges: [],
+  };
+}
+
+export function findQABlock(document: QABlockCanvasDocument, blockId: string): QABlock {
+  const block = document.blocks.find((candidate) => candidate.id === blockId);
+  if (!block) {
+    throw new Error(`Unknown qa_block: ${blockId}`);
+  }
+  return block;
+}
+
+export function updateQABlock(
+  document: QABlockCanvasDocument,
+  blockId: string,
+  updater: (block: QABlock) => QABlock,
+): QABlockCanvasDocument {
+  return {
+    ...document,
+    blocks: document.blocks.map((block) => (block.id === blockId ? updater(block) : block)),
+  };
+}
+
+export function appendQABlockAnswerVersion(
+  block: QABlock,
+  version: { text: string; createdAt?: string },
+): QABlock {
+  const existingVersions = block.stack?.versions ?? [];
+  const nextVersionNumber = existingVersions.length + 1;
+  const nextVersion: AnswerVersion = {
+    id: `${block.id}-v${nextVersionNumber}`,
+    text: version.text,
+    createdAt: version.createdAt ?? new Date().toISOString(),
+  };
+  return {
+    ...block,
+    answer: version.text,
+    stack: {
+      activeVersionId: nextVersion.id,
+      versions: [...existingVersions, nextVersion],
+    },
+  };
+}

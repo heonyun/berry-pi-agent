@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createInitialDocument, type ContextCanvasDocument } from "../shared/domain.ts";
-import { App } from "./App.tsx";
+import { LegacyApp as App } from "./LegacyApp.tsx";
 
 vi.mock("@xyflow/react", () => ({
   Background: () => null,

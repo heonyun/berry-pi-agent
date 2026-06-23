@@ -482,6 +482,189 @@ button.active {
   }
 }
 
+.app-shell-v2 {
+  display: grid;
+  grid-template-columns: 1fr minmax(240px, 320px);
+}
+
+.app-shell-v2 .canvas-panel {
+  border-right: 2px solid var(--border);
+}
+
+.app-shell-v2 .canvas-panel .react-flow {
+  padding-bottom: 110px;
+}
+
+.app-shell-v2 .react-flow__controls {
+  top: 56px;
+  right: 12px;
+  bottom: auto;
+  left: auto;
+}
+
+.qa-block-answer-error {
+  border-color: var(--critical);
+}
+
+.qa-block-error-banner {
+  margin: 0;
+  color: var(--critical);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.v2-status-bar {
+  position: absolute;
+  left: 16px;
+  top: 12px;
+  z-index: 6;
+  display: flex;
+  gap: 12px;
+  max-width: calc(100% - 32px);
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 251, 241, 0.9);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.v2-status-selection {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v2-status-hint {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.react-flow__edge.qa-block-edge-attached path {
+  stroke: var(--border);
+  stroke-dasharray: 4 4;
+}
+
+.react-flow__edge.qa-block-edge-detached path {
+  stroke: var(--accent-strong);
+}
+
+.v2-context-preview {
+  padding: 16px;
+  background: var(--panel);
+  overflow: auto;
+}
+
+.v2-context-preview h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.v2-context-preview pre {
+  margin: 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.qa-block-node.qa-block-selected {
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 2px rgba(88, 111, 142, 0.22);
+}
+
+.qa-block-node.qa-block-dragging {
+  opacity: 0.92;
+}
+
+.qa-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: grab;
+}
+
+.qa-block-question-input {
+  width: 100%;
+  min-height: 72px;
+  margin-bottom: 8px;
+  resize: vertical;
+}
+
+.qa-block-answer-preview {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qa-block-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.qa-block-node {
+  position: relative;
+}
+
+.qa-block-node-expanded .qa-block-answer {
+  min-height: 96px;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.bottom-composer {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 6;
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 251, 241, 0.94);
+  box-shadow: 0 8px 24px rgba(58, 42, 28, 0.12);
+}
+
+.bottom-composer-input {
+  flex: 1;
+  min-height: 60px;
+  resize: vertical;
+}
+
+.bottom-composer-run {
+  align-self: flex-end;
+}
+
+.qa-block-node {
+  min-width: 420px;
+  max-width: 540px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: #fff8ef;
+  padding: 15px 18px;
+}
+
+.qa-block-node-compact .qa-block-question {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qa-block-node-expanded .qa-block-answer {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
 @keyframes answer-dot {
   0%,
   100% {
