@@ -20,7 +20,7 @@ export function BottomComposer({ disabled = false, onSubmit }: BottomComposerPro
         onValueChange={setDraft}
         onKeyDown={(event) => {
           stopNodeKeyPropagation(event);
-          if (event.key === "Enter" && !event.shiftKey) {
+          if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
             const text = draft.trim();
             if (text) {

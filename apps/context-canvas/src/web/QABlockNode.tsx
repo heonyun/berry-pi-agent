@@ -1,4 +1,4 @@
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { type Node, type NodeProps } from "@xyflow/react";
 import type { StanceBand } from "../shared/domain.ts";
 
@@ -17,6 +17,10 @@ export const QABlockNode = memo(function QABlockNode({
   data,
 }: NodeProps<Node<QABlockNodeData>>) {
   const [expanded, setExpanded] = useState(data.expanded);
+
+  useEffect(() => {
+    setExpanded(data.expanded);
+  }, [data.expanded]);
 
   return (
     <div
