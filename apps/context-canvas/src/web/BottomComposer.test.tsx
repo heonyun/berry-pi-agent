@@ -1,8 +1,9 @@
 /** @vitest-environment jsdom */
 
+import { createRef } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BottomComposer } from "./BottomComposer.tsx";
+import { BottomComposer, type BottomComposerHandle } from "./BottomComposer.tsx";
 
 afterEach(() => {
   cleanup();
@@ -37,5 +38,17 @@ describe("BottomComposer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
 
     expect(onSubmit).toHaveBeenCalledWith("stack gap");
+  });
+
+  it("exposes focus through ref for post-run composer refocus", () => {
+    const ref = createRef<BottomComposerHandle>();
+    render(<BottomComposer ref={ref} onSubmit={vi.fn()} />);
+
+    const textarea = screen.getByPlaceholderText("Ask a question… (Ctrl+Enter to send)");
+    textarea.blur();
+    expect(document.activeElement).not.toBe(textarea);
+
+    ref.current?.focus();
+    expect(document.activeElement).toBe(textarea);
   });
 });

@@ -1,6 +1,7 @@
 import type { Edge, Node } from "@xyflow/react";
 import { blockDetached } from "../core/magnetic-layout.ts";
 import {
+  QA_BLOCK_COLUMN_TOLERANCE,
   QA_BLOCK_MAGNETIC_DETACH_THRESHOLD,
   type QABlockCanvasDocument,
   type StanceBand,
@@ -27,7 +28,42 @@ export interface QABlockReactFlowInput {
 
 function stanceForBlock(document: QABlockCanvasDocument, blockId: string): StanceBand {
   const block = document.blocks.find((candidate) => candidate.id === blockId);
-  return block?.metadata.stance ?? "neutral";
+  if (!block) {
+    return "neutral";
+  }
+  const lineage = document.edges.find(
+    (edge) => edge.target === blockId && edge.meaning === "lineage",
+  );
+  if (!lineage) {
+    return block.metadata.stance ?? "neutral";
+  }
+  const parent = document.blocks.find((candidate) => candidate.id === lineage.source);
+  if (!parent) {
+    return block.metadata.stance ?? "neutral";
+  }
+  const dx = block.position.x - parent.position.x;
+  if (dx > QA_BLOCK_COLUMN_TOLERANCE) {
+    return "constructive";
+  }
+  if (dx < -QA_BLOCK_COLUMN_TOLERANCE) {
+    return "critical";
+  }
+  return block.metadata.stance ?? "neutral";
+}
+
+function hasBlockBelowInColumn(document: QABlockCanvasDocument, blockId: string): boolean {
+  const block = document.blocks.find((candidate) => candidate.id === blockId);
+  if (!block) {
+    return false;
+  }
+  const columnX = Math.round(block.position.x / QA_BLOCK_COLUMN_TOLERANCE) * QA_BLOCK_COLUMN_TOLERANCE;
+  return document.blocks.some(
+    (candidate) =>
+      candidate.id !== blockId &&
+      Math.round(candidate.position.x / QA_BLOCK_COLUMN_TOLERANCE) * QA_BLOCK_COLUMN_TOLERANCE ===
+        columnX &&
+      candidate.position.y > block.position.y,
+  );
 }
 
 export function toQABlockFlowNodes(input: QABlockReactFlowInput): QABlockFlowNode[] {
@@ -55,6 +91,7 @@ export function toQABlockFlowNodes(input: QABlockReactFlowInput): QABlockFlowNod
       expanded: block.id === expandedBlockId,
       running: runningBlockId === block.id,
       selected: block.id === selectedBlockId,
+      stackedAbove: hasBlockBelowInColumn(document, block.id),
       deleteArmed: deleteArmedBlockId === block.id,
       errorMessage: blockErrors?.get(block.id),
       onQuestionChange: callbacks.onQuestionChange,

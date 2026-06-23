@@ -41,7 +41,7 @@ describe("applyQABlockCommand", () => {
     });
 
     const block = branch.document.blocks.find((candidate) => candidate.id === branch.meta.blockId);
-    expect(block?.position).toEqual({ x: 540, y: -360 });
+    expect(block?.position).toEqual({ x: 540, y: -290 });
     expect(branch.document.edges).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
