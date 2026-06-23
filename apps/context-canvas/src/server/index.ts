@@ -7,7 +7,8 @@ import path from "node:path";
 import { getModel, type AssistantMessage, type KnownProvider } from "@earendil-works/pi-ai";
 import { createAgentSession, SessionManager, type AgentSession } from "@earendil-works/pi-coding-agent";
 import { compilePromptContext, formatPromptForPi, type CompiledPromptContext } from "../shared/compiler.ts";
-import type { ContextCanvasDocument } from "../shared/domain.ts";
+import { compileQABlockContext } from "../shared/compile-qablock-context.ts";
+import type { ContextCanvasDocument, QABlockCanvasDocument } from "../shared/domain.ts";
 import { DEFAULT_CANVAS_ID, createInitialDocument } from "../shared/domain.ts";
 import { loadBundleToDocument } from "../storage/markdown/load.ts";
 import { projectDocumentToBundle } from "../storage/markdown/project.ts";
@@ -193,8 +194,8 @@ export function handleBundleLoad(config: ContextCanvasServerConfig): {
   }
 }
 
-async function handlePrompt(
-  body: { document: ContextCanvasDocument; promptNodeId: string },
+async function handleCompiledPrompt(
+  compiled: CompiledPromptContext,
   res: ServerResponse,
 ): Promise<void> {
   res.writeHead(200, {
@@ -205,7 +206,6 @@ async function handlePrompt(
 
   let unsubscribe: (() => void) | undefined;
   try {
-    const compiled = compilePromptContext(body.document, body.promptNodeId);
     const promptText = formatPromptForPi(compiled);
     const session = await getSession();
     let streamedText = "";
@@ -285,6 +285,28 @@ async function handlePrompt(
   }
 }
 
+async function handlePrompt(
+  body: { document: ContextCanvasDocument; promptNodeId: string },
+  res: ServerResponse,
+): Promise<void> {
+  const compiled = compilePromptContext(body.document, body.promptNodeId);
+  await handleCompiledPrompt(compiled, res);
+}
+
+async function handleQABlockPrompt(
+  body: { document: QABlockCanvasDocument; blockId: string },
+  res: ServerResponse,
+): Promise<void> {
+  const compiled = compileQABlockContext(body.document, body.blockId);
+  await handleCompiledPrompt(compiled, res);
+}
+
+function isQABlockPromptBody(
+  body: { document: ContextCanvasDocument | QABlockCanvasDocument; promptNodeId?: string; blockId?: string },
+): body is { document: QABlockCanvasDocument; blockId: string } {
+  return body.document.schemaVersion === 2 && typeof body.blockId === "string";
+}
+
 export function createContextCanvasServer(config: ContextCanvasServerConfig = serverConfig) {
   return createServer(async (req, res) => {
     const origin = requestOrigin(req);
@@ -330,8 +352,21 @@ export function createContextCanvasServer(config: ContextCanvasServerConfig = se
 
     if (req.method === "POST" && req.url === "/api/prompt") {
       try {
-        const body = await readJsonBody<{ document: ContextCanvasDocument; promptNodeId: string }>(req);
-        await handlePrompt(body, res);
+        const body = await readJsonBody<{
+          document: ContextCanvasDocument | QABlockCanvasDocument;
+          promptNodeId?: string;
+          blockId?: string;
+        }>(req);
+        if (isQABlockPromptBody(body)) {
+          await handleQABlockPrompt(body, res);
+        } else if (typeof body.promptNodeId === "string") {
+          await handlePrompt(
+            { document: body.document as ContextCanvasDocument, promptNodeId: body.promptNodeId },
+            res,
+          );
+        } else {
+          throw new Error("Invalid prompt request body.");
+        }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         const statusCode = error instanceof RequestBodyTooLargeError ? 413 : 400;

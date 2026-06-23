@@ -1,4 +1,5 @@
 import {
+  QA_BLOCK_MAGNETIC_DETACH_THRESHOLD,
   QA_BLOCK_COLUMN_TOLERANCE,
   QA_BLOCK_HORIZONTAL_GAP,
   QA_BLOCK_VERTICAL_GAP,
@@ -103,4 +104,13 @@ export function resolveNewBlockPlacement(input: MagneticPlacementInput): Magneti
     position: { x: selected.position.x, y: selected.position.y - QA_BLOCK_VERTICAL_GAP },
     mode: "vertical",
   };
+}
+
+/** INVARIANT: edge visibility follows detach threshold from snap anchor (issue-39). */
+export function blockDetached(position: Vec2, snapPosition: Vec2): boolean {
+  const dx = Math.abs(position.x - snapPosition.x);
+  const dy = Math.abs(position.y - snapPosition.y);
+  return (
+    dx > QA_BLOCK_MAGNETIC_DETACH_THRESHOLD || dy > QA_BLOCK_MAGNETIC_DETACH_THRESHOLD
+  );
 }

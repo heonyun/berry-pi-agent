@@ -189,6 +189,8 @@ export interface QABlock {
   question: string;
   answer: string;
   position: Vec2;
+  /** Magnetic anchor; edges show when position drifts beyond detach threshold. */
+  snapPosition: Vec2;
   metadata: NodeMetadata;
   stack?: AnswerStack;
 }
@@ -233,4 +235,36 @@ export function findQABlock(document: QABlockCanvasDocument, blockId: string): Q
     throw new Error(`Unknown qa_block: ${blockId}`);
   }
   return block;
+}
+
+export function updateQABlock(
+  document: QABlockCanvasDocument,
+  blockId: string,
+  updater: (block: QABlock) => QABlock,
+): QABlockCanvasDocument {
+  return {
+    ...document,
+    blocks: document.blocks.map((block) => (block.id === blockId ? updater(block) : block)),
+  };
+}
+
+export function appendQABlockAnswerVersion(
+  block: QABlock,
+  version: { text: string; createdAt?: string },
+): QABlock {
+  const existingVersions = block.stack?.versions ?? [];
+  const nextVersionNumber = existingVersions.length + 1;
+  const nextVersion: AnswerVersion = {
+    id: `${block.id}-v${nextVersionNumber}`,
+    text: version.text,
+    createdAt: version.createdAt ?? new Date().toISOString(),
+  };
+  return {
+    ...block,
+    answer: version.text,
+    stack: {
+      activeVersionId: nextVersion.id,
+      versions: [...existingVersions, nextVersion],
+    },
+  };
 }
