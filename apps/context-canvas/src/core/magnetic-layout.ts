@@ -53,8 +53,8 @@ function topmostBlock(
 function isOccupied(blocks: ReadonlyArray<Pick<QABlock, "position">>, position: Vec2): boolean {
   return blocks.some(
     (block) =>
-      Math.abs(block.position.x - position.x) < QA_BLOCK_COLUMN_TOLERANCE &&
-      Math.abs(block.position.y - position.y) < QA_BLOCK_COLUMN_TOLERANCE,
+      Math.abs(block.position.x - position.x) <= QA_BLOCK_COLUMN_TOLERANCE &&
+      Math.abs(block.position.y - position.y) <= QA_BLOCK_COLUMN_TOLERANCE,
   );
 }
 
