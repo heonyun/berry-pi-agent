@@ -96,10 +96,21 @@ function QABlockCanvasApp() {
   }, [dispatch]);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      requestAnimationFrame(() => applyStackReflow());
+    let cancelled = false;
+    let outerFrame = 0;
+    let innerFrame = 0;
+    outerFrame = requestAnimationFrame(() => {
+      innerFrame = requestAnimationFrame(() => {
+        if (!cancelled) {
+          applyStackReflow();
+        }
+      });
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(outerFrame);
+      cancelAnimationFrame(innerFrame);
+    };
   }, [applyStackReflow, document.blocks, expandedBlockId, blockHeightsVersion]);
 
   const runBlock = useCallback(
