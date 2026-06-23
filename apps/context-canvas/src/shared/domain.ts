@@ -170,3 +170,62 @@ export function updateNode(
     nodes: document.nodes.map((node) => (node.id === nodeId ? updater(node) : node)),
   };
 }
+
+/** WHY: schema v2 is a clean break from prompt_input + ai_answer pairs; v1 converter is deferred. */
+export const QA_BLOCK_SCHEMA_VERSION = 2 as const;
+export const QA_BLOCK_VERTICAL_GAP = VERTICAL_GAP;
+export const QA_BLOCK_HORIZONTAL_GAP = 360;
+export const QA_BLOCK_COLUMN_TOLERANCE = 48;
+
+export interface QABlock {
+  id: string;
+  kind: "qa_block";
+  groupId: string;
+  question: string;
+  answer: string;
+  position: Vec2;
+  metadata: NodeMetadata;
+  stack?: AnswerStack;
+}
+
+export interface QABlockCanvasDocument {
+  schemaVersion: typeof QA_BLOCK_SCHEMA_VERSION;
+  canvas: { id: string; title: string };
+  groups: ContextGroup[];
+  blocks: QABlock[];
+  edges: ContextEdge[];
+}
+
+/** Minimal canvas sidecar for Obsidian/external-tool observability (viewport optional). */
+export interface CanvasSidecar {
+  id: string;
+  title: string;
+  schemaVersion: typeof QA_BLOCK_SCHEMA_VERSION;
+  viewport?: { x: number; y: number; zoom: number };
+}
+
+/** TODO: issue-39 — replace v1 initial document once App reads v2 only. */
+export function createEmptyQABlockDocument(): QABlockCanvasDocument {
+  return {
+    schemaVersion: QA_BLOCK_SCHEMA_VERSION,
+    canvas: { id: DEFAULT_CANVAS_ID, title: "Context Canvas" },
+    groups: [
+      {
+        id: "group-1",
+        title: "Conversation",
+        origin: { x: 0, y: 0 },
+        summary: "",
+      },
+    ],
+    blocks: [],
+    edges: [],
+  };
+}
+
+export function findQABlock(document: QABlockCanvasDocument, blockId: string): QABlock {
+  const block = document.blocks.find((candidate) => candidate.id === blockId);
+  if (!block) {
+    throw new Error(`Unknown qa_block: ${blockId}`);
+  }
+  return block;
+}

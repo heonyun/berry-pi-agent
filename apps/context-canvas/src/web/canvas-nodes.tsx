@@ -4,6 +4,7 @@ import { INITIAL_PROMPT_TEXT } from "../shared/domain.ts";
 import type { StanceBand } from "../shared/domain.ts";
 import type { AnswerAction, AnswerNodeData, PromptNodeData } from "../adapters/react-flow.ts";
 import { ImeTextarea, stopNodeKeyPropagation } from "./ImeTextarea.tsx";
+import { QABlockNode } from "./QABlockNode.tsx";
 
 function stanceClass(stance: StanceBand): string {
   return `stance-${stance}`;
@@ -332,4 +333,5 @@ export const AIAnswerNode = memo(function AIAnswerNode({
 export const canvasNodeTypes = {
   promptInput: PromptInputNode,
   aiAnswer: AIAnswerNode,
+  qaBlock: QABlockNode,
 };

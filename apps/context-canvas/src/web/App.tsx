@@ -33,6 +33,7 @@ import { applyCommand } from "../core/reducer.ts";
 import { compilePromptContext } from "../shared/compiler.ts";
 import { buildNodeBacklinks, formatCompiledPreviewMarkdown } from "../shared/compile-preview.ts";
 import { createInitialDocument, type ContextNode, type Vec2 } from "../shared/domain.ts";
+import { BottomComposer } from "./BottomComposer.tsx";
 import { canvasNodeTypes } from "./canvas-nodes.tsx";
 import { exportBundle } from "./export-bundle.ts";
 import { loadBundle } from "./load-bundle.ts";
@@ -941,6 +942,13 @@ function CanvasApp() {
           />
           <Controls />
         </ReactFlow>
+        <BottomComposer
+          disabled={interactionDisabled}
+          onSubmit={(question) => {
+            // TODO: issue-39 — wire v2 reducer + magnetic placement for bottom composer.
+            setStatus(`Q&A block skeleton: "${question.slice(0, 48)}${question.length > 48 ? "…" : ""}"`);
+          }}
+        />
       </div>
       <aside className="side-panel">
         <div>
