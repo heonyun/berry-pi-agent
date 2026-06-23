@@ -23,3 +23,34 @@ test("loadEnvFile reads KEY=VALUE without overriding existing env", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("loadEnvFile strips inline comments from unquoted values", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-env-"));
+  const filePath = path.join(dir, ".env");
+  fs.writeFileSync(filePath, "CONTEXT_CANVAS_MODEL=deepseek-v4-flash # default model\n", "utf8");
+  try {
+    delete process.env.CONTEXT_CANVAS_MODEL;
+    loadEnvFile(filePath);
+    assert.equal(process.env.CONTEXT_CANVAS_MODEL, "deepseek-v4-flash");
+  } finally {
+    delete process.env.CONTEXT_CANVAS_MODEL;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("loadEnvFile ignores prototype keys on process.env", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cc-env-"));
+  const filePath = path.join(dir, ".env");
+  const protoKey = `__proto_test_${Date.now()}`;
+  fs.writeFileSync(filePath, `${protoKey}=from-file\n`, "utf8");
+  Object.prototype[protoKey] = "from-prototype";
+  try {
+    delete process.env[protoKey];
+    loadEnvFile(filePath);
+    assert.equal(process.env[protoKey], "from-file");
+  } finally {
+    delete process.env[protoKey];
+    delete Object.prototype[protoKey];
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -17,10 +17,16 @@ export function loadEnvFile(filePath) {
       continue;
     }
     const key = trimmed.slice(0, separator).trim();
-    if (!key || key in process.env) {
+    if (!key || Object.hasOwn(process.env, key)) {
       continue;
     }
     let value = trimmed.slice(separator + 1).trim();
+    if (!value.startsWith('"') && !value.startsWith("'")) {
+      const commentIndex = value.indexOf(" #");
+      if (commentIndex !== -1) {
+        value = value.slice(0, commentIndex).trim();
+      }
+    }
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
       (value.startsWith("'") && value.endsWith("'"))
