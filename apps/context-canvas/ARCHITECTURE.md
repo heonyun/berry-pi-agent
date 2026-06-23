@@ -35,3 +35,15 @@ Shift from muscle-memory (2D node alignment) toward **visual context**: combined
 - `schemaVersion: 2` with `qa_block` entities (clean break from v1 prompt/answer pairs).
 - Magnetic placement rules live in `src/core/magnetic-layout.ts` (framework-agnostic).
 - UI skeleton: `QABlockNode`, `BottomComposer` — wired in a follow-up PR.
+
+## Dev agent (local)
+
+`npm run dev` runs `scripts/dev.mjs`, which loads `.env.local` / `.env` via `scripts/load-env.mjs` without overriding shell env.
+
+| Variable | Dev default | Purpose |
+| --- | --- | --- |
+| `CONTEXT_CANVAS_PROVIDER` | `deepseek` | Agent provider |
+| `CONTEXT_CANVAS_MODEL` | `deepseek-v4-flash` | Agent model |
+| `DEEPSEEK_API_KEY` | — | Required for DeepSeek; copy `.env.example` → `.env.local` |
+
+Startup logs `DEEPSEEK_API_KEY: loaded|not set` (never the value) and `Agent provider/model: …`. The API server logs `Agent model: …` on listen.

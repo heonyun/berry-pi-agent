@@ -40,7 +40,7 @@ describe("BottomComposer", () => {
     expect(onSubmit).toHaveBeenCalledWith("stack gap");
   });
 
-  it("exposes focus through ref for post-run composer refocus", () => {
+  it("exposes focus through ref when enabled", () => {
     const ref = createRef<BottomComposerHandle>();
     render(<BottomComposer ref={ref} onSubmit={vi.fn()} />);
 
@@ -50,5 +50,15 @@ describe("BottomComposer", () => {
 
     ref.current?.focus();
     expect(document.activeElement).toBe(textarea);
+  });
+
+  it("does not focus while disabled", () => {
+    const ref = createRef<BottomComposerHandle>();
+    render(<BottomComposer ref={ref} disabled onSubmit={vi.fn()} />);
+
+    const textarea = screen.getByPlaceholderText("Ask a question… (Ctrl+Enter to send)");
+    textarea.blur();
+    ref.current?.focus();
+    expect(document.activeElement).not.toBe(textarea);
   });
 });

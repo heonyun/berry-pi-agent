@@ -20,7 +20,13 @@ export const BottomComposer = forwardRef<BottomComposerHandle, BottomComposerPro
       ref,
       () => ({
         focus: () => {
-          footerRef.current?.querySelector<HTMLTextAreaElement>(".bottom-composer-input")?.focus();
+          const textarea = footerRef.current?.querySelector<HTMLTextAreaElement>(
+            ".bottom-composer-input",
+          );
+          if (!textarea || textarea.disabled) {
+            return;
+          }
+          textarea.focus();
         },
       }),
       [],
