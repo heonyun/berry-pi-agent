@@ -598,9 +598,13 @@ button.active {
   margin-top: 6px;
   font-size: 13px;
   color: var(--muted);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .qa-block-delete {
@@ -615,8 +619,13 @@ button.active {
 
 .qa-block-node-expanded .qa-block-answer {
   min-height: 96px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
   white-space: pre-wrap;
   line-height: 1.45;
+  overflow: visible;
+  word-break: break-word;
 }
 
 .bottom-composer {
@@ -651,6 +660,11 @@ button.active {
   border-radius: 12px;
   background: #fff8ef;
   padding: 15px 18px;
+  overflow: visible;
+}
+
+.react-flow__node:has(.qa-block-node) {
+  overflow: visible;
 }
 
 .qa-block-node-compact .qa-block-question {
@@ -659,10 +673,10 @@ button.active {
   white-space: nowrap;
 }
 
-.qa-block-node-expanded .qa-block-answer {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--border);
+.qa-block-node-compact.qa-block-stacked {
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  box-shadow: 0 -2px 0 rgba(125, 107, 93, 0.12);
 }
 
 @keyframes answer-dot {

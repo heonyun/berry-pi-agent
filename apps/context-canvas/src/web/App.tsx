@@ -22,11 +22,11 @@ import {
 } from "../adapters/qa-block-react-flow.ts";
 import type { QABlockCommand } from "../core/qa-block-commands.ts";
 import { applyQABlockCommand } from "../core/qa-block-reducer.ts";
-import { columnBlocksSorted, reflowMagneticStacks } from "../core/magnetic-layout.ts";
+import { columnBlocksSorted, blockDetached, reflowMagneticStacks } from "../core/magnetic-layout.ts";
 import { roundedPosition } from "../core/mutations.ts";
 import { compileQABlockContext } from "../shared/compile-qablock-context.ts";
-import { createEmptyQABlockDocument } from "../shared/domain.ts";
-import { BottomComposer } from "./BottomComposer.tsx";
+import { createEmptyQABlockDocument, QA_BLOCK_APPROX_HEIGHT } from "../shared/domain.ts";
+import { BottomComposer, type BottomComposerHandle } from "./BottomComposer.tsx";
 import { canvasNodeTypes } from "./canvas-nodes.tsx";
 import { streamBlock } from "./stream-block.ts";
 import { formatStreamError } from "./format-stream-error.ts";
@@ -39,6 +39,7 @@ function QABlockCanvasApp() {
   const documentRef = useRef(document);
   const fitViewOnLayoutRef = useRef(false);
   const blockHeightsRef = useRef<Map<string, number>>(new Map());
+  const composerRef = useRef<BottomComposerHandle>(null);
   const [blockHeightsVersion, setBlockHeightsVersion] = useState(0);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [expandedBlockId, setExpandedBlockId] = useState<string | null>(null);
@@ -71,11 +72,17 @@ function QABlockCanvasApp() {
   }, []);
 
   const applyStackReflow = useCallback(() => {
-    const heights = blockHeightsRef.current;
-    if (heights.size === 0) {
+    const blocks = documentRef.current.blocks;
+    if (blocks.length < 2) {
       return;
     }
-    const positions = reflowMagneticStacks(documentRef.current.blocks, heights);
+    const heights = new Map(blockHeightsRef.current);
+    for (const block of blocks) {
+      if (!heights.has(block.id)) {
+        heights.set(block.id, QA_BLOCK_APPROX_HEIGHT);
+      }
+    }
+    const positions = reflowMagneticStacks(blocks, heights);
     for (const [blockId, position] of positions) {
       const block = documentRef.current.blocks.find((candidate) => candidate.id === blockId);
       if (!block) {
@@ -89,7 +96,10 @@ function QABlockCanvasApp() {
   }, [dispatch]);
 
   useEffect(() => {
-    applyStackReflow();
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => applyStackReflow());
+    });
+    return () => cancelAnimationFrame(frame);
   }, [applyStackReflow, document.blocks, expandedBlockId, blockHeightsVersion]);
 
   const runBlock = useCallback(
@@ -119,9 +129,11 @@ function QABlockCanvasApp() {
         setBlockErrors((current) => new Map(current).set(blockId, message));
       } finally {
         setRunningBlockId(null);
+        applyStackReflow();
+        composerRef.current?.focus();
       }
     },
-    [dispatch],
+    [applyStackReflow, dispatch],
   );
 
   const composerAnchor = useCallback(() => {
@@ -148,6 +160,7 @@ function QABlockCanvasApp() {
         return null;
       }
       setSelectedBlockId(result.meta.blockId);
+      setExpandedBlockId(result.meta.blockId);
       setDeleteArmedBlockId(null);
       fitViewOnLayoutRef.current = true;
       return result.meta.blockId;
@@ -268,10 +281,25 @@ function QABlockCanvasApp() {
 
   const updateDraggedBlockPosition = useCallback(
     (node: QABlockFlowNode) => {
+      const rounded = roundedPosition(node.position);
+      const block = documentRef.current.blocks.find((candidate) => candidate.id === node.id);
+      if (!block) {
+        return;
+      }
+      if (!blockDetached(rounded, block.snapPosition)) {
+        if (rounded.x !== block.snapPosition.x || rounded.y !== block.snapPosition.y) {
+          dispatch({
+            type: "move_block",
+            blockId: node.id,
+            position: block.snapPosition,
+          });
+          return;
+        }
+      }
       dispatch({
         type: "move_block",
         blockId: node.id,
-        position: roundedPosition(node.position),
+        position: rounded,
       });
     },
     [dispatch],
@@ -419,7 +447,7 @@ function QABlockCanvasApp() {
           <Background gap={22} color="#dccab8" />
           <Controls position="top-right" showInteractive={false} />
         </ReactFlow>
-        <BottomComposer disabled={runningBlockId !== null} onSubmit={onComposerSubmit} />
+        <BottomComposer ref={composerRef} disabled={runningBlockId !== null} onSubmit={onComposerSubmit} />
         <div className="v2-status-bar" aria-live="polite">
           <span>{status}</span>
           <span className="v2-status-hint">{KEYBOARD_HINT}</span>

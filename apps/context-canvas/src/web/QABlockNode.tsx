@@ -12,6 +12,7 @@ export interface QABlockNodeData {
   running: boolean;
   selected?: boolean;
   deleteArmed?: boolean;
+  stackedAbove?: boolean;
   errorMessage?: string;
   onQuestionChange?: (blockId: string, question: string) => void;
   onSelect?: (blockId: string) => void;
@@ -95,6 +96,7 @@ export const QABlockNode = memo(function QABlockNode({
       className={[
         "qa-block-node",
         data.expanded ? "qa-block-node-expanded" : "qa-block-node-compact",
+        !data.expanded && data.stackedAbove ? "qa-block-stacked" : "",
         selected || data.selected ? "qa-block-selected" : "",
         dragging ? "qa-block-dragging" : "",
       ]
