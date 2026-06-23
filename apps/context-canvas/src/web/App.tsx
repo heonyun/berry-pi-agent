@@ -40,6 +40,7 @@ function QABlockCanvasApp() {
   const fitViewOnLayoutRef = useRef(false);
   const blockHeightsRef = useRef<Map<string, number>>(new Map());
   const composerRef = useRef<BottomComposerHandle>(null);
+  const pendingComposerFocusRef = useRef(false);
   const [blockHeightsVersion, setBlockHeightsVersion] = useState(0);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const [expandedBlockId, setExpandedBlockId] = useState<string | null>(null);
@@ -113,6 +114,17 @@ function QABlockCanvasApp() {
     };
   }, [applyStackReflow, document.blocks, expandedBlockId, blockHeightsVersion]);
 
+  useEffect(() => {
+    if (runningBlockId !== null || !pendingComposerFocusRef.current) {
+      return;
+    }
+    pendingComposerFocusRef.current = false;
+    const frame = requestAnimationFrame(() => {
+      composerRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [runningBlockId]);
+
   const runBlock = useCallback(
     async (blockId: string) => {
       setRunningBlockId(blockId);
@@ -139,9 +151,12 @@ function QABlockCanvasApp() {
         setStatus(`Error: ${message}`);
         setBlockErrors((current) => new Map(current).set(blockId, message));
       } finally {
+        pendingComposerFocusRef.current = true;
         setRunningBlockId(null);
         applyStackReflow();
-        composerRef.current?.focus();
+        requestAnimationFrame(() => {
+          applyStackReflow();
+        });
       }
     },
     [applyStackReflow, dispatch],

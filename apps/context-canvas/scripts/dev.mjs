@@ -3,9 +3,25 @@ import crypto from "node:crypto";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { loadContextCanvasEnv } from "./load-env.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(root, "..");
+
+loadContextCanvasEnv(appRoot);
+
+if (!process.env.CONTEXT_CANVAS_PROVIDER?.trim()) {
+  process.env.CONTEXT_CANVAS_PROVIDER = "deepseek";
+}
+if (!process.env.CONTEXT_CANVAS_MODEL?.trim()) {
+  process.env.CONTEXT_CANVAS_MODEL = "deepseek-v4-flash";
+}
+
+const deepseekKeyLoaded = Boolean(process.env.DEEPSEEK_API_KEY?.trim());
+console.log(`DEEPSEEK_API_KEY: ${deepseekKeyLoaded ? "loaded" : "not set"}`);
+console.log(
+  `Agent provider/model: ${process.env.CONTEXT_CANVAS_PROVIDER}/${process.env.CONTEXT_CANVAS_MODEL}`,
+);
 const contextCanvasToken = process.env.CONTEXT_CANVAS_TOKEN || crypto.randomBytes(32).toString("hex");
 const bindHost = process.env.CONTEXT_CANVAS_BIND_HOST || "127.0.0.1";
 const viteHost = process.env.CONTEXT_CANVAS_VITE_HOST || "127.0.0.1";
