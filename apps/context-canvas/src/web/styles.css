@@ -491,6 +491,28 @@ button.active {
   border-right: 2px solid var(--border);
 }
 
+.app-shell-v2 .canvas-panel .react-flow {
+  padding-bottom: 110px;
+}
+
+.app-shell-v2 .react-flow__controls {
+  top: 56px;
+  right: 12px;
+  bottom: auto;
+  left: auto;
+}
+
+.qa-block-answer-error {
+  border-color: var(--critical);
+}
+
+.qa-block-error-banner {
+  margin: 0;
+  color: var(--critical);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .v2-status-bar {
   position: absolute;
   left: 16px;
@@ -512,6 +534,21 @@ button.active {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.v2-status-hint {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.react-flow__edge.qa-block-edge-attached path {
+  stroke: var(--border);
+  stroke-dasharray: 4 4;
+}
+
+.react-flow__edge.qa-block-edge-detached path {
+  stroke: var(--accent-strong);
 }
 
 .v2-context-preview {

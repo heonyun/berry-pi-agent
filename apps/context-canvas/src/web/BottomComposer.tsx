@@ -16,13 +16,18 @@ export function BottomComposer({ disabled = false, onSubmit }: BottomComposerPro
         className="bottom-composer-input nodrag nopan"
         value={draft}
         disabled={disabled}
-        placeholder="Ask a question…"
+        placeholder="Ask a question… (Ctrl+Enter to send)"
+        onLocalChange={setDraft}
         onValueChange={setDraft}
         onKeyDown={(event) => {
           stopNodeKeyPropagation(event);
-          if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+          const sendShortcut =
+            event.key === "Enter" &&
+            (event.ctrlKey || event.metaKey) &&
+            !event.nativeEvent.isComposing;
+          if (sendShortcut) {
             event.preventDefault();
-            const text = draft.trim();
+            const text = event.currentTarget.value.trim();
             if (text) {
               onSubmit(text);
               setDraft("");

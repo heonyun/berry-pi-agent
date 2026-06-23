@@ -177,6 +177,8 @@ export const QA_BLOCK_SCHEMA_VERSION = 2 as const;
 export const QA_BLOCK_APPROX_WIDTH = 480;
 export const QA_BLOCK_APPROX_HEIGHT = 270;
 export const QA_BLOCK_VERTICAL_GAP = 360;
+/** Visual gap between stacked blocks after height-aware reflow (issue #44). */
+export const QA_BLOCK_STACK_GAP = 20;
 export const QA_BLOCK_HORIZONTAL_GAP = 540;
 export const QA_BLOCK_COLUMN_TOLERANCE = 72;
 /** TODO: issue-39 — tentative snap/detach threshold; confirm in manual UX pass. */

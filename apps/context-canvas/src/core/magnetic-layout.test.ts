@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { resolveNewBlockPlacement } from "./magnetic-layout.ts";
+import { resolveNewBlockPlacement, reflowMagneticStacks, columnBlocksSorted } from "./magnetic-layout.ts";
 
 describe("resolveNewBlockPlacement", () => {
   it("places a parallel branch to the right of the upper block when selection has a block above", () => {
@@ -47,5 +47,44 @@ describe("resolveNewBlockPlacement", () => {
 
     expect(result.mode).toBe("vertical");
     expect(result.position).toEqual({ x: 100, y: -720 });
+  });
+});
+
+describe("reflowMagneticStacks", () => {
+  it("stacks attached column blocks using measured heights and stack gap", () => {
+    const blocks = [
+      {
+        id: "bottom",
+        position: { x: 0, y: 0 },
+        snapPosition: { x: 0, y: 0 },
+      },
+      {
+        id: "top",
+        position: { x: 0, y: -360 },
+        snapPosition: { x: 0, y: -360 },
+      },
+    ];
+    const heights = new Map([
+      ["bottom", 120],
+      ["top", 80],
+    ]);
+
+    const positions = reflowMagneticStacks(blocks, heights, 20);
+
+    expect(positions.get("bottom")).toEqual({ x: 0, y: 0 });
+    expect(positions.get("top")).toEqual({ x: 0, y: -100 });
+  });
+});
+
+describe("columnBlocksSorted", () => {
+  it("returns blocks in the same column sorted top-to-bottom", () => {
+    const blocks = [
+      { id: "a", position: { x: 0, y: -200 } },
+      { id: "b", position: { x: 0, y: 0 } },
+      { id: "c", position: { x: 540, y: 0 } },
+    ];
+
+    const ordered = columnBlocksSorted(blocks, "b");
+    expect(ordered.map((block) => block.id)).toEqual(["a", "b"]);
   });
 });

@@ -1,7 +1,9 @@
 import {
+  QA_BLOCK_APPROX_HEIGHT,
   QA_BLOCK_MAGNETIC_DETACH_THRESHOLD,
   QA_BLOCK_COLUMN_TOLERANCE,
   QA_BLOCK_HORIZONTAL_GAP,
+  QA_BLOCK_STACK_GAP,
   QA_BLOCK_VERTICAL_GAP,
   type QABlock,
   type Vec2,
@@ -104,6 +106,77 @@ export function resolveNewBlockPlacement(input: MagneticPlacementInput): Magneti
     position: { x: selected.position.x, y: selected.position.y - QA_BLOCK_VERTICAL_GAP },
     mode: "vertical",
   };
+}
+
+function columnKey(x: number): number {
+  return Math.round(x / QA_BLOCK_COLUMN_TOLERANCE) * QA_BLOCK_COLUMN_TOLERANCE;
+}
+
+function blocksInColumn(
+  blocks: ReadonlyArray<Pick<QABlock, "id" | "position">>,
+  x: number,
+): Array<Pick<QABlock, "id" | "position">> {
+  const key = columnKey(x);
+  return blocks.filter((block) => columnKey(block.position.x) === key);
+}
+
+/**
+ * Repositions magnetically attached blocks in each column using measured heights.
+ * Bottom block in a column keeps its Y; blocks above stack with QA_BLOCK_STACK_GAP.
+ */
+export function reflowMagneticStacks(
+  blocks: ReadonlyArray<Pick<QABlock, "id" | "position" | "snapPosition">>,
+  blockHeights: ReadonlyMap<string, number>,
+  stackGap = QA_BLOCK_STACK_GAP,
+): Map<string, Vec2> {
+  const attached = blocks.filter(
+    (block) => !blockDetached(block.position, block.snapPosition),
+  );
+  if (attached.length === 0) {
+    return new Map();
+  }
+
+  const columns = new Map<number, Array<Pick<QABlock, "id" | "position" | "snapPosition">>>();
+  for (const block of attached) {
+    const key = columnKey(block.position.x);
+    const column = columns.get(key) ?? [];
+    column.push(block);
+    columns.set(key, column);
+  }
+
+  const positions = new Map<string, Vec2>();
+  for (const column of columns.values()) {
+    const sorted = [...column].sort((a, b) => b.position.y - a.position.y);
+    const bottom = sorted[0];
+    if (!bottom) {
+      continue;
+    }
+    positions.set(bottom.id, { x: bottom.position.x, y: bottom.position.y });
+    for (let index = 1; index < sorted.length; index += 1) {
+      const block = sorted[index]!;
+      const below = sorted[index - 1]!;
+      const belowTop = positions.get(below.id)!.y;
+      const height = blockHeights.get(block.id) ?? QA_BLOCK_APPROX_HEIGHT;
+      const y = belowTop - stackGap - height;
+      positions.set(block.id, { x: block.position.x, y });
+    }
+  }
+  return positions;
+}
+
+/** Blocks in the same column as `blockId`, sorted top-to-bottom (smallest Y first). */
+export function columnBlocksSorted(
+  blocks: ReadonlyArray<Pick<QABlock, "id" | "position">>,
+  blockId: string | null,
+): Array<Pick<QABlock, "id" | "position">> {
+  if (!blockId) {
+    return [...blocks].sort((a, b) => a.position.y - b.position.y);
+  }
+  const selected = blocks.find((block) => block.id === blockId);
+  if (!selected) {
+    return [...blocks].sort((a, b) => a.position.y - b.position.y);
+  }
+  return blocksInColumn(blocks, selected.position.x).sort((a, b) => a.position.y - b.position.y);
 }
 
 /** INVARIANT: edge visibility follows detach threshold from snap anchor (issue-39). */

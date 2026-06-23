@@ -1,7 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
 import { blockDetached } from "../core/magnetic-layout.ts";
-import type { AnswerAction } from "./react-flow.ts";
-import type { QABlockAnswerAction } from "../core/qa-block-commands.ts";
 import {
   QA_BLOCK_MAGNETIC_DETACH_THRESHOLD,
   type QABlockCanvasDocument,
@@ -19,12 +17,12 @@ export interface QABlockReactFlowInput {
   callbacks: {
     onQuestionChange: (blockId: string, question: string) => void;
     onSelect: (blockId: string) => void;
-    onToggleExpand: (blockId: string) => void;
-    onAnswerAction: (blockId: string, action: AnswerAction) => void;
+    onHeightChange: (blockId: string, height: number) => void;
     onArmDelete: (blockId: string) => void;
     onDelete: (blockId: string) => void;
   };
   deleteArmedBlockId?: string | null;
+  blockErrors?: ReadonlyMap<string, string>;
 }
 
 function stanceForBlock(document: QABlockCanvasDocument, blockId: string): StanceBand {
@@ -40,6 +38,7 @@ export function toQABlockFlowNodes(input: QABlockReactFlowInput): QABlockFlowNod
     expandedBlockId,
     callbacks,
     deleteArmedBlockId,
+    blockErrors,
   } = input;
 
   return document.blocks.map((block) => ({
@@ -57,10 +56,10 @@ export function toQABlockFlowNodes(input: QABlockReactFlowInput): QABlockFlowNod
       running: runningBlockId === block.id,
       selected: block.id === selectedBlockId,
       deleteArmed: deleteArmedBlockId === block.id,
+      errorMessage: blockErrors?.get(block.id),
       onQuestionChange: callbacks.onQuestionChange,
       onSelect: callbacks.onSelect,
-      onToggleExpand: callbacks.onToggleExpand,
-      onAnswerAction: callbacks.onAnswerAction,
+      onHeightChange: callbacks.onHeightChange,
       onArmDelete: callbacks.onArmDelete,
       onDelete: callbacks.onDelete,
     },
@@ -78,15 +77,11 @@ export function toQABlockFlowEdges(document: QABlockCanvasDocument): Edge[] {
         id: edge.id,
         source: edge.source,
         target: edge.target,
-        hidden: !detached,
+        hidden: false,
         className: detached ? "qa-block-edge-detached" : "qa-block-edge-attached",
-        style: detached ? undefined : { opacity: 0 },
+        style: detached ? undefined : { strokeWidth: 2 },
       };
     });
-}
-
-export function mapAnswerActionToQABlock(action: AnswerAction): QABlockAnswerAction {
-  return action;
 }
 
 export { QA_BLOCK_MAGNETIC_DETACH_THRESHOLD };

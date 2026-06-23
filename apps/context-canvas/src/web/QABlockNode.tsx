@@ -1,7 +1,6 @@
-import { memo, useCallback, useEffect, useRef, type MouseEvent, type PointerEvent } from "react";
+import { memo, useCallback, useEffect, useRef, type PointerEvent } from "react";
 import { type Node, type NodeProps } from "@xyflow/react";
 import type { StanceBand } from "../shared/domain.ts";
-import type { AnswerAction } from "../adapters/react-flow.ts";
 import { ImeTextarea, stopNodeKeyPropagation } from "./ImeTextarea.tsx";
 
 export interface QABlockNodeData {
@@ -13,40 +12,14 @@ export interface QABlockNodeData {
   running: boolean;
   selected?: boolean;
   deleteArmed?: boolean;
+  errorMessage?: string;
   onQuestionChange?: (blockId: string, question: string) => void;
   onSelect?: (blockId: string) => void;
-  onToggleExpand?: (blockId: string) => void;
-  onAnswerAction?: (blockId: string, action: AnswerAction) => void;
+  onHeightChange?: (blockId: string, height: number) => void;
   onArmDelete?: (blockId: string) => void;
   onDelete?: (blockId: string) => void;
   [key: string]: unknown;
 }
-
-const ANSWER_ACTIONS: Array<{
-  action: AnswerAction;
-  className: string;
-  label: string;
-  title: string;
-}> = [
-  {
-    action: "risks",
-    className: "answer-action-corner top-left",
-    label: "Ask for answer risks",
-    title: "Risks",
-  },
-  {
-    action: "positives",
-    className: "answer-action-corner top-right",
-    label: "Ask for answer positives",
-    title: "Positives",
-  },
-  {
-    action: "risk_retry",
-    className: "answer-action-corner bottom-left",
-    label: "Ask to rethink answer risks",
-    title: "Rethink risks",
-  },
-];
 
 function stanceClass(stance: StanceBand): string {
   return `stance-${stance}`;
@@ -57,9 +30,7 @@ function shouldIgnoreNodeGesture(target: EventTarget | null): boolean {
     return false;
   }
   return Boolean(
-    target.closest(
-      ".nodrag, .answer-action-corner, .delete-node-button, .node-drag-handle, textarea, button",
-    ),
+    target.closest(".nodrag, .delete-node-button, .node-drag-handle, textarea, button"),
   );
 }
 
@@ -68,12 +39,25 @@ export const QABlockNode = memo(function QABlockNode({
   dragging,
   selected,
 }: NodeProps<Node<QABlockNodeData>>) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const latestQuestionRef = useRef(data.question);
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
     latestQuestionRef.current = data.question;
   }, [data.question]);
+
+  useEffect(() => {
+    const element = rootRef.current;
+    if (!element || !data.onHeightChange) {
+      return;
+    }
+    const report = () => data.onHeightChange?.(data.blockId, element.offsetHeight);
+    report();
+    const observer = new ResizeObserver(report);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [data, data.answer, data.blockId, data.expanded, data.errorMessage, data.onHeightChange]);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
@@ -97,17 +81,6 @@ export const QABlockNode = memo(function QABlockNode({
 
   useEffect(() => () => clearTimer(), [clearTimer]);
 
-  const handleToggle = useCallback(
-    (event: MouseEvent) => {
-      if (shouldIgnoreNodeGesture(event.target)) {
-        return;
-      }
-      data.onSelect?.(data.blockId);
-      data.onToggleExpand?.(data.blockId);
-    },
-    [data],
-  );
-
   const handleQuestionCommit = useCallback(
     (value: string) => {
       latestQuestionRef.current = value;
@@ -116,11 +89,9 @@ export const QABlockNode = memo(function QABlockNode({
     [data],
   );
 
-  const actionDisabled =
-    data.running || data.answer.trim().length === 0 || !data.selected || !selected;
-
   return (
     <div
+      ref={rootRef}
       className={[
         "qa-block-node",
         data.expanded ? "qa-block-node-expanded" : "qa-block-node-compact",
@@ -129,31 +100,12 @@ export const QABlockNode = memo(function QABlockNode({
       ]
         .filter(Boolean)
         .join(" ")}
-      onClick={handleToggle}
       onPointerDown={handlePointerDown}
       onPointerMove={clearTimer}
       onPointerUp={clearTimer}
       onPointerCancel={clearTimer}
       onPointerLeave={clearTimer}
     >
-      {ANSWER_ACTIONS.map((item) => (
-        <button
-          key={item.action}
-          type="button"
-          className={`${item.className} nodrag nopan`}
-          aria-label={item.label}
-          title={item.title}
-          disabled={actionDisabled}
-          onPointerDown={(event) => event.stopPropagation()}
-          onPointerUp={(event) => {
-            event.stopPropagation();
-            if (!actionDisabled) {
-              data.onAnswerAction?.(data.blockId, item.action);
-            }
-          }}
-          onKeyDown={stopNodeKeyPropagation}
-        />
-      ))}
       {data.deleteArmed ? (
         <button
           type="button"
@@ -191,9 +143,17 @@ export const QABlockNode = memo(function QABlockNode({
         <div className="qa-block-question">{data.question || "Question…"}</div>
       )}
       {data.expanded ? (
-        <div className="qa-block-answer">
-          {data.answer || (data.running ? <span className="streaming-dot" aria-label="Streaming answer" /> : "Answer pending.")}
+        <div className={`qa-block-answer${data.errorMessage ? " qa-block-answer-error" : ""}`}>
+          {data.errorMessage ? (
+            <p className="qa-block-error-banner" role="alert">
+              {data.errorMessage}
+            </p>
+          ) : null}
+          {!data.errorMessage &&
+            (data.answer || (data.running ? <span className="streaming-dot" aria-label="Streaming answer" /> : "Answer pending."))}
         </div>
+      ) : data.errorMessage ? (
+        <div className="qa-block-answer-preview qa-block-answer-error">{data.errorMessage}</div>
       ) : data.answer.trim() ? (
         <div className="qa-block-answer-preview">{data.answer}</div>
       ) : null}

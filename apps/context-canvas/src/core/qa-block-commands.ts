@@ -18,7 +18,7 @@ export type QABlockCommand =
     }
   | { type: "set_block_answer"; blockId: string; text: string }
   | { type: "update_block_question"; blockId: string; question: string }
-  | { type: "move_block"; blockId: string; position: Vec2 }
+  | { type: "move_block"; blockId: string; position: Vec2; syncSnapPosition?: boolean }
   | { type: "delete_block"; blockId: string };
 
 export interface QABlockCommandMeta {

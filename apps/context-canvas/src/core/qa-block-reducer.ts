@@ -67,6 +67,7 @@ export function applyQABlockCommand(
         document: updateQABlock(document, command.blockId, (block) => ({
           ...block,
           position: command.position,
+          snapPosition: command.syncSnapPosition ? command.position : block.snapPosition,
         })),
         meta: { blockId: command.blockId },
       };
