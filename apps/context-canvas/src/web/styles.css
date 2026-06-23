@@ -499,7 +499,7 @@ button.active {
 
 .bottom-composer-input {
   flex: 1;
-  min-height: 40px;
+  min-height: 60px;
   resize: vertical;
 }
 
@@ -508,12 +508,12 @@ button.active {
 }
 
 .qa-block-node {
-  min-width: 280px;
-  max-width: 360px;
+  min-width: 420px;
+  max-width: 540px;
   border: 2px solid var(--border);
   border-radius: 12px;
   background: #fff8ef;
-  padding: 10px 12px;
+  padding: 15px 18px;
 }
 
 .qa-block-node-compact .qa-block-question {
