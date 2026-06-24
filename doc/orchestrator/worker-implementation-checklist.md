@@ -14,6 +14,7 @@ Run after a Qwen implementation worker ticket completes. Orchestrator verifies; 
 - [ ] Read changed hunks; confirm behavior matches ticket acceptance criteria
 - [ ] Check helpers **called** by the change — open definition if not in worker diff
 - [ ] Preserve existing invariants (`INVARIANT` / `RELATED` comments when editing context-canvas)
+- [ ] Do not add WHAT comments; use tags per `COMMENT_CONVENTIONS.md` only when needed
 
 ## 3. Tests (once)
 

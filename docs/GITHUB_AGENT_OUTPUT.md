@@ -30,7 +30,7 @@ Actionable follow-ups for humans or agents (include non-blocking residual risks 
 | --- | --- | --- |
 | `pass` | No actionable blocker findings | Non-blocking |
 | `hold` | P1+ finding with evidence, or verification gap | Codex triage; may block |
-| `hold (truncated)` | Diff coverage incomplete; findings may depend on unseen hunks | **Non-blocking by default** |
+| `hold (truncated)` | Diff coverage incomplete; findings may depend on unseen hunks | **Non-blocking by default** — triage per [doc/orchestrator/pr-review-triage.md#truncated](../doc/orchestrator/pr-review-triage.md#truncated) |
 | `fail` | P0 or proven correctness/security regression with diff evidence | Codex triage; likely block |
 
 Scripts may prepend an automated **Review note** when output violates these rules (for example `fail` on a truncated diff, or `hold` with zero numbered findings).
@@ -79,8 +79,7 @@ Its useful output is a pre-implementation review:
 - smallest safe first patch or prototype,
 - concrete verification commands only when supported by repository context.
 
-Treat `Conclusion: pass` on issue planning comments as a weak signal. Codex
-still owns final implementation and verification decisions.
+Treat `Conclusion: pass` on issue planning comments as a **weak signal** — not approval to skip design review or verification. Codex still owns implementation and merge decisions. For PR reviews, `pass` with zero findings is stronger than issue `pass`.
 
 ## PR review expectations
 
@@ -112,7 +111,7 @@ Prefer concise Korean when the issue or PR body is mostly Korean. Otherwise use 
 
 1. Skip the footer and `<!-- pi-agent:workflow:... -->` marker when summarizing for handoff.
 2. Read automated **Review note** banners first; they downgrade or flag low-evidence output.
-3. Map `Conclusion: fail` or `hold` to triage priority; treat `hold (truncated)` as non-blocking unless Codex confirms a cited hunk.
+3. Map `Conclusion: fail` or `hold` to triage priority; treat `hold (truncated)` as non-blocking unless Codex confirms a cited hunk (see [pr-review-triage.md](../doc/orchestrator/pr-review-triage.md#truncated)).
 4. Down-rank findings with `evidence:heuristic` or missing `- Evidence:` lines.
 5. Copy `Commands to rerun` into local verification steps when present.
 6. Do not quote entire bot comments into `.orchestrator/` raw artifacts; summarize Findings and next steps only.

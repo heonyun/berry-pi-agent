@@ -1,0 +1,87 @@
+name: Agent Task
+description: Berry-pi-agent task for orchestrator workflow (plan / implement / review)
+title: "[Task] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Repository: **heonyun/berry-pi-agent** only. For Antigravity-delegated issues, include `<!-- pi-agent:created-by:antigravity -->` in the body.
+
+        `harness_flow` = workflow stage (plan / implement / review). **Not** the deployment environment.
+
+  - type: dropdown
+    id: harness_flow
+    attributes:
+      label: Harness flow
+      description: Current workflow stage for this task
+      options:
+        - plan
+        - implement
+        - review
+    validations:
+      required: true
+
+  - type: dropdown
+    id: task_class
+    attributes:
+      label: Task class
+      description: Risk and verification class (see docs/TASK_CLASSIFIER.md)
+      options:
+        - trivial
+        - standard
+        - complex
+        - pr-loop-only
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: One sentence outcome
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected
+    attributes:
+      label: Affected
+      description: Paths or components (one per line)
+      placeholder: |
+        apps/context-canvas/src/web/App.tsx
+    validations:
+      required: true
+
+  - type: input
+    id: task_record_path
+    attributes:
+      label: Task record path (optional)
+      description: Obsidian or doc/orchestrator/task-record-template mirror
+      placeholder: Projects/berry-pi-agent/tasks/T-000/00-index.md
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: Areas explicitly excluded
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      description: Commands to run (checkbox list)
+      value: |
+        - [ ] npm run test --workspace=@berry-pi/context-canvas
+        - [ ] npm run typecheck --workspace=@berry-pi/context-canvas
+    validations:
+      required: true
+
+  - type: textarea
+    id: harness_breadcrumbs
+    attributes:
+      label: Harness breadcrumbs (optional)
+      description: next_action and drill_down for the next agent session
+      placeholder: |
+        next_action: Implement skeleton in App.tsx
+        drill_down: doc/working-log/2026-06-24-topic.md

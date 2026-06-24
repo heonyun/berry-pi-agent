@@ -34,9 +34,15 @@ Purpose: reduce user cognitive load. Every orchestrator turn ends with this bloc
 
 ## Handoff hook
 
-When a harness or PR-loop run exists, add one line under Q4:
+When a harness or PR-loop run exists, add under Q4:
 
-`Harness run: .orchestrator/harness-pilot/runs/<id>/read-next.md`
+- `harness_flow: plan | implement | review`
+- `drill_down: <path>` (worklog, `read-next.md`, or eval run)
+- Optional: `Harness run: .orchestrator/harness-pilot/runs/<id>/read-next.md`
+
+Example Q4 line:
+
+`harness_flow: review · drill_down: doc/working-log/2026-06-24-harness-improvement-roadmap.md`
 
 ## Anti-patterns
 
