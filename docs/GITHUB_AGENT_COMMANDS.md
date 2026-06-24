@@ -69,7 +69,7 @@ praise, broad style notes, or invented package-manager commands are low-value.
 
 Structured mentions help the bot cite files, scope work, and avoid truncation noise.
 
-### New issue body (recommended fields)
+### New issue body (Harness block — matches `.github/ISSUE_TEMPLATE/agent-task.yml`)
 
 ```md
 ## Goal
@@ -77,6 +77,14 @@ One sentence outcome.
 
 ## Affected
 - apps/context-canvas/src/server/index.ts
+
+## Harness
+| Field | Value |
+| --- | --- |
+| harness_flow | plan |
+| task_class | standard |
+| next_action | Open PR with skeleton |
+| drill_down | doc/working-log/YYYY-MM-DD-topic.md |
 
 ## Repro / expected vs actual
 (steps or symptoms)
@@ -103,7 +111,7 @@ Trusted authors and Antigravity-marked issues receive automatic planning review 
 
 `/deepseek` avoids notifying unrelated accounts. `@deepseek` and `@github-actions` remain supported aliases.
 
-### PR description (recommended fields)
+### PR description (Harness block — matches `.github/pull_request_template.md`)
 
 ```md
 ## Summary
@@ -112,6 +120,15 @@ Trusted authors and Antigravity-marked issues receive automatic planning review 
 ## Test plan
 - [x] npm run test --workspace=@berry-pi/context-canvas (76 passed)
 
+## Harness
+| Field | Value |
+| --- | --- |
+| harness_flow | review |
+| task_class | standard |
+| head_sha | abc1234 |
+| next_action | Merge after CI green |
+| drill_down | .orchestrator/runs/pr-N/read-next.md |
+
 ## Risk areas
 - SSE error path when stopReason=error
 
@@ -119,7 +136,7 @@ Trusted authors and Antigravity-marked issues receive automatic planning review 
 - docs-only harness changes (separate PR)
 ```
 
-### PR re-review request
+### PR re-review request (required pattern)
 
 ```md
 @deepseek-review
