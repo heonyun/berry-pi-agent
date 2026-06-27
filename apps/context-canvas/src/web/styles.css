@@ -516,7 +516,7 @@ button.active {
 .v2-status-bar {
   position: absolute;
   left: 16px;
-  top: 12px;
+  top: 44px; /* clear fixed view toggle (top:8px) */
   z-index: 6;
   display: flex;
   gap: 12px;

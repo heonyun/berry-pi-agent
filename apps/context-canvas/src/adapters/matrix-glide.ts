@@ -12,6 +12,10 @@ import {
 // ── Context Matrix -> glide-data-grid adapter ─────────────────────────────
 // Grid library is renderer adapter only. Domain state (MatrixDocument) is the
 // single source of truth. This module maps domain state to grid cells.
+//
+// NOTE: All cells use allowOverlay: false intentionally. Inline grid editing
+// is out of scope for this app. Markdown body editing is owned by the side
+// panel, which commits through the command/reducer path (update_cell_body).
 // ─────────────────────────────────────────────────────────────────────────
 
 export interface MatrixGridConfig {

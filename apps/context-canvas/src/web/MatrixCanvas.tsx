@@ -37,6 +37,17 @@ export function MatrixCanvas(): ReactElement {
 
   const config = useMemo(() => getMatrixGridConfig(document), [document]);
 
+  // Memoize grid columns to avoid recreating the array on every render
+  const columns = useMemo(
+    () =>
+      Array.from({ length: config.cols }, (_, i) => ({
+        id: String(i),
+        title: formatColumnLabel(i),
+        width: 120,
+      })) as readonly GridColumn[],
+    [config.cols],
+  );
+
   const dispatch = useCallback((command: MatrixCommand) => {
     const result = applyMatrixCommand(docRef.current, command);
     docRef.current = result.document;
@@ -148,6 +159,11 @@ export function MatrixCanvas(): ReactElement {
   const onCellClick = useCallback(
     (cell: Item) => {
       const [col, row] = cell;
+      // Ignore header clicks (row < 0) and out-of-bounds cells — editing is
+      // owned by the side panel, not inline grid overlay
+      if (row < 0 || col < 0 || row >= config.rows || col >= config.cols) {
+        return;
+      }
       const key = cellKey(row, col);
       const domainCell = docRef.current.sheet.cells.get(key);
       setSidePanelCell({
@@ -156,7 +172,7 @@ export function MatrixCanvas(): ReactElement {
         body: domainCell?.body ?? "",
       });
     },
-    [],
+    [config.rows, config.cols],
   );
 
   return (
@@ -165,11 +181,7 @@ export function MatrixCanvas(): ReactElement {
         <DataEditor
           getCellContent={cellContent}
           getCellsForSelection={true}
-          columns={Array.from({ length: config.cols }, (_, i) => ({
-            id: String(i),
-            title: formatColumnLabel(i),
-            width: 120,
-          })) as readonly GridColumn[]}
+          columns={columns}
           rows={config.rows}
           rowMarkers="number"
           onCellClicked={onCellClick}
