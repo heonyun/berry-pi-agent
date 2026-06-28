@@ -96,6 +96,11 @@ describe("projectMatrixToBundle", () => {
     expect(fs.existsSync(rootIndexPath(bundleRoot))).toBe(true);
     expect(fs.existsSync(sheetIndexPath(bundleRoot, MATRIX_SHEET_ID))).toBe(true);
 
+    const templateJson = JSON.parse(
+      fs.readFileSync(path.join(bundleRoot, "templates", `${RESEARCH_SHEET_TEMPLATE.id}.json`), "utf8"),
+    );
+    expect(templateJson.id).toBe(RESEARCH_SHEET_TEMPLATE.id);
+
     const cellMarkdown = parse(fs.readFileSync(cellCoordToPath(bundleRoot, 0, 0), "utf8"));
     expect(cellMarkdown.frontmatter.type).toBe("matrix_cell");
     expect(cellMarkdown.frontmatter.row).toBe(0);
@@ -145,6 +150,19 @@ describe("loadMatrixBundle", () => {
     expect(result.pathsWritten.every((entry) => !entry.includes("\\"))).toBe(true);
     expect(result.pathsWritten).toContain("sheet/sheet-main/index.md");
   });
+
+  it("warns and skips template files with unsafe templateId values", () => {
+    const bundleRoot = makeTempDir();
+    projectMatrixToBundle(sampleMatrixDocument(), bundleRoot);
+    const sidecarPath = path.join(bundleRoot, MATRIX_SIDECAR);
+    const manifest = JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
+    manifest.templateId = "../escape";
+    fs.writeFileSync(sidecarPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    const loaded = loadMatrixBundle(bundleRoot);
+    expect(loaded.warnings.some((warning) => warning.includes("Invalid templateId"))).toBe(true);
+    expect(loaded.document?.template).toBeUndefined();
+  });
 });
 
 describe("normalizeBundleRelativePath", () => {
@@ -175,5 +193,68 @@ describe("bundle path safety", () => {
     );
 
     expect(result.errors.some((error) => error.code === "invalid_cell_key")).toBe(true);
+  });
+
+  it("rejects negative cell coordinates during export", () => {
+    const bundleRoot = makeTempDir();
+    const document = sampleMatrixDocument();
+    const cells = new Map(document.sheet.cells);
+    cells.set("-1,0", {
+      value: null,
+      body: "negative row",
+      frontmatter: "",
+    });
+    cells.set("0,-2", {
+      value: null,
+      body: "negative col",
+      frontmatter: "",
+    });
+
+    const result = projectMatrixToBundle(
+      {
+        ...document,
+        sheet: { ...document.sheet, cells },
+      },
+      bundleRoot,
+    );
+
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "invalid_cell_key", message: expect.stringContaining("-1,0") }),
+        expect.objectContaining({ code: "invalid_cell_key", message: expect.stringContaining("0,-2") }),
+      ]),
+    );
+    expect(result.pathsWritten.some((entry) => entry.includes("cells/-"))).toBe(false);
+  });
+
+  it("rejects out-of-range cell coordinates during export", () => {
+    const bundleRoot = makeTempDir();
+    const document = sampleMatrixDocument();
+    const cells = new Map(document.sheet.cells);
+    cells.set(cellKey(0, document.sheet.cols), {
+      value: null,
+      body: "past last column",
+      frontmatter: "",
+    });
+    cells.set(cellKey(document.sheet.rows, 0), {
+      value: null,
+      body: "past last row",
+      frontmatter: "",
+    });
+
+    const result = projectMatrixToBundle(
+      {
+        ...document,
+        sheet: { ...document.sheet, cells },
+      },
+      bundleRoot,
+    );
+
+    expect(result.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "out_of_range_cell" }),
+        expect.objectContaining({ code: "out_of_range_cell" }),
+      ]),
+    );
   });
 });

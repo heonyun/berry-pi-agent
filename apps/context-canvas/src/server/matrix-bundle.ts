@@ -21,7 +21,7 @@ export function handleMatrixBundleExport(
   config: ContextCanvasServerConfig,
   monorepoRoot: string,
 ): {
-  bundleRoot: string;
+  workspaceId: string;
   pathsWritten: string[];
   errors: Array<{ path: string; message: string }>;
 } {
@@ -34,7 +34,7 @@ export function handleMatrixBundleExport(
     workspaceTitle: body.workspaceTitle ?? body.document.sheet.name,
   });
   return {
-    bundleRoot,
+    workspaceId,
     pathsWritten: result.pathsWritten,
     errors: result.errors.map((error) => ({
       path: error.path ?? "",

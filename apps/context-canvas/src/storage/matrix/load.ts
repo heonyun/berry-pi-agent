@@ -3,6 +3,7 @@ import path from "node:path";
 import type { Cell, CellValue, MatrixDocument, SheetTemplate } from "../../shared/domain.ts";
 import { cellKey } from "../../shared/domain.ts";
 import { parse } from "../markdown/document.ts";
+import { assertSafeId } from "../markdown/paths.ts";
 import { cellsDir, pathToCellCoord } from "./paths.ts";
 import { readMatrixManifest } from "./sidecar.ts";
 import { MATRIX_SIDECAR } from "./sidecar.ts";
@@ -143,6 +144,12 @@ function loadTemplate(
   warnings: string[],
 ): SheetTemplate | undefined {
   if (!templateId) {
+    return undefined;
+  }
+  try {
+    assertSafeId(templateId, "templateId");
+  } catch {
+    warnings.push(`Invalid templateId: ${templateId}`);
     return undefined;
   }
   const filePath = templatePath(bundleRoot, templateId);

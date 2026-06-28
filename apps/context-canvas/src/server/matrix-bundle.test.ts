@@ -4,6 +4,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { cellKey, createEmptyMatrixDocument, MATRIX_SHEET_ID } from "../shared/domain.ts";
 import { MATRIX_SIDECAR } from "../storage/matrix/sidecar.ts";
+import { DEFAULT_MATRIX_WORKSPACE_ID } from "../storage/matrix/project.ts";
+import { resolveWithinBundle } from "../storage/markdown/paths.ts";
 import { handleMatrixBundleExport, handleMatrixBundleLoad } from "./matrix-bundle.ts";
 import { resolveContextCanvasServerConfig } from "./security.ts";
 
@@ -34,8 +36,11 @@ describe("handleMatrixBundleExport", () => {
     try {
       const result = handleMatrixBundleExport({ document }, config, tempRoot);
       expect(result.errors).toEqual([]);
+      expect(result.workspaceId).toBe(DEFAULT_MATRIX_WORKSPACE_ID);
       expect(result.pathsWritten.length).toBeGreaterThan(0);
-      expect(readFileSync(path.join(result.bundleRoot, MATRIX_SIDECAR), "utf8")).toContain('"kind": "matrix-bundle"');
+      expect(result).not.toHaveProperty("bundleRoot");
+      const bundleRoot = resolveWithinBundle(tempRoot, result.workspaceId);
+      expect(readFileSync(path.join(bundleRoot, MATRIX_SIDECAR), "utf8")).toContain('"kind": "matrix-bundle"');
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }

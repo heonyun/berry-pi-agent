@@ -365,15 +365,6 @@ export function createContextCanvasServer(config: ContextCanvasServerConfig = se
     }
 
     if (req.method === "GET" && req.url === "/api/matrix-bundle/load") {
-      const routeAccess = verifyRequestAccess(
-        { method: req.method, origin, token: requestToken(req), url: req.url },
-        config,
-      );
-      if (!routeAccess.ok) {
-        res.writeHead(routeAccess.statusCode, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: routeAccess.message }));
-        return;
-      }
       const result = handleMatrixBundleLoad(config, monorepoRoot);
       res.writeHead(result.statusCode, { "Content-Type": "application/json" });
       res.end(JSON.stringify(result));
