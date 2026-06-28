@@ -15,6 +15,8 @@ const PROTECTED_API_PATHS = new Set([
   "/api/matrix-run",
   "/api/bundle/export",
   "/api/bundle/load",
+  "/api/matrix-bundle/export",
+  "/api/matrix-bundle/load",
 ]);
 
 type Env = Partial<Record<string, string>>;

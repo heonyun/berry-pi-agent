@@ -8,7 +8,7 @@ import { getModel, type KnownProvider } from "@earendil-works/pi-ai";
 import { createAgentSession, SessionManager, type AgentSession } from "@earendil-works/pi-coding-agent";
 import { compilePromptContext, formatPromptForPi, type CompiledPromptContext } from "../shared/compiler.ts";
 import { compileQABlockContext } from "../shared/compile-qablock-context.ts";
-import type { ContextCanvasDocument, QABlockCanvasDocument } from "../shared/domain.ts";
+import type { ContextCanvasDocument, MatrixDocument, QABlockCanvasDocument } from "../shared/domain.ts";
 import { DEFAULT_CANVAS_ID, createInitialDocument } from "../shared/domain.ts";
 import { loadBundleToDocument } from "../storage/markdown/load.ts";
 import { projectDocumentToBundle } from "../storage/markdown/project.ts";
@@ -26,6 +26,7 @@ import {
   type ContextCanvasServerConfig,
 } from "./security.ts";
 import { handleMatrixRun, type MatrixRunRequestBody } from "./matrix-run.ts";
+import { handleMatrixBundleExport, handleMatrixBundleLoad } from "./matrix-bundle.ts";
 
 export { assistantMessageText, assistantRunErrorMessage, findAssistantRunError } from "./assistant-message.ts";
 
@@ -354,6 +355,28 @@ export function createContextCanvasServer(config: ContextCanvasServerConfig = se
       try {
         const body = await readJsonBody<MatrixRunRequestBody>(req);
         await handleMatrixRun(body, res, getSession);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        const statusCode = error instanceof RequestBodyTooLargeError ? 413 : 400;
+        res.writeHead(statusCode, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: message }));
+      }
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/api/matrix-bundle/load") {
+      const result = handleMatrixBundleLoad(config, monorepoRoot);
+      res.writeHead(result.statusCode, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(result));
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/api/matrix-bundle/export") {
+      try {
+        const body = await readJsonBody<{ document: MatrixDocument; workspaceId?: string; workspaceTitle?: string }>(req);
+        const result = handleMatrixBundleExport(body, config, monorepoRoot);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         const statusCode = error instanceof RequestBodyTooLargeError ? 413 : 400;
