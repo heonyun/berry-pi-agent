@@ -17,7 +17,7 @@ import {
   compileMatrixRangeContext,
   type MatrixContextRange,
 } from "../shared/compile-matrix-range-context.ts";
-import { filterPatchesToTargetRange, parseAiCommand } from "../shared/matrix-validation.ts";
+import { parseAiCommand } from "../shared/matrix-validation.ts";
 import { runMatrix } from "./run-matrix.ts";
 
 // ── Context Matrix Canvas ────────────────────────────────────────────────
@@ -251,17 +251,10 @@ export function MatrixCanvas(): ReactElement {
         return;
       }
 
-      const { patches, strippedCount } = filterPatchesToTargetRange(
-        parsed.command.patches,
-        parsed.command.targetRange,
-      );
-      const command = { ...parsed.command, patches };
-
-      const result = dispatch({ type: "apply_ai_command", command });
+      const result = dispatch({ type: "apply_ai_command", command: parsed.command });
       let message = `Run applied: ${result.meta.updatedCells} cells updated`;
-      if (strippedCount > 0 || result.meta.strippedPatches) {
-        const count = strippedCount || result.meta.strippedPatches || 0;
-        message += ` — ${count} patch(es) outside target range skipped`;
+      if (result.meta.strippedPatches) {
+        message += ` — ${result.meta.strippedPatches} patch(es) outside target range skipped`;
       }
       setStatus(message);
     } catch (error: unknown) {

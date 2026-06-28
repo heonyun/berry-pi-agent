@@ -38,7 +38,7 @@ function extractRangeCellLines(document: MatrixDocument, range: RangeRefDTO): st
       const address = `${formatColumnLabel(col)}${row + 1}`;
       const display = cell.body || String(cell.value);
       lines.push(`  ${address}: ${display}`);
-      if (cell.frontmatter.trim()) {
+      if (cell.frontmatter?.trim()) {
         lines.push(`    frontmatter: ${cell.frontmatter.trim()}`);
       }
     }
