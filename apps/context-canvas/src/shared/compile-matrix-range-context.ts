@@ -60,6 +60,13 @@ function renderContextBlock(label: string, range: RangeRefDTO, lines: string[]):
   return `${header}\n${lines.join("\n")}`;
 }
 
+/** Format compiled matrix context for pi-coding-agent (system + user, like formatPromptForPi). */
+export function formatMatrixPromptForPi(compiled: CompiledRangeContext): string {
+  const system = compiled.messages.find((message) => message.role === "system")?.content ?? "";
+  const user = compiled.messages.find((message) => message.role === "user")?.content ?? "";
+  return [system, "", user, "", "Respond with the AiCommand JSON object only."].join("\n").trim();
+}
+
 /**
  * Compile structured context from context ranges and a target range for matrix-run.
  * Mirrors compileQABlockContext output shape (messages + contextText).

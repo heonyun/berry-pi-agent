@@ -38,13 +38,35 @@ export type ValidatedAiCommand = z.infer<typeof AiCommandSchema>;
 export type ValidatedWritePatch = z.infer<typeof WritePatchSchema>;
 
 /**
+ * Unwrap nested `{ command: AiCommand }` envelopes (common model shape) before Zod parse.
+ */
+export function coerceAiCommandPayload(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object") {
+    return raw;
+  }
+  const record = raw as Record<string, unknown>;
+  if (
+    typeof record.intent === "string" &&
+    record.targetRange &&
+    typeof record.targetRange === "object" &&
+    Array.isArray(record.patches)
+  ) {
+    return record;
+  }
+  if (record.command && typeof record.command === "object") {
+    return coerceAiCommandPayload(record.command);
+  }
+  return raw;
+}
+
+/**
  * Parse and validate an unknown payload as an AiCommand.
  * Returns the validated command or an array of ZodError issues.
  */
 export function parseAiCommand(raw: unknown):
   | { ok: true; command: AiCommand }
   | { ok: false; errors: z.ZodError } {
-  const result = AiCommandSchema.safeParse(raw);
+  const result = AiCommandSchema.safeParse(coerceAiCommandPayload(raw));
   if (result.success) {
     return { ok: true, command: result.data };
   }

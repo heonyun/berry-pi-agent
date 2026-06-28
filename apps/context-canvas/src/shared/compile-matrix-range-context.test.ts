@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   compileMatrixRangeContext,
   compileMatrixRangeContextStub,
+  formatMatrixPromptForPi,
 } from "./compile-matrix-range-context.ts";
 import { applyMatrixCommand } from "../core/matrix-reducer.ts";
 import { cellKey, createEmptyMatrixDocument } from "./domain.ts";
@@ -70,6 +71,23 @@ describe("compileMatrixRangeContext", () => {
     );
 
     expect(compiled.contextText).toContain("(empty range)");
+  });
+});
+
+describe("formatMatrixPromptForPi", () => {
+  it("includes system and user messages for the agent session", () => {
+    const document = createEmptyMatrixDocument();
+    const compiled = compileMatrixRangeContext(
+      document,
+      [],
+      { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+      "Fill status column",
+    );
+    const prompt = formatMatrixPromptForPi(compiled);
+
+    expect(prompt).toContain("matrix AI assistant");
+    expect(prompt).toContain("Fill status column");
+    expect(prompt).toContain("Respond with the AiCommand JSON object only.");
   });
 });
 

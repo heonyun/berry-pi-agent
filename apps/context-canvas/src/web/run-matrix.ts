@@ -1,6 +1,7 @@
 import { buildPromptRequestHeaders } from "./api.ts";
 import type { CompiledRangeContext } from "../shared/compile-matrix-range-context.ts";
 import type { AiCommand, RangeRefDTO } from "../shared/domain.ts";
+import { parseAiCommand } from "../shared/matrix-validation.ts";
 
 export interface MatrixRunClientRequest {
   readonly prompt: string;
@@ -10,6 +11,17 @@ export interface MatrixRunClientRequest {
 
 export interface MatrixRunClientResponse {
   readonly command: AiCommand;
+}
+
+/** Normalize matrix-run JSON: `{ command }` envelope or bare AiCommand at root. */
+export function parseMatrixRunResponse(payload: unknown): MatrixRunClientResponse {
+  const parsed = parseAiCommand(payload);
+  if (!parsed.ok) {
+    throw new Error(
+      `Response from POST /api/matrix-run does not match AiCommand schema: ${parsed.errors.message}`,
+    );
+  }
+  return { command: parsed.command };
 }
 
 export async function runMatrix(request: MatrixRunClientRequest): Promise<MatrixRunClientResponse> {
@@ -35,5 +47,5 @@ export async function runMatrix(request: MatrixRunClientRequest): Promise<Matrix
     throw new Error(message);
   }
 
-  return (await response.json()) as MatrixRunClientResponse;
+  return parseMatrixRunResponse(await response.json());
 }
