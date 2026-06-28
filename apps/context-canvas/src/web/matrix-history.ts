@@ -8,6 +8,7 @@ import {
 import { isMatrixHistoryEntry } from "../shared/matrix-validation.ts";
 
 const STORAGE_KEY = "context-matrix-history";
+/** CONTRACT: localStorage is authoritative for in-browser history; bundle export is async second persist (see scheduleMatrixBundleExport). */
 const MAX_HISTORY = 50;
 const PREVIEW_MAX = 280;
 

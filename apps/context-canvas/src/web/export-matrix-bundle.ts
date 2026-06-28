@@ -7,7 +7,7 @@ export type MatrixBundleExportResult = {
   errors: Array<{ path: string; message: string }>;
 };
 
-/** JSON-safe matrix document (Maps become plain objects for wire transport). */
+/** CONTRACT: Maps must serialize to plain objects for JSON wire; ingest must rehydrate Maps. */
 export function matrixDocumentForWire(document: MatrixDocument): unknown {
   return {
     ...document,
@@ -37,7 +37,7 @@ export async function exportMatrixBundle(
   return (await response.json()) as MatrixBundleExportResult;
 }
 
-/** Fire-and-forget bundle export after a successful matrix run. */
+/** RISK: Fire-and-forget — export failure must not block run success; only console.warn. RELATED: export-matrix-bundle.test.ts scheduleMatrixBundleExport warns on failure without throwing */
 export function scheduleMatrixBundleExport(
   document: MatrixDocument,
   history: readonly MatrixHistoryEntry[],
