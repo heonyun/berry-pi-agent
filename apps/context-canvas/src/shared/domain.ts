@@ -271,3 +271,112 @@ export function appendQABlockAnswerVersion(
     },
   };
 }
+
+// ── Context Matrix domain types ──────────────────────────────────────────
+// Issues: #49 — Matrix MVP skeleton
+// Grid library is renderer adapter only; domain state is the source of truth.
+// ──────────────────────────────────────────────────────────────────────────
+
+export const MATRIX_DEFAULT_COLS = 50;
+export const MATRIX_DEFAULT_ROWS = 20;
+export const MATRIX_SHEET_ID = "sheet-main";
+
+/** Cell value types the matrix supports (no rich objects yet). */
+export type CellValue = string | number | boolean | null;
+
+/** A single cell in the matrix; body + hidden frontmatter. */
+export interface Cell {
+  readonly value: CellValue;
+  /** Markdown body displayed as concise summary in the grid. */
+  readonly body: string;
+  /** Hidden YAML/frontmatter metadata (not shown in grid). */
+  readonly frontmatter: string;
+  /** Provenance badge label shown as small metadata indicator. */
+  readonly provenance?: string;
+}
+
+/** A rectangular range reference anchored by top-left and bottom-right. */
+export interface RangeRef {
+  readonly sheetId: string;
+  readonly startRow: number;
+  readonly startCol: number;
+  readonly endRow: number;
+  readonly endCol: number;
+}
+
+/** Serialisable range reference for cross-boundary messages. */
+export interface RangeRefDTO {
+  readonly startRow: number;
+  readonly startCol: number;
+  readonly endRow: number;
+  readonly endCol: number;
+}
+
+/** AI-generated instruction for what to patch and where. */
+export interface AiCommand {
+  readonly intent: string;
+  readonly targetRange: RangeRefDTO;
+  readonly patches: WritePatch[];
+}
+
+/** A single write patch targeting one cell. */
+export interface WritePatch {
+  readonly row: number;
+  readonly col: number;
+  readonly value: CellValue;
+  readonly body: string;
+  readonly frontmatter?: string;
+  readonly provenance?: string;
+}
+
+/** A named sheet within the matrix document. */
+export interface Sheet {
+  readonly id: string;
+  readonly name: string;
+  readonly rows: number;
+  readonly cols: number;
+  readonly cells: ReadonlyMap<string, Cell>;
+}
+
+/** Top-level matrix document: the single source of truth. */
+export interface MatrixDocument {
+  readonly kind: "matrix";
+  readonly schemaVersion: 2;
+  readonly sheet: Sheet;
+}
+
+/** Helper: encode row,col into a map key. */
+export function cellKey(row: number, col: number): string {
+  return `${row},${col}`;
+}
+
+/** Helper: create initial empty matrix document (20x50). */
+export function createEmptyMatrixDocument(): MatrixDocument {
+  return {
+    kind: "matrix",
+    schemaVersion: 2,
+    sheet: {
+      id: MATRIX_SHEET_ID,
+      name: "Context Matrix",
+      rows: MATRIX_DEFAULT_ROWS,
+      cols: MATRIX_DEFAULT_COLS,
+      cells: new Map(),
+    },
+  };
+}
+
+/** Helper: column label like "A" or "AA" from a 0-based coordinate. */
+export function formatColumnLabel(col: number): string {
+  let label = "";
+  let n = col;
+  do {
+    label = String.fromCharCode(65 + (n % 26)) + label;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return label;
+}
+
+/** Helper: range label like "B2:D8" from 0-based coordinates. */
+export function formatRangeLabel(startCol: number, startRow: number, endCol: number, endRow: number): string {
+  return `${formatColumnLabel(startCol)}${startRow + 1}:${formatColumnLabel(endCol)}${endRow + 1}`;
+}

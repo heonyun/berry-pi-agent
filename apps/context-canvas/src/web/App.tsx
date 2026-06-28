@@ -30,6 +30,7 @@ import { BottomComposer, type BottomComposerHandle } from "./BottomComposer.tsx"
 import { canvasNodeTypes } from "./canvas-nodes.tsx";
 import { streamBlock } from "./stream-block.ts";
 import { formatStreamError } from "./format-stream-error.ts";
+import { MatrixCanvas } from "./MatrixCanvas.tsx";
 
 const KEYBOARD_HINT = "Alt+↑ new block · Alt+↓ composer · Alt+←/→ navigate";
 
@@ -494,10 +495,31 @@ function QABlockCanvasApp() {
   );
 }
 
-export function App() {
+function ViewToggle({ view, onToggle }: { view: "canvas" | "matrix"; onToggle: () => void }) {
   return (
-    <ReactFlowProvider>
-      <QABlockCanvasApp />
-    </ReactFlowProvider>
+    <button
+      className="view-toggle-button"
+      onClick={onToggle}
+      title={view === "canvas" ? "Switch to Matrix view" : "Switch to Canvas view"}
+    >
+      {view === "canvas" ? "Matrix" : "Canvas"}
+    </button>
+  );
+}
+
+export function App() {
+  const [view, setView] = useState<"canvas" | "matrix">("canvas");
+
+  return (
+    <>
+      <ViewToggle view={view} onToggle={() => setView((v) => (v === "canvas" ? "matrix" : "canvas"))} />
+      {view === "canvas" ? (
+        <ReactFlowProvider>
+          <QABlockCanvasApp />
+        </ReactFlowProvider>
+      ) : (
+        <MatrixCanvas />
+      )}
+    </>
   );
 }
