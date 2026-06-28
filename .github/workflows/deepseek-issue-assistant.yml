@@ -1,5 +1,6 @@
 # Planning / idea review on issues via DeepSeek API.
 # Secret: DEEPSEEK_V4 (API key). Variable: DEEPSEEK_V4 (model name).
+# DEEPSEEK_REASONING_EFFORT default high (thinking enabled; set off to disable).
 
 name: DeepSeek Issue Assistant
 
