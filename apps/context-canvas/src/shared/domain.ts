@@ -387,6 +387,9 @@ export function findNamedRangeForSelection(
   document: MatrixDocument,
   selection: RangeRefDTO,
 ): NamedRange | undefined {
+  if (!document.namedRanges) {
+    return undefined;
+  }
   for (const namedRange of document.namedRanges.values()) {
     if (rangesEqual(namedRange.range, selection)) {
       return namedRange;

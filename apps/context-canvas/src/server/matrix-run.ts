@@ -29,7 +29,9 @@ export function extractJsonObject(text: string): unknown {
 }
 
 function formatCompiledPrompt(compiled: CompiledRangeContext, prompt: string): string {
-  const userMessage = compiled.messages.find((message) => message.role === "user")?.content;
+  const userMessage = Array.isArray(compiled.messages)
+    ? compiled.messages.find((message) => message.role === "user")?.content
+    : undefined;
   return [userMessage ?? `User intent: ${prompt}`, "", "Respond with the AiCommand JSON object only."].join("\n");
 }
 
