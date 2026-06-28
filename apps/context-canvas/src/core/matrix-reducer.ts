@@ -1,4 +1,11 @@
-import type { MatrixDocument, Cell, WritePatch, RangeRefDTO } from "../shared/domain.ts";
+import type {
+  AiCommand,
+  MatrixDocument,
+  Cell,
+  NamedRange,
+  WritePatch,
+  RangeRefDTO,
+} from "../shared/domain.ts";
 import { cellKey } from "../shared/domain.ts";
 
 // ── Context Matrix commands ───────────────────────────────────────────────
@@ -7,6 +14,9 @@ export type MatrixCommand =
   | { type: "apply_patches"; patches: WritePatch[] }
   | { type: "update_cell_body"; row: number; col: number; body: string }
   | { type: "mock_ai_command"; targetRange: RangeRefDTO; patches: WritePatch[] }
+  | { type: "apply_ai_command"; command: AiCommand }
+  | { type: "set_named_range"; namedRange: NamedRange }
+  | { type: "remove_named_range"; name: string }
   | { type: "clear_cell"; row: number; col: number };
 
 export interface MatrixApplyResult {
@@ -61,6 +71,39 @@ export function applyMatrixCommand(
       return {
         ...result,
         meta: { ...result.meta, targetRange },
+      };
+    }
+
+    case "apply_ai_command": {
+      const result = applyPatches(document, command.command.patches);
+      return {
+        ...result,
+        meta: {
+          ...result.meta,
+          targetRange: command.command.targetRange,
+          message: command.command.intent,
+        },
+      };
+    }
+
+    case "set_named_range": {
+      const nextNamedRanges = new Map(document.namedRanges);
+      nextNamedRanges.set(command.namedRange.name, command.namedRange);
+      return {
+        document: { ...document, namedRanges: nextNamedRanges },
+        meta: {
+          updatedCells: 0,
+          message: `Named range "${command.namedRange.name}" saved`,
+        },
+      };
+    }
+
+    case "remove_named_range": {
+      const nextNamedRanges = new Map(document.namedRanges);
+      nextNamedRanges.delete(command.name);
+      return {
+        document: { ...document, namedRanges: nextNamedRanges },
+        meta: { updatedCells: 0, message: `Named range "${command.name}" removed` },
       };
     }
 

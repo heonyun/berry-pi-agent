@@ -209,6 +209,58 @@ describe("applyMatrixCommand", () => {
     });
   });
 
+  describe("Phase 1: named ranges and apply_ai_command", () => {
+    it("set_named_range upserts a named range on the document", () => {
+      const doc = createEmptyMatrixDocument();
+      const range = { startRow: 0, startCol: 0, endRow: 4, endCol: 4 };
+
+      const result = applyMatrixCommand(doc, {
+        type: "set_named_range",
+        namedRange: { name: "outputs", range },
+      });
+
+      expect(result.document.namedRanges.get("outputs")).toEqual({ name: "outputs", range });
+      expect(result.meta.message).toContain("outputs");
+    });
+
+    it("remove_named_range deletes a named range", () => {
+      let doc = createEmptyMatrixDocument();
+      doc = applyMatrixCommand(doc, {
+        type: "set_named_range",
+        namedRange: {
+          name: "inputs",
+          range: { startRow: 0, startCol: 0, endRow: 2, endCol: 0 },
+        },
+      }).document;
+
+      const result = applyMatrixCommand(doc, { type: "remove_named_range", name: "inputs" });
+
+      expect(result.document.namedRanges.has("inputs")).toBe(false);
+    });
+
+    it("apply_ai_command applies validated patches with intent meta", () => {
+      const doc = createEmptyMatrixDocument();
+      const targetRange = { startRow: 1, startCol: 4, endRow: 2, endCol: 4 };
+
+      const result = applyMatrixCommand(doc, {
+        type: "apply_ai_command",
+        command: {
+          intent: "Fill status cells",
+          targetRange,
+          patches: [
+            { row: 1, col: 4, value: "done", body: "Done", provenance: "matrix-run" },
+            { row: 2, col: 4, value: "done", body: "Done", provenance: "matrix-run" },
+          ],
+        },
+      });
+
+      expect(result.meta.updatedCells).toBe(2);
+      expect(result.meta.targetRange).toEqual(targetRange);
+      expect(result.meta.message).toBe("Fill status cells");
+      expect(result.document.sheet.cells.get(cellKey(1, 4))?.provenance).toBe("matrix-run");
+    });
+  });
+
   describe("cell summary and metadata badge contract", () => {
     it("cell has body + frontmatter + provenance but grid only shows summary and badge", () => {
       const doc = createEmptyMatrixDocument();
