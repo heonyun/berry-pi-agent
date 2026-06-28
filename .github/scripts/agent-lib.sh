@@ -149,7 +149,9 @@ Review requirements:
   manager commands.
 
 If there are no actionable findings, say so explicitly in Findings and include
-remaining test gaps or residual risks.
+remaining test gaps or residual risks under Suggested next steps only.
+When Conclusion is "pass", Findings must be empty (write "None.") — do not list
+P2/P3 or missing-test items as numbered findings.
 EOF
 }
 
@@ -252,6 +254,10 @@ agent_post_process_review_comment() {
 
   if [[ "${finding_count}" -eq 0 ]] && [[ "${conclusion}" =~ ^(fail|hold)$ ]]; then
     notes+=("Conclusion is \`${conclusion}\` but Findings has no numbered actionable items; treat as non-blocking unless Codex verifies.")
+  fi
+
+  if [[ "${finding_count}" -gt 0 ]] && [[ "${conclusion}" == "pass" ]]; then
+    notes+=("Conclusion is \`pass\` but Findings has ${finding_count} numbered item(s); triage each — non-blockers belong under Suggested next steps per output schema.")
   fi
 
   if [[ "${finding_count}" -gt 0 ]] && ! agent_findings_have_evidence "${body}"; then
