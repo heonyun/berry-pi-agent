@@ -15,6 +15,7 @@ Candidate-only record. Do not promote to `AGENTS.md` until repeated evidence or 
 | --- | --- | --- | --- | --- | --- |
 | harness-pilot-repo-scout-forbidden | 2026-06-24 | eval_added | `Invoke-HarnessPilotRun` blocked `repo-scout` | Default `ForbiddenModes` = `implementation-worker` only | 2026-06-24-pilot-standard-scout helped |
 | harness-flow-global-candidate | 2026-06-24 | candidate_only | Pilot batch 3/3 helped | Promote `harness_flow` breadcrumbs after one real PR round | harness-pilot-recorded-2026-06-24.md |
+| matrix-comment-conventions-gate | 2026-06-28 | promoted | Matrix implement missed tagged comments on fragile hunks | Worker checklist §2a: read `COMMENT_CONVENTIONS.md`; tag non-obvious hunks only | worker-implementation-checklist.md §2a |
 
 ## Status values
 

@@ -80,6 +80,7 @@ export function applyMatrixCommand(
     }
 
     case "apply_ai_command": {
+      // RELATED: matrix-reducer.test.ts "apply_ai_command strips patches outside targetRange with warning meta"
       const { patches, strippedCount } = filterPatchesToTargetRange(
         command.command.patches,
         command.command.targetRange,
@@ -229,6 +230,7 @@ function applyPatches(
   };
 }
 
+/** INVARIANT: Out-of-bounds patches and direct cell commands are silently skipped (no throw). */
 function isCellInBounds(document: MatrixDocument, row: number, col: number): boolean {
   return row >= 0 && col >= 0 && row < document.sheet.rows && col < document.sheet.cols;
 }

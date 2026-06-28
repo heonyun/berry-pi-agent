@@ -34,10 +34,6 @@ import {
 } from "./matrix-history.ts";
 import { scheduleMatrixBundleExport } from "./export-matrix-bundle.ts";
 
-// ── Context Matrix Canvas ────────────────────────────────────────────────
-// Phase 4b: run history in left nav + read-only detail + re-run pre-fill.
-// ─────────────────────────────────────────────────────────────────────────
-
 function selectionToRangeRef(selection: {
   startCol: number;
   startRow: number;

@@ -272,10 +272,8 @@ export function appendQABlockAnswerVersion(
   };
 }
 
-// ── Context Matrix domain types ──────────────────────────────────────────
-// Issues: #49 — Matrix MVP skeleton
-// Grid library is renderer adapter only; domain state is the source of truth.
-// ──────────────────────────────────────────────────────────────────────────
+// ── Context Matrix domain types (#49) ─────────────────────────────────────
+/** INVARIANT: MatrixDocument is source of truth; grid renderer is a view adapter only. */
 
 export const MATRIX_DEFAULT_COLS = 50;
 export const MATRIX_DEFAULT_ROWS = 20;
