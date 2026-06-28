@@ -6,6 +6,7 @@ import {
   formatRangeLabel,
   rangesEqual,
   type MatrixDocument,
+  type MatrixHistoryEntry,
   type RangeRefDTO,
   type RecentRangeEntry,
 } from "../shared/domain.ts";
@@ -20,11 +21,20 @@ import { MatrixShell } from "./MatrixShell.tsx";
 import { MatrixGrid } from "./MatrixGrid.tsx";
 import { MatrixComposer, type ContextChip } from "./MatrixComposer.tsx";
 import { MatrixDetailPane, type DetailTab, type DetailCellState } from "./MatrixDetailPane.tsx";
-import { MatrixRecentNav } from "./MatrixRecentNav.tsx";
+import { MatrixLeftNav } from "./MatrixLeftNav.tsx";
+import { MatrixHistoryDetailPane } from "./MatrixHistoryDetailPane.tsx";
 import { loadRecentRanges, recordRecentRange, saveRecentRanges } from "./matrix-recent-ranges.ts";
+import {
+  appendMatrixHistory,
+  createHistoryEntry,
+  loadMatrixHistory,
+  saveMatrixHistory,
+  summarizePatches,
+  truncatePreview,
+} from "./matrix-history.ts";
 
 // ── Context Matrix Canvas ────────────────────────────────────────────────
-// Phase 3: templates, status chips, Recent Ranges nav, component split.
+// Phase 4b: run history in left nav + read-only detail + re-run pre-fill.
 // ─────────────────────────────────────────────────────────────────────────
 
 function selectionToRangeRef(selection: {
@@ -77,10 +87,16 @@ export function MatrixCanvas(): ReactElement {
   const [status, setStatus] = useState("Ready");
 
   const [recentRanges, setRecentRanges] = useState<RecentRangeEntry[]>(() => loadRecentRanges());
+  const [historyEntries, setHistoryEntries] = useState<MatrixHistoryEntry[]>(() => loadMatrixHistory());
+  const [selectedHistory, setSelectedHistory] = useState<MatrixHistoryEntry | null>(null);
 
   useEffect(() => {
     saveRecentRanges(recentRanges);
   }, [recentRanges]);
+
+  useEffect(() => {
+    saveMatrixHistory(historyEntries);
+  }, [historyEntries]);
 
   const dispatch = useCallback((command: MatrixCommand) => {
     const result = applyMatrixCommand(docRef.current, command);
@@ -229,6 +245,19 @@ export function MatrixCanvas(): ReactElement {
       if (targetLabel) {
         touchRecentRange(`run:${targetLabel.replace(/^@/, "")}`, targetLabel);
       }
+
+      const historyEntry = createHistoryEntry({
+        intent: prompt.trim(),
+        contextRanges: contextChips.map((chip) => ({ label: chip.label, range: chip.range })),
+        targetRange,
+        targetRangeLabel: targetLabel ?? compiled.targetRangeLabel,
+        patchesApplied: result.meta.updatedCells,
+        compiledContextPreview: truncatePreview(compiled.contextText),
+        patchesSummary: summarizePatches(parsed.command),
+      });
+      setHistoryEntries((entries) => appendMatrixHistory(entries, historyEntry));
+      setSelectedHistory(historyEntry);
+
       let message = `Run applied: ${result.meta.updatedCells} cells updated`;
       if (result.meta.strippedPatches) {
         message += ` — ${result.meta.strippedPatches} patch(es) outside target range skipped`;
@@ -254,6 +283,7 @@ export function MatrixCanvas(): ReactElement {
   );
 
   const handleCellClick = useCallback((row: number, col: number) => {
+    setSelectedHistory(null);
     const key = cellKey(row, col);
     const domainCell = docRef.current.sheet.cells.get(key);
     setDetailCell({
@@ -263,6 +293,30 @@ export function MatrixCanvas(): ReactElement {
     });
     setDetailFrontmatter(domainCell?.frontmatter ?? "");
     setDetailTab("markdown");
+  }, []);
+
+  const handleHistorySelect = useCallback((entry: MatrixHistoryEntry) => {
+    setSelectedHistory(entry);
+    setDetailCell(null);
+    setDetailFrontmatter("");
+  }, []);
+
+  const handleHistoryClose = useCallback(() => {
+    setSelectedHistory(null);
+  }, []);
+
+  const handleHistoryRerun = useCallback((entry: MatrixHistoryEntry) => {
+    setPrompt(entry.intent);
+    setContextChips(
+      entry.contextRanges.map((range) => ({
+        id: nextChipId(),
+        label: range.label,
+        range: range.range,
+      })),
+    );
+    setTargetRange(entry.targetRange);
+    setSelectedHistory(null);
+    setStatus("Composer pre-filled from history — review and Run");
   }, []);
 
   const handleRecentSelect = useCallback(
@@ -286,7 +340,15 @@ export function MatrixCanvas(): ReactElement {
 
   return (
     <MatrixShell
-      leftNav={<MatrixRecentNav entries={recentRanges} onSelect={handleRecentSelect} />}
+      leftNav={
+        <MatrixLeftNav
+          recentEntries={recentRanges}
+          historyEntries={historyEntries}
+          selectedHistoryId={selectedHistory?.id ?? null}
+          onRecentSelect={handleRecentSelect}
+          onHistorySelect={handleHistorySelect}
+        />
+      }
       center={
         <div className="matrix-main">
           <MatrixGrid
@@ -327,23 +389,31 @@ export function MatrixCanvas(): ReactElement {
         </div>
       }
       detailPane={
-        <MatrixDetailPane
-          detailCell={detailCell}
-          detailFrontmatter={detailFrontmatter}
-          detailTab={detailTab}
-          domainCell={detailDomainCell}
-          onTabChange={setDetailTab}
-          onBodyChange={(body) => detailCell && setDetailCell({ ...detailCell, body })}
-          onFrontmatterChange={setDetailFrontmatter}
-          onSave={() =>
-            detailCell &&
-            handleDetailSave(detailCell.row, detailCell.col, detailCell.body, detailFrontmatter)
-          }
-          onClear={() => {
-            setDetailCell(null);
-            setDetailFrontmatter("");
-          }}
-        />
+        selectedHistory ? (
+          <MatrixHistoryDetailPane
+            entry={selectedHistory}
+            onClose={handleHistoryClose}
+            onRerun={handleHistoryRerun}
+          />
+        ) : (
+          <MatrixDetailPane
+            detailCell={detailCell}
+            detailFrontmatter={detailFrontmatter}
+            detailTab={detailTab}
+            domainCell={detailDomainCell}
+            onTabChange={setDetailTab}
+            onBodyChange={(body) => detailCell && setDetailCell({ ...detailCell, body })}
+            onFrontmatterChange={setDetailFrontmatter}
+            onSave={() =>
+              detailCell &&
+              handleDetailSave(detailCell.row, detailCell.col, detailCell.body, detailFrontmatter)
+            }
+            onClear={() => {
+              setDetailCell(null);
+              setDetailFrontmatter("");
+            }}
+          />
+        )
       }
     />
   );

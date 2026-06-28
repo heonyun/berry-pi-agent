@@ -3,6 +3,8 @@ import path from "node:path";
 export const CELLS_DIR = "cells";
 export const SHEET_DIR = "sheet";
 export const TEMPLATES_DIR = "templates";
+export const HISTORY_DIR = "history";
+export const HISTORY_RUNS_FILE = "runs.json";
 export const MATRIX_SIDECAR = "matrix.sidecar.json";
 export const ROOT_INDEX = "index.md";
 
@@ -80,4 +82,8 @@ export function rootIndexPath(bundleRoot: string): string {
 
 export function cellsDir(bundleRoot: string): string {
   return path.join(bundleRoot, CELLS_DIR);
+}
+
+export function historyRunsPath(bundleRoot: string): string {
+  return resolveWithinBundle(bundleRoot, HISTORY_DIR, HISTORY_RUNS_FILE);
 }

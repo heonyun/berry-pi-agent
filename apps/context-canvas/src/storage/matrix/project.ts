@@ -7,10 +7,12 @@ import { regenerateMatrixIndexes } from "./index.ts";
 import {
   CELLS_DIR,
   cellCoordToPath,
+  HISTORY_DIR,
   normalizeBundleRelativePath,
   templatePath,
   TEMPLATES_DIR,
 } from "./paths.ts";
+import { writeMatrixHistory } from "./history.ts";
 import { buildMatrixManifest, writeMatrixManifest } from "./sidecar.ts";
 import { MATRIX_SIDECAR } from "./sidecar.ts";
 import type { MatrixCellProjectionFrontmatter, ProjectOptions, ProjectResult, ProjectionError } from "./types.ts";
@@ -70,6 +72,7 @@ export function projectMatrixToBundle(
     workspaceId = DEFAULT_MATRIX_WORKSPACE_ID,
     workspaceTitle = document.sheet.name,
     writeMatrixSidecar = true,
+    historyEntries = [],
   } = options;
 
   assertSafeId(workspaceId, "workspaceId");
@@ -178,6 +181,19 @@ export function projectMatrixToBundle(
       code: "write_failed",
       message,
     });
+  }
+
+  if (historyEntries.length > 0) {
+    try {
+      pathsWritten.push(writeMatrixHistory(bundleRoot, historyEntries));
+    } catch (writeError: unknown) {
+      const message = writeError instanceof Error ? writeError.message : String(writeError);
+      return failProjection(bundleRoot, pathsWritten, errors, {
+        code: "write_failed",
+        message,
+        path: `${HISTORY_DIR}/runs.json`,
+      });
+    }
   }
 
   return { pathsWritten, errors };

@@ -8,7 +8,7 @@ import { getModel, type KnownProvider } from "@earendil-works/pi-ai";
 import { createAgentSession, SessionManager, type AgentSession } from "@earendil-works/pi-coding-agent";
 import { compilePromptContext, formatPromptForPi, type CompiledPromptContext } from "../shared/compiler.ts";
 import { compileQABlockContext } from "../shared/compile-qablock-context.ts";
-import type { ContextCanvasDocument, MatrixDocument, QABlockCanvasDocument } from "../shared/domain.ts";
+import type { ContextCanvasDocument, MatrixDocument, MatrixHistoryEntry, QABlockCanvasDocument } from "../shared/domain.ts";
 import { DEFAULT_CANVAS_ID, createInitialDocument } from "../shared/domain.ts";
 import { loadBundleToDocument } from "../storage/markdown/load.ts";
 import { projectDocumentToBundle } from "../storage/markdown/project.ts";
@@ -373,7 +373,12 @@ export function createContextCanvasServer(config: ContextCanvasServerConfig = se
 
     if (req.method === "POST" && req.url === "/api/matrix-bundle/export") {
       try {
-        const body = await readJsonBody<{ document: MatrixDocument; workspaceId?: string; workspaceTitle?: string }>(req);
+        const body = await readJsonBody<{
+          document: MatrixDocument;
+          workspaceId?: string;
+          workspaceTitle?: string;
+          history?: MatrixHistoryEntry[];
+        }>(req);
         const result = handleMatrixBundleExport(body, config, monorepoRoot);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(result));

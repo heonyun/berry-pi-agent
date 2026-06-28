@@ -5,6 +5,7 @@ import { cellKey } from "../../shared/domain.ts";
 import { parse } from "../markdown/document.ts";
 import { assertSafeId } from "../markdown/paths.ts";
 import { cellsDir, pathToCellCoord } from "./paths.ts";
+import { readMatrixHistory } from "./history.ts";
 import { readMatrixManifest } from "./sidecar.ts";
 import { MATRIX_SIDECAR } from "./sidecar.ts";
 import type { LoadResult } from "./types.ts";
@@ -73,7 +74,9 @@ export function loadMatrixBundle(bundleRoot: string): LoadResult {
     return { warnings, errors };
   }
 
-  return { document, warnings, errors };
+  const history = readMatrixHistory(bundleRoot);
+
+  return { document, history, warnings, errors };
 }
 
 function listCellFiles(bundleRoot: string): string[] {
