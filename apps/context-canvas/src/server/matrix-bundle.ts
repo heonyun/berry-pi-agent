@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { MatrixDocument } from "../shared/domain.ts";
+import type { MatrixDocument, MatrixHistoryEntry } from "../shared/domain.ts";
 import { assertSafeId, resolveWithinBundle } from "../storage/markdown/paths.ts";
 import { loadMatrixBundle } from "../storage/matrix/load.ts";
 import {
@@ -17,7 +17,12 @@ function resolveMatrixBundleRootBase(config: ContextCanvasServerConfig, monorepo
 }
 
 export function handleMatrixBundleExport(
-  body: { document: MatrixDocument; workspaceId?: string; workspaceTitle?: string },
+  body: {
+    document: MatrixDocument;
+    workspaceId?: string;
+    workspaceTitle?: string;
+    history?: MatrixHistoryEntry[];
+  },
   config: ContextCanvasServerConfig,
   monorepoRoot: string,
 ): {
@@ -32,6 +37,7 @@ export function handleMatrixBundleExport(
   const result = projectMatrixToBundle(body.document, bundleRoot, {
     workspaceId,
     workspaceTitle: body.workspaceTitle ?? body.document.sheet.name,
+    historyEntries: body.history,
   });
   return {
     workspaceId,
@@ -49,6 +55,7 @@ export function handleMatrixBundleLoad(
   workspaceId = DEFAULT_MATRIX_WORKSPACE_ID,
 ): {
   document?: MatrixDocument;
+  history?: MatrixHistoryEntry[];
   warnings: string[];
   errors: string[];
   statusCode: 200 | 404 | 422 | 500;
@@ -60,7 +67,13 @@ export function handleMatrixBundleLoad(
   try {
     const result = loadMatrixBundle(bundleRoot);
     if (result.document) {
-      return { ...result, statusCode: 200 };
+      return {
+        document: result.document,
+        history: result.history,
+        warnings: result.warnings,
+        errors: result.errors,
+        statusCode: 200,
+      };
     }
     return { ...result, statusCode: bundleExists ? 422 : 404 };
   } catch (error: unknown) {

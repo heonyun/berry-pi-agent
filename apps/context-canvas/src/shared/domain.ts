@@ -382,6 +382,26 @@ export interface RecentRangeEntry {
   readonly lastUsedAt: string;
 }
 
+/** Context range snapshot stored with a history entry for re-run pre-fill. */
+export interface MatrixHistoryContextRange {
+  readonly label: string;
+  readonly range: RangeRefDTO;
+}
+
+/** Append-only record of a successful matrix AI run (Phase 4b). */
+export interface MatrixHistoryEntry {
+  readonly id: string;
+  readonly timestamp: string;
+  readonly intent: string;
+  readonly contextRangeNames: string[];
+  readonly contextRanges: readonly MatrixHistoryContextRange[];
+  readonly targetRangeLabel: string;
+  readonly targetRange: RangeRefDTO;
+  readonly patchesApplied: number;
+  readonly compiledContextPreview?: string;
+  readonly patchesSummary?: string;
+}
+
 /** Top-level matrix document: the single source of truth. */
 export interface MatrixDocument {
   readonly kind: "matrix";

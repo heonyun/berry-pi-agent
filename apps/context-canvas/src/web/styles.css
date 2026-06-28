@@ -712,6 +712,23 @@ button.active {
   overflow-y: auto;
 }
 
+.matrix-left-nav-stack {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  padding: 12px 10px;
+  overflow-y: auto;
+  gap: 0;
+}
+
+.matrix-left-nav-section + .matrix-left-nav-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
 .matrix-left-nav-title {
   font-size: 13px;
   font-weight: 700;
@@ -764,6 +781,128 @@ button.active {
 .matrix-recent-label {
   font-size: 11px;
   opacity: 0.85;
+}
+
+.matrix-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.matrix-history-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.matrix-history-item:hover,
+.matrix-history-item.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.matrix-history-intent {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.matrix-history-meta {
+  font-size: 10px;
+  opacity: 0.9;
+  margin-top: 2px;
+}
+
+.matrix-history-ranges {
+  font-size: 10px;
+  opacity: 0.8;
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+.matrix-history-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.matrix-history-detail-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.matrix-history-detail-close {
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.matrix-history-detail-fields {
+  margin: 0 0 16px;
+  font-size: 12px;
+}
+
+.matrix-history-detail-fields > div {
+  margin-bottom: 10px;
+}
+
+.matrix-history-detail-fields dt {
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.matrix-history-detail-fields dd {
+  margin: 0;
+  line-height: 1.4;
+}
+
+.matrix-history-preview {
+  margin: 0;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.matrix-history-detail-actions {
+  margin-top: auto;
+}
+
+.matrix-history-rerun {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .matrix-center {

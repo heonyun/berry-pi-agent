@@ -1,4 +1,4 @@
-import type { CellValue, MatrixDocument, NamedRange } from "../../shared/domain.ts";
+import type { CellValue, MatrixDocument, MatrixHistoryEntry, NamedRange } from "../../shared/domain.ts";
 
 /** On-disk bundle layout manifest (Phase 4a data contract). */
 export interface MatrixBundleManifest {
@@ -38,12 +38,21 @@ export interface ProjectResult {
 
 export interface LoadResult {
   document?: MatrixDocument;
+  history?: MatrixHistoryEntry[];
   warnings: string[];
   errors: string[];
+}
+
+/** On-disk history file (`history/runs.json`). */
+export interface MatrixHistoryRunsFile {
+  readonly kind: "matrix-history";
+  readonly schemaVersion: 1;
+  readonly entries: MatrixHistoryEntry[];
 }
 
 export interface ProjectOptions {
   workspaceId?: string;
   workspaceTitle?: string;
   writeMatrixSidecar?: boolean;
+  historyEntries?: readonly MatrixHistoryEntry[];
 }

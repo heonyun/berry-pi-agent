@@ -8,7 +8,7 @@ export interface MatrixRecentNavProps {
 
 export function MatrixRecentNav({ entries, onSelect }: MatrixRecentNavProps): ReactElement {
   return (
-    <nav className="matrix-left-nav" data-testid="matrix-recent-nav" aria-label="Recent ranges">
+    <section className="matrix-left-nav-section" data-testid="matrix-recent-nav" aria-label="Recent ranges">
       <h2 className="matrix-left-nav-title">Recent Ranges</h2>
       {entries.length === 0 ? (
         <p className="matrix-left-nav-empty">No recent ranges yet. Name a range or run AI.</p>
@@ -29,6 +29,6 @@ export function MatrixRecentNav({ entries, onSelect }: MatrixRecentNavProps): Re
           ))}
         </ul>
       )}
-    </nav>
+    </section>
   );
 }
