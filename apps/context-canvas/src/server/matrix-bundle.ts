@@ -16,7 +16,10 @@ function resolveMatrixBundleRootBase(config: ContextCanvasServerConfig, monorepo
   return path.join(monorepoRoot, ".context-matrix-bundles");
 }
 
-function mapFromWire<K extends string, V>(value: ReadonlyMap<K, V> | Record<string, V>): Map<K, V> {
+function mapFromWire<K extends string, V>(value: ReadonlyMap<K, V> | Record<string, V> | null | undefined): Map<K, V> {
+  if (value == null) {
+    return new Map();
+  }
   if (value instanceof Map) {
     return new Map(value);
   }
@@ -24,6 +27,9 @@ function mapFromWire<K extends string, V>(value: ReadonlyMap<K, V> | Record<stri
 }
 
 function normalizeMatrixDocumentWire(document: MatrixDocument): MatrixDocument {
+  if (!document?.sheet) {
+    throw new Error("Matrix bundle export requires a document with a sheet");
+  }
   const { cells, ...sheetRest } = document.sheet;
   return {
     ...document,

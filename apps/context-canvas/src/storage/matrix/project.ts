@@ -183,7 +183,7 @@ export function projectMatrixToBundle(
     });
   }
 
-  if (historyEntries !== undefined) {
+  if (Array.isArray(historyEntries)) {
     try {
       pathsWritten.push(writeMatrixHistory(bundleRoot, historyEntries));
     } catch (writeError: unknown) {

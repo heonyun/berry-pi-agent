@@ -254,18 +254,20 @@ export function MatrixCanvas(): ReactElement {
       const historyEntry = createHistoryEntry({
         intent: prompt.trim(),
         contextRanges: contextChips.map((chip) => ({ label: chip.label, range: chip.range })),
-        targetRange,
+        targetRange: parsed.command.targetRange,
         targetRangeLabel: targetLabel ?? compiled.targetRangeLabel,
         patchesApplied: result.meta.updatedCells,
         compiledContextPreview: truncatePreview(compiled.contextText),
         patchesSummary: summarizePatches({ ...parsed.command, patches: appliedPatches }),
       });
-      const updatedHistory = appendMatrixHistory(historyEntries, historyEntry);
-      setHistoryEntries(updatedHistory);
+      setHistoryEntries((entries) => {
+        const updatedHistory = appendMatrixHistory(entries, historyEntry);
+        scheduleMatrixBundleExport(docRef.current, updatedHistory);
+        return updatedHistory;
+      });
       setDetailCell(null);
       setDetailFrontmatter("");
       setSelectedHistory(historyEntry);
-      scheduleMatrixBundleExport(docRef.current, updatedHistory);
 
       let message = `Run applied: ${result.meta.updatedCells} cells updated`;
       if (result.meta.strippedPatches) {
@@ -278,7 +280,7 @@ export function MatrixCanvas(): ReactElement {
     } finally {
       setIsRunning(false);
     }
-  }, [contextChips, dispatch, historyEntries, prompt, targetLabel, targetRange, touchRecentRange]);
+  }, [contextChips, dispatch, prompt, targetLabel, targetRange, touchRecentRange]);
 
   const handleDetailSave = useCallback(
     (row: number, col: number, body: string, frontmatter: string) => {

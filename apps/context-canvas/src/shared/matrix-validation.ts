@@ -82,7 +82,9 @@ export function isMatrixHistoryEntry(value: unknown): value is MatrixHistoryEntr
     entry.contextRanges.every(isMatrixHistoryContextRange) &&
     typeof entry.targetRangeLabel === "string" &&
     isRangeRefDTO(entry.targetRange) &&
-    typeof entry.patchesApplied === "number"
+    typeof entry.patchesApplied === "number" &&
+    (entry.compiledContextPreview === undefined || typeof entry.compiledContextPreview === "string") &&
+    (entry.patchesSummary === undefined || typeof entry.patchesSummary === "string")
   );
 }
 
