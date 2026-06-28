@@ -16,6 +16,11 @@ Run after a Qwen implementation worker ticket completes. Orchestrator verifies; 
 - [ ] Preserve existing invariants (`INVARIANT` / `RELATED` comments when editing context-canvas)
 - [ ] Do not add WHAT comments; use tags per `COMMENT_CONVENTIONS.md` only when needed
 
+### 2a. Context Matrix / context-canvas (when scope touches `apps/context-canvas/`)
+
+- [ ] Worker read `apps/context-canvas/COMMENT_CONVENTIONS.md` before editing
+- [ ] Non-obvious hunks have tagged comments (`INVARIANT`, `CONTRACT`, `RISK`, `RELATED`, etc.) — max ~2 tags per file; no mass retrofit
+
 ## 3. Tests (once)
 
 - [ ] Run targeted test file once: `npm test --workspace @berry/context-canvas -- App.test.tsx` (or ticket-specified path)
