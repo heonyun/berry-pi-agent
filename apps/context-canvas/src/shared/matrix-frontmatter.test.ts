@@ -18,6 +18,11 @@ describe("parseCellFrontmatter", () => {
     expect(parseCellFrontmatter("")).toEqual({});
     expect(parseCellFrontmatter("  \n  ")).toEqual({});
   });
+
+  it("returns empty object for null or undefined frontmatter", () => {
+    expect(parseCellFrontmatter(null)).toEqual({});
+    expect(parseCellFrontmatter(undefined)).toEqual({});
+  });
 });
 
 describe("formatStatusChip", () => {

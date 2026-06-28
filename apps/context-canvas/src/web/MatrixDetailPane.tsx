@@ -12,6 +12,7 @@ export interface DetailCellState {
 
 export interface MatrixDetailPaneProps {
   readonly detailCell: DetailCellState | null;
+  readonly detailFrontmatter: string;
   readonly detailTab: DetailTab;
   readonly domainCell: Cell | null;
   readonly onTabChange: (tab: DetailTab) => void;
@@ -31,6 +32,7 @@ function summarizeBody(body: string, maxLength = 280): string {
 
 export function MatrixDetailPane({
   detailCell,
+  detailFrontmatter,
   detailTab,
   domainCell,
   onTabChange,
@@ -80,7 +82,7 @@ export function MatrixDetailPane({
                 <textarea
                   className="matrix-detail-textarea matrix-detail-frontmatter"
                   rows={4}
-                  value={domainCell?.frontmatter ?? ""}
+                  value={detailFrontmatter}
                   onChange={(event) => onFrontmatterChange(event.target.value)}
                   placeholder="status: draft"
                   data-testid="side-panel-frontmatter"

@@ -329,6 +329,7 @@ export function MatrixCanvas(): ReactElement {
       detailPane={
         <MatrixDetailPane
           detailCell={detailCell}
+          detailFrontmatter={detailFrontmatter}
           detailTab={detailTab}
           domainCell={detailDomainCell}
           onTabChange={setDetailTab}

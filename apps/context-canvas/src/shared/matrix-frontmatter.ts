@@ -1,7 +1,12 @@
 import type { CellFrontmatterParsed } from "./domain.ts";
 
 /** Parse simple YAML frontmatter for status chip display (no full YAML engine). */
-export function parseCellFrontmatter(frontmatter: string): CellFrontmatterParsed {
+export function parseCellFrontmatter(
+  frontmatter: string | null | undefined,
+): CellFrontmatterParsed {
+  if (!frontmatter?.trim()) {
+    return {};
+  }
   const result: Record<string, unknown> = {};
   for (const line of frontmatter.split("\n")) {
     const trimmed = line.trim();
