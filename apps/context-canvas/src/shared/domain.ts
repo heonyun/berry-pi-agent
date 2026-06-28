@@ -345,24 +345,77 @@ export interface NamedRange {
   readonly role?: "context" | "target" | "neutral";
 }
 
+/** Semantic column role for sheet templates (Phase 3). */
+export type ColumnRole =
+  | "label"
+  | "question"
+  | "answer"
+  | "context"
+  | "status"
+  | "note"
+  | "custom";
+
+/** One column definition within a SheetTemplate. */
+export interface SheetTemplateColumn {
+  readonly col: number;
+  readonly role: ColumnRole;
+  readonly header: string;
+}
+
+/** Column layout template attached to a matrix sheet. */
+export interface SheetTemplate {
+  readonly id: string;
+  readonly name: string;
+  readonly columns: SheetTemplateColumn[];
+}
+
+/** Parsed from cell.frontmatter YAML (subset used by grid chips). */
+export interface CellFrontmatterParsed {
+  readonly status?: string;
+  readonly [key: string]: unknown;
+}
+
+/** UI-only recent range entry (session/localStorage until Phase 4a). */
+export interface RecentRangeEntry {
+  readonly name: string;
+  readonly rangeLabel: string;
+  readonly lastUsedAt: string;
+}
+
 /** Top-level matrix document: the single source of truth. */
 export interface MatrixDocument {
   readonly kind: "matrix";
-  readonly schemaVersion: 3;
+  readonly schemaVersion: 4;
   readonly sheet: Sheet;
   readonly namedRanges: ReadonlyMap<string, NamedRange>;
+  readonly templateId?: string;
+  readonly template?: SheetTemplate;
 }
+
+export const RESEARCH_SHEET_TEMPLATE: SheetTemplate = {
+  id: "research-default",
+  name: "Research",
+  columns: [
+    { col: 0, role: "label", header: "ID" },
+    { col: 1, role: "question", header: "Question" },
+    { col: 2, role: "answer", header: "Key Answer" },
+    { col: 3, role: "context", header: "Evidence" },
+    { col: 4, role: "status", header: "Status" },
+    { col: 5, role: "note", header: "Notes" },
+  ],
+};
 
 /** Helper: encode row,col into a map key. */
 export function cellKey(row: number, col: number): string {
   return `${row},${col}`;
 }
 
-/** Helper: create initial empty matrix document (20x50). */
-export function createEmptyMatrixDocument(): MatrixDocument {
+/** Helper: create initial empty matrix document (20x50) with optional Research template. */
+export function createEmptyMatrixDocument(options?: { withResearchTemplate?: boolean }): MatrixDocument {
+  const withTemplate = options?.withResearchTemplate ?? true;
   return {
     kind: "matrix",
-    schemaVersion: 3,
+    schemaVersion: 4,
     sheet: {
       id: MATRIX_SHEET_ID,
       name: "Context Matrix",
@@ -371,7 +424,16 @@ export function createEmptyMatrixDocument(): MatrixDocument {
       cells: new Map(),
     },
     namedRanges: new Map(),
+    ...(withTemplate
+      ? { templateId: RESEARCH_SHEET_TEMPLATE.id, template: RESEARCH_SHEET_TEMPLATE }
+      : {}),
   };
+}
+
+/** Resolve semantic header for a column from the active template, else Excel-style label. */
+export function getColumnHeader(document: MatrixDocument, col: number): string {
+  const templateCol = document.template?.columns.find((c) => c.col === col);
+  return templateCol?.header ?? formatColumnLabel(col);
 }
 
 export function rangesEqual(a: RangeRefDTO, b: RangeRefDTO): boolean {

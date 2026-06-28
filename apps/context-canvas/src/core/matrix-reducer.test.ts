@@ -284,31 +284,56 @@ describe("applyMatrixCommand", () => {
     });
   });
 
-  describe("cell summary and metadata badge contract", () => {
-    it("cell has body + frontmatter + provenance but grid only shows summary and badge", () => {
-      const doc = createEmptyMatrixDocument();
+  describe("Phase 3: template and frontmatter commands", () => {
+    it("update_cell_frontmatter sets frontmatter on a cell", () => {
+      let doc = createEmptyMatrixDocument({ withResearchTemplate: false });
+      doc = applyMatrixCommand(doc, {
+        type: "apply_patches",
+        patches: [{ row: 0, col: 0, value: "x", body: "Body" }],
+      }).document;
 
       const result = applyMatrixCommand(doc, {
-        type: "apply_patches",
-        patches: [
-          {
-            row: 5,
-            col: 10,
-            value: "completed",
-            body: "Task completed successfully.\n\n## Details\n- Step 1 done\n- Step 2 done",
-            provenance: "ai-v2",
-          },
-        ],
+        type: "update_cell_frontmatter",
+        row: 0,
+        col: 0,
+        frontmatter: "status: draft",
       });
 
-      const cell = result.document.sheet.cells.get(cellKey(5, 10));
-      // Domain state holds full Markdown body
-      expect(cell?.body).toContain("Task completed successfully");
-      expect(cell?.body).toContain("## Details");
-      // Provenance badge data preserved
-      expect(cell?.provenance).toBe("ai-v2");
-      // Frontmatter is empty (hidden metadata)
-      expect(cell?.frontmatter).toBe("");
+      const cell = result.document.sheet.cells.get(cellKey(0, 0));
+      expect(cell?.frontmatter).toBe("status: draft");
+      expect(cell?.body).toBe("Body");
+      expect(result.meta.updatedCells).toBe(1);
+    });
+
+    it("apply_template attaches SheetTemplate and bumps schemaVersion", () => {
+      const doc = createEmptyMatrixDocument({ withResearchTemplate: false });
+      const template = {
+        id: "research-default",
+        name: "Research",
+        columns: [
+          { col: 0, role: "question" as const, header: "Question" },
+          { col: 1, role: "answer" as const, header: "Key Answer" },
+        ],
+      };
+
+      const result = applyMatrixCommand(doc, {
+        type: "apply_template",
+        template,
+        resizeCols: 6,
+      });
+
+      expect(result.document.schemaVersion).toBe(4);
+      expect(result.document.templateId).toBe("research-default");
+      expect(result.document.template?.name).toBe("Research");
+      expect(result.document.sheet.cols).toBe(50);
+      expect(result.meta.message).toContain("Research");
+    });
+
+    it("createEmptyMatrixDocument seeds Research template by default", () => {
+      const doc = createEmptyMatrixDocument();
+      expect(doc.schemaVersion).toBe(4);
+      expect(doc.template?.name).toBe("Research");
+      expect(doc.template?.columns.length).toBeGreaterThan(0);
     });
   });
 });

@@ -1,5 +1,6 @@
 import type { MatrixDocument, Cell } from "../shared/domain.ts";
 import { cellKey } from "../shared/domain.ts";
+import { formatStatusChip, parseCellFrontmatter } from "../shared/matrix-frontmatter.ts";
 import {
   GridCellKind,
   Item,
@@ -45,7 +46,9 @@ function domainCellToGridCell(domainCell: Cell | undefined): GridCell {
 
   const summary = domainCell.body.split("\n")[0] || String(domainCell.value ?? "");
   const provenanceBadge = domainCell.provenance ? `[${domainCell.provenance}] ` : "";
-  const displayText = provenanceBadge + (summary || String(domainCell.value ?? ""));
+  const parsedFm = parseCellFrontmatter(domainCell.frontmatter);
+  const statusBadge = parsedFm.status ? `${formatStatusChip(String(parsedFm.status))} ` : "";
+  const displayText = statusBadge + provenanceBadge + (summary || String(domainCell.value ?? ""));
 
   if (typeof domainCell.value === "number") {
     return {
