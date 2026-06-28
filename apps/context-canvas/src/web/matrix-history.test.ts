@@ -57,6 +57,25 @@ describe("matrix-history", () => {
     expect(entries[1]?.intent).toBe("first");
   });
 
+  it("trims history to MAX_HISTORY entries", () => {
+    let entries: ReturnType<typeof createHistoryEntry>[] = [];
+    for (let i = 0; i < 55; i++) {
+      entries = appendMatrixHistory(
+        entries,
+        createHistoryEntry({
+          intent: `run-${i}`,
+          contextRanges: [],
+          targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+          targetRangeLabel: "A1",
+          patchesApplied: 1,
+        }),
+      );
+    }
+    expect(entries).toHaveLength(50);
+    expect(entries[0]?.intent).toBe("run-54");
+    expect(entries[49]?.intent).toBe("run-5");
+  });
+
   it("formats cell count label", () => {
     expect(formatCellCount(1)).toBe("1 cell updated");
     expect(formatCellCount(3)).toBe("3 cells updated");

@@ -84,4 +84,16 @@ describe("matrix history storage", () => {
     expect(loadResult.history).toHaveLength(1);
     expect(loadResult.history?.[0]?.patchesSummary).toBe("E1, E2, E3");
   });
+
+  it("clears history/runs.json when an empty history array is exported", () => {
+    const bundleRoot = makeTempDir();
+    const document = sampleDocument();
+    const history = [sampleHistoryEntry()];
+
+    projectMatrixToBundle(document, bundleRoot, { historyEntries: history });
+    expect(readMatrixHistory(bundleRoot)).toHaveLength(1);
+
+    projectMatrixToBundle(document, bundleRoot, { historyEntries: [] });
+    expect(readMatrixHistory(bundleRoot)).toEqual([]);
+  });
 });
