@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { parseAiCommand, validateWritePatches, WritePatchSchema, AiCommandSchema, filterPatchesToTargetRange } from "./matrix-validation.ts";
+import { parseAiCommand, validateWritePatches, WritePatchSchema, AiCommandSchema, filterPatchesToTargetRange, coerceAiCommandPayload } from "./matrix-validation.ts";
 
 describe("matrix-validation", () => {
   describe("WritePatchSchema", () => {
@@ -120,6 +120,36 @@ describe("matrix-validation", () => {
     it("returns ok:false for null input", () => {
       const result = parseAiCommand(null);
       expect(result.ok).toBe(false);
+    });
+
+    it("unwraps a nested command envelope from the model", () => {
+      const result = parseAiCommand({
+        command: {
+          intent: "Fill status",
+          targetRange: { startRow: 0, startCol: 0, endRow: 1, endCol: 1 },
+          patches: [],
+        },
+      });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.command.intent).toBe("Fill status");
+      }
+    });
+  });
+
+  describe("coerceAiCommandPayload", () => {
+    const bare = {
+      intent: "x",
+      targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+      patches: [],
+    };
+
+    it("returns bare AiCommand payloads unchanged", () => {
+      expect(coerceAiCommandPayload(bare)).toEqual(bare);
+    });
+
+    it("unwraps nested command envelopes", () => {
+      expect(coerceAiCommandPayload({ command: bare })).toEqual(bare);
     });
   });
 

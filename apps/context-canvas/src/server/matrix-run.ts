@@ -1,6 +1,6 @@
 import type { ServerResponse } from "node:http";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import type { CompiledRangeContext } from "../shared/compile-matrix-range-context.ts";
+import { formatMatrixPromptForPi, type CompiledRangeContext } from "../shared/compile-matrix-range-context.ts";
 import type { AiCommand, RangeRefDTO } from "../shared/domain.ts";
 import { parseAiCommand } from "../shared/matrix-validation.ts";
 import { assistantMessageText, assistantRunErrorMessage } from "./assistant-message.ts";
@@ -28,13 +28,6 @@ export function extractJsonObject(text: string): unknown {
   throw new Error("No JSON object found in model response.");
 }
 
-function formatCompiledPrompt(compiled: CompiledRangeContext, prompt: string): string {
-  const userMessage = Array.isArray(compiled.messages)
-    ? compiled.messages.find((message) => message.role === "user")?.content
-    : undefined;
-  return [userMessage ?? `User intent: ${prompt}`, "", "Respond with the AiCommand JSON object only."].join("\n");
-}
-
 export async function handleMatrixRun(
   body: MatrixRunRequestBody,
   res: ServerResponse,
@@ -53,7 +46,7 @@ export async function handleMatrixRun(
 
   try {
     const session = await getSession();
-    const promptText = formatCompiledPrompt(body.compiled, body.prompt);
+    const promptText = formatMatrixPromptForPi(body.compiled);
     await session.prompt(promptText);
 
     const messages = session.messages;
