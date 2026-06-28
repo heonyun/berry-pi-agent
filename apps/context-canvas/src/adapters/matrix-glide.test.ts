@@ -99,5 +99,22 @@ describe("matrix-glide adapter", () => {
       const result = contentFn([5, 2]);
       expect(displayDataOf(result)).toContain("42");
     });
+
+    it("shows status chip from frontmatter.status", () => {
+      let doc = createEmptyMatrixDocument();
+      const cell: Cell = {
+        value: "draft",
+        body: "Work in progress",
+        frontmatter: "status: draft",
+      };
+      const cells = new Map(doc.sheet.cells);
+      cells.set(cellKey(0, 0), cell);
+      doc = { ...doc, sheet: { ...doc.sheet, cells } };
+
+      const contentFn = getCellContent(doc);
+      const result = contentFn([0, 0]);
+      expect(displayDataOf(result)).toContain("[draft]");
+      expect(displayDataOf(result)).toContain("Work in progress");
+    });
   });
 });
