@@ -260,11 +260,12 @@ export function MatrixCanvas(): ReactElement {
         compiledContextPreview: truncatePreview(compiled.contextText),
         patchesSummary: summarizePatches({ ...parsed.command, patches: appliedPatches }),
       });
+      let updatedHistory: MatrixHistoryEntry[] | undefined;
       setHistoryEntries((entries) => {
-        const updatedHistory = appendMatrixHistory(entries, historyEntry);
-        scheduleMatrixBundleExport(docRef.current, updatedHistory);
+        updatedHistory = appendMatrixHistory(entries, historyEntry);
         return updatedHistory;
       });
+      scheduleMatrixBundleExport(docRef.current, updatedHistory!);
       setDetailCell(null);
       setDetailFrontmatter("");
       setSelectedHistory(historyEntry);
