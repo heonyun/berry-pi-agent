@@ -72,7 +72,7 @@ export function projectMatrixToBundle(
     workspaceId = DEFAULT_MATRIX_WORKSPACE_ID,
     workspaceTitle = document.sheet.name,
     writeMatrixSidecar = true,
-    historyEntries = [],
+    historyEntries,
   } = options;
 
   assertSafeId(workspaceId, "workspaceId");
@@ -183,7 +183,7 @@ export function projectMatrixToBundle(
     });
   }
 
-  if (historyEntries.length > 0) {
+  if (historyEntries !== undefined) {
     try {
       pathsWritten.push(writeMatrixHistory(bundleRoot, historyEntries));
     } catch (writeError: unknown) {

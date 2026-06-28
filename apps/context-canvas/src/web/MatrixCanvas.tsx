@@ -15,7 +15,7 @@ import {
   compileMatrixRangeContext,
   type MatrixContextRange,
 } from "../shared/compile-matrix-range-context.ts";
-import { parseAiCommand } from "../shared/matrix-validation.ts";
+import { filterPatchesToTargetRange, parseAiCommand } from "../shared/matrix-validation.ts";
 import { runMatrix } from "./run-matrix.ts";
 import { MatrixShell } from "./MatrixShell.tsx";
 import { MatrixGrid } from "./MatrixGrid.tsx";
@@ -32,6 +32,7 @@ import {
   summarizePatches,
   truncatePreview,
 } from "./matrix-history.ts";
+import { scheduleMatrixBundleExport } from "./export-matrix-bundle.ts";
 
 // ── Context Matrix Canvas ────────────────────────────────────────────────
 // Phase 4b: run history in left nav + read-only detail + re-run pre-fill.
@@ -246,6 +247,10 @@ export function MatrixCanvas(): ReactElement {
         touchRecentRange(`run:${targetLabel.replace(/^@/, "")}`, targetLabel);
       }
 
+      const { patches: appliedPatches } = filterPatchesToTargetRange(
+        parsed.command.patches,
+        parsed.command.targetRange,
+      );
       const historyEntry = createHistoryEntry({
         intent: prompt.trim(),
         contextRanges: contextChips.map((chip) => ({ label: chip.label, range: chip.range })),
@@ -253,10 +258,14 @@ export function MatrixCanvas(): ReactElement {
         targetRangeLabel: targetLabel ?? compiled.targetRangeLabel,
         patchesApplied: result.meta.updatedCells,
         compiledContextPreview: truncatePreview(compiled.contextText),
-        patchesSummary: summarizePatches(parsed.command),
+        patchesSummary: summarizePatches({ ...parsed.command, patches: appliedPatches }),
       });
-      setHistoryEntries((entries) => appendMatrixHistory(entries, historyEntry));
+      const updatedHistory = appendMatrixHistory(historyEntries, historyEntry);
+      setHistoryEntries(updatedHistory);
+      setDetailCell(null);
+      setDetailFrontmatter("");
       setSelectedHistory(historyEntry);
+      scheduleMatrixBundleExport(docRef.current, updatedHistory);
 
       let message = `Run applied: ${result.meta.updatedCells} cells updated`;
       if (result.meta.strippedPatches) {
@@ -269,7 +278,7 @@ export function MatrixCanvas(): ReactElement {
     } finally {
       setIsRunning(false);
     }
-  }, [contextChips, dispatch, prompt, targetLabel, targetRange, touchRecentRange]);
+  }, [contextChips, dispatch, historyEntries, prompt, targetLabel, targetRange, touchRecentRange]);
 
   const handleDetailSave = useCallback(
     (row: number, col: number, body: string, frontmatter: string) => {

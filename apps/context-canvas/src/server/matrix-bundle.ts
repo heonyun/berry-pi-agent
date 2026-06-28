@@ -16,6 +16,25 @@ function resolveMatrixBundleRootBase(config: ContextCanvasServerConfig, monorepo
   return path.join(monorepoRoot, ".context-matrix-bundles");
 }
 
+function mapFromWire<K extends string, V>(value: ReadonlyMap<K, V> | Record<string, V>): Map<K, V> {
+  if (value instanceof Map) {
+    return new Map(value);
+  }
+  return new Map(Object.entries(value) as [K, V][]);
+}
+
+function normalizeMatrixDocumentWire(document: MatrixDocument): MatrixDocument {
+  const { cells, ...sheetRest } = document.sheet;
+  return {
+    ...document,
+    sheet: {
+      ...sheetRest,
+      cells: mapFromWire(cells),
+    },
+    namedRanges: mapFromWire(document.namedRanges),
+  };
+}
+
 export function handleMatrixBundleExport(
   body: {
     document: MatrixDocument;
@@ -34,7 +53,7 @@ export function handleMatrixBundleExport(
   assertSafeId(workspaceId, "workspaceId");
   const rootBase = resolveMatrixBundleRootBase(config, monorepoRoot);
   const bundleRoot = resolveWithinBundle(rootBase, workspaceId);
-  const result = projectMatrixToBundle(body.document, bundleRoot, {
+  const result = projectMatrixToBundle(normalizeMatrixDocumentWire(body.document), bundleRoot, {
     workspaceId,
     workspaceTitle: body.workspaceTitle ?? body.document.sheet.name,
     historyEntries: body.history,
