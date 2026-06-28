@@ -1,24 +1,44 @@
 import { useCallback, useMemo, useRef, useState, type ReactElement } from "react";
 import { DataEditor, type GridColumn, type GridSelection, type Item } from "@glideapps/glide-data-grid";
 import "@glideapps/glide-data-grid/dist/index.css";
-import { cellKey, createEmptyMatrixDocument, formatColumnLabel, formatRangeLabel, type MatrixDocument } from "../shared/domain.ts";
+import {
+  cellKey,
+  createEmptyMatrixDocument,
+  findNamedRangeForSelection,
+  formatColumnLabel,
+  formatRangeLabel,
+  type MatrixDocument,
+  type RangeRefDTO,
+} from "../shared/domain.ts";
 import { applyMatrixCommand, type MatrixCommand } from "../core/matrix-reducer.ts";
 import { getCellContent, getMatrixGridConfig } from "../adapters/matrix-glide.ts";
+import { compileMatrixRangeContextStub } from "../shared/compile-matrix-range-context.ts";
 import { parseAiCommand } from "../shared/matrix-validation.ts";
+import { runMatrix } from "./run-matrix.ts";
 
 // ── Context Matrix Canvas ────────────────────────────────────────────────
-// Renders a 20x50 glide-data-grid sheet with:
-//   - Bottom composer showing a context chip for the selected range
-//   - Mock AI command that produces validated WritePatch entries
-//   - Side panel Markdown editing through command/reducer path
+// Phase 1: named ranges, real /api/matrix-run, pinned Markdown detail pane.
 // ─────────────────────────────────────────────────────────────────────────
+
+function selectionToRangeRef(selection: {
+  startCol: number;
+  startRow: number;
+  endCol: number;
+  endRow: number;
+}): RangeRefDTO {
+  return {
+    startRow: selection.startRow,
+    startCol: selection.startCol,
+    endRow: selection.endRow,
+    endCol: selection.endCol,
+  };
+}
 
 export function MatrixCanvas(): ReactElement {
   const [document, setDocument] = useState<MatrixDocument>(() => createEmptyMatrixDocument());
   const docRef = useRef(document);
   docRef.current = document;
 
-  // Selection state (0-based column, 0-based row)
   const [selection, setSelection] = useState<{
     startCol: number;
     startRow: number;
@@ -26,18 +46,19 @@ export function MatrixCanvas(): ReactElement {
     endRow: number;
   } | null>(null);
 
-  // Side panel editing state
-  const [sidePanelCell, setSidePanelCell] = useState<{
+  const [detailCell, setDetailCell] = useState<{
     row: number;
     col: number;
     body: string;
   } | null>(null);
 
+  const [prompt, setPrompt] = useState("");
+  const [rangeNameInput, setRangeNameInput] = useState("");
+  const [isRunning, setIsRunning] = useState(false);
   const [status, setStatus] = useState("Ready");
 
   const config = useMemo(() => getMatrixGridConfig(document), [document]);
 
-  // Memoize grid columns to avoid recreating the array on every render
   const columns = useMemo(
     () =>
       Array.from({ length: config.cols }, (_, i) => ({
@@ -60,113 +81,127 @@ export function MatrixCanvas(): ReactElement {
 
   const cellContent = useMemo(() => getCellContent(document), [document]);
 
-  // Selected range label for context chip
+  const selectionRange = useMemo(
+    () => (selection ? selectionToRangeRef(selection) : null),
+    [selection],
+  );
+
+  const matchedNamedRange = useMemo(() => {
+    if (!selectionRange) {
+      return null;
+    }
+    return findNamedRangeForSelection(document, selectionRange) ?? null;
+  }, [document, selectionRange]);
+
   const selectionLabel = useMemo(() => {
-    if (!selection) return null;
+    if (!selection) {
+      return null;
+    }
+    if (matchedNamedRange) {
+      return `@${matchedNamedRange.name}`;
+    }
     return formatRangeLabel(
       selection.startCol,
       selection.startRow,
       selection.endCol,
       selection.endRow,
     );
-  }, [selection]);
+  }, [selection, matchedNamedRange]);
 
-  // Glide selection handler – reject empty / zero-area selections
-  const onGridSelectionChange = useCallback(
-    (newSelection: GridSelection) => {
-      if (!newSelection.current) {
-        setSelection(null);
-        return;
-      }
-      const { range } = newSelection.current;
-      // Reject zero-area or degenerate selections
-      if (range.width <= 0 || range.height <= 0) {
-        setSelection(null);
-        return;
-      }
-      setSelection({
-        startCol: range.x,
-        startRow: range.y,
-        endCol: range.x + range.width - 1,
-        endRow: range.y + range.height - 1,
-      });
-    },
-    [],
-  );
+  const onGridSelectionChange = useCallback((newSelection: GridSelection) => {
+    if (!newSelection.current) {
+      setSelection(null);
+      return;
+    }
+    const { range } = newSelection.current;
+    if (range.width <= 0 || range.height <= 0) {
+      setSelection(null);
+      return;
+    }
+    setSelection({
+      startCol: range.x,
+      startRow: range.y,
+      endCol: range.x + range.width - 1,
+      endRow: range.y + range.height - 1,
+    });
+  }, []);
 
-  // Mock AI command submission – selection is wired into targetRange
-  const handleMockAiCommand = useCallback(() => {
-    if (!selection) {
+  const handleSaveNamedRange = useCallback(() => {
+    if (!selectionRange) {
       setStatus("Select a range first");
       return;
     }
-
-    setStatus("Mock AI command running...");
-
-    // Simulate AI producing patches for E2:E8 (col=4, rows=1..7)
-    const mockPatches = [
-      { row: 1, col: 4, value: "context-loaded" as const, body: "Context data loaded", provenance: "ai-v1" },
-      { row: 2, col: 4, value: "analyzed" as const, body: "Analysis complete", provenance: "ai-v1" },
-      { row: 3, col: 4, value: "ready" as const, body: "Ready for review", provenance: "ai-v1" },
-      { row: 4, col: 4, value: "generated" as const, body: "Generated content", provenance: "ai-v1" },
-      { row: 5, col: 4, value: "validated" as const, body: "Validation passed", provenance: "ai-v1" },
-      { row: 6, col: 4, value: "applied" as const, body: "Changes applied", provenance: "ai-v1" },
-      { row: 7, col: 4, value: "complete" as const, body: "Task complete", provenance: "ai-v1" },
-    ];
-
-    // Validate through Zod boundary; targetRange reflects the user-selected range
-    const parsed = parseAiCommand({
-      intent: `Fill cells E2:E8 with status values (user selected ${selectionLabel})`,
-      targetRange: {
-        startRow: selection.startRow,
-        startCol: selection.startCol,
-        endRow: selection.endRow,
-        endCol: selection.endCol,
-      },
-      patches: mockPatches,
+    const name = rangeNameInput.trim().toLowerCase();
+    if (!/^[a-z][a-z0-9_-]*$/.test(name)) {
+      setStatus("Range name must be slug-safe (a-z, 0-9, _, -)");
+      return;
+    }
+    dispatch({
+      type: "set_named_range",
+      namedRange: { name, range: selectionRange },
     });
+    setRangeNameInput("");
+  }, [dispatch, rangeNameInput, selectionRange]);
 
-    if (!parsed.ok) {
-      setStatus(`AI command validation failed: ${parsed.errors.message}`);
+  const handleRun = useCallback(async () => {
+    if (!selectionRange) {
+      setStatus("Select a range first");
+      return;
+    }
+    if (!prompt.trim()) {
+      setStatus("Enter a prompt before running");
       return;
     }
 
-    const result = dispatch({
-      type: "mock_ai_command",
-      targetRange: {
-        startRow: selection.startRow,
-        startCol: selection.startCol,
-        endRow: selection.endRow,
-        endCol: selection.endCol,
-      },
-      patches: parsed.command.patches,
-    });
+    setIsRunning(true);
+    setStatus("Running matrix AI...");
+    try {
+      const compiled = compileMatrixRangeContextStub(
+        docRef.current,
+        selectionRange,
+        prompt.trim(),
+        matchedNamedRange ? [matchedNamedRange.name] : [],
+      );
+      const response = await runMatrix({
+        prompt: prompt.trim(),
+        targetRange: selectionRange,
+        compiled,
+      });
 
-    setStatus(`Mock AI command applied: ${result.meta.updatedCells} cells updated`);
-  }, [dispatch, selection, selectionLabel]);
+      const parsed = parseAiCommand(response.command);
+      if (!parsed.ok) {
+        setStatus(`AI command validation failed: ${parsed.errors.message}`);
+        return;
+      }
 
-  // Side panel: commit body edit through command/reducer
-  const handleSidePanelSave = useCallback(
+      const result = dispatch({ type: "apply_ai_command", command: parsed.command });
+      setStatus(`Run applied: ${result.meta.updatedCells} cells updated`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`Run failed: ${message}`);
+    } finally {
+      setIsRunning(false);
+    }
+  }, [dispatch, matchedNamedRange, prompt, selectionRange]);
+
+  const handleDetailSave = useCallback(
     (row: number, col: number, body: string) => {
       dispatch({ type: "update_cell_body", row, col, body });
-      setSidePanelCell(null);
-      setStatus(`Cell (${col + 1},${row + 1}) body updated via side panel command`);
+      setDetailCell({ row, col, body });
+      setStatus(`Cell ${formatColumnLabel(col)}${row + 1} body updated`);
     },
     [dispatch],
   );
 
-  // Grid cell click -> open side panel
   const onCellClick = useCallback(
     (cell: Item) => {
       const [col, row] = cell;
-      // Ignore header clicks (row < 0) and out-of-bounds cells — editing is
-      // owned by the side panel, not inline grid overlay
       if (row < 0 || col < 0 || row >= config.rows || col >= config.cols) {
         return;
       }
       const key = cellKey(row, col);
       const domainCell = docRef.current.sheet.cells.get(key);
-      setSidePanelCell({
+      setDetailCell({
         row,
         col,
         body: domainCell?.body ?? "",
@@ -177,95 +212,132 @@ export function MatrixCanvas(): ReactElement {
 
   return (
     <div className="matrix-canvas">
-      <div className="matrix-grid-container">
-        <DataEditor
-          getCellContent={cellContent}
-          getCellsForSelection={true}
-          columns={columns}
-          rows={config.rows}
-          rowMarkers="number"
-          onCellClicked={onCellClick}
-          onGridSelectionChange={onGridSelectionChange}
-          rangeSelect="rect"
-          smoothScrollX
-          smoothScrollY
-          height="100%"
-          width="100%"
-        />
-      </div>
-
-      <footer className="bottom-composer matrix-composer">
-        <div className="matrix-composer-bar">
-          {/* Context chip for selected range */}
-          {selectionLabel && (
-            <span className="matrix-context-chip" data-testid="context-chip">
-              {selectionLabel}
-            </span>
-          )}
-
-          <input
-            className="matrix-composer-input nodrag nopan"
-            type="text"
-            placeholder={selectionLabel ? `Apply AI on ${selectionLabel}...` : "Select a range, then run AI..."}
-            disabled
-            data-testid="matrix-composer-input"
+      <div className="matrix-main">
+        <div className="matrix-grid-container" data-testid="matrix-grid">
+          <DataEditor
+            getCellContent={cellContent}
+            getCellsForSelection={true}
+            columns={columns}
+            rows={config.rows}
+            rowMarkers="number"
+            onCellClicked={onCellClick}
+            onGridSelectionChange={onGridSelectionChange}
+            rangeSelect="rect"
+            smoothScrollX
+            smoothScrollY
+            height="100%"
+            width="100%"
           />
-
-          <button
-            type="button"
-            className="matrix-composer-run nodrag nopan"
-            disabled={!selectionLabel}
-            onClick={handleMockAiCommand}
-            data-testid="mock-ai-run"
-          >
-            Mock AI
-          </button>
         </div>
-        <div className="matrix-composer-hint">
-          Select a range to set AI context · Mock AI writes to E2:E8
-        </div>
-      </footer>
 
-      {/* Side panel for Markdown editing */}
-      {sidePanelCell && (
-        <aside className="matrix-side-panel" data-testid="matrix-side-panel">
-          <h3>Cell ({sidePanelCell.col + 1},{sidePanelCell.row + 1})</h3>
-          <label>
-            Markdown body:
-            <textarea
-              className="matrix-side-panel-textarea"
-              rows={12}
-              value={sidePanelCell.body}
-              onChange={(e) =>
-                setSidePanelCell({ ...sidePanelCell, body: e.target.value })
-              }
-              data-testid="side-panel-textarea"
+        <footer className="bottom-composer matrix-composer" data-testid="matrix-composer">
+          <div className="matrix-composer-bar">
+            {selectionLabel && (
+              <span className="matrix-context-chip" data-testid="context-chip">
+                {selectionLabel}
+              </span>
+            )}
+
+            <input
+              className="matrix-composer-input nodrag nopan"
+              type="text"
+              placeholder={selectionLabel ? `Apply AI on ${selectionLabel}...` : "Select a range, then run AI..."}
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              disabled={isRunning}
+              data-testid="matrix-composer-input"
             />
-          </label>
-          <div className="matrix-side-panel-actions">
+
+            <input
+              className="matrix-range-name-input nodrag nopan"
+              type="text"
+              placeholder="name range"
+              value={rangeNameInput}
+              onChange={(event) => setRangeNameInput(event.target.value)}
+              disabled={!selectionLabel}
+              data-testid="matrix-range-name-input"
+            />
+
             <button
               type="button"
-              onClick={() =>
-                handleSidePanelSave(sidePanelCell.row, sidePanelCell.col, sidePanelCell.body)
-              }
-              data-testid="side-panel-save"
+              className="matrix-name-range-button nodrag nopan"
+              disabled={!selectionLabel || !rangeNameInput.trim()}
+              onClick={handleSaveNamedRange}
+              data-testid="matrix-name-range"
             >
-              Save
+              Name
             </button>
-            <button type="button" onClick={() => setSidePanelCell(null)}>
-              Cancel
+
+            <button
+              type="button"
+              className="matrix-composer-run nodrag nopan"
+              disabled={!selectionLabel || !prompt.trim() || isRunning}
+              onClick={() => void handleRun()}
+              data-testid="matrix-run"
+            >
+              {isRunning ? "Running..." : "Run"}
             </button>
           </div>
-        </aside>
-      )}
+          <div className="matrix-composer-hint">
+            Select a range · name it optionally · enter prompt · Run calls POST /api/matrix-run
+          </div>
+        </footer>
 
-      {/* Status bar */}
-      <div className="v2-status-bar" aria-live="polite">
-        <span>{status}</span>
-        {selectionLabel && (
-          <span className="v2-status-selection">Range: {selectionLabel}</span>
-        )}
+        <div className="v2-status-bar matrix-status-bar" aria-live="polite" data-testid="matrix-status-bar">
+          <span>{status}</span>
+          {selectionLabel && <span className="v2-status-selection">Range: {selectionLabel}</span>}
+        </div>
       </div>
+
+      <aside className="matrix-detail-pane" data-testid="matrix-detail-pane">
+        <div className="matrix-detail-tabs">
+          <button
+            type="button"
+            className="matrix-detail-tab active"
+            data-testid="detail-tab-markdown"
+            aria-current="true"
+          >
+            Markdown
+          </button>
+        </div>
+
+        {detailCell ? (
+          <div className="matrix-detail-content">
+            <h3>
+              Cell {formatColumnLabel(detailCell.col)}
+              {detailCell.row + 1}
+            </h3>
+            <label>
+              Markdown body:
+              <textarea
+                className="matrix-detail-textarea"
+                rows={14}
+                value={detailCell.body}
+                onChange={(event) =>
+                  setDetailCell({ ...detailCell, body: event.target.value })
+                }
+                data-testid="side-panel-textarea"
+              />
+            </label>
+            <div className="matrix-detail-actions">
+              <button
+                type="button"
+                onClick={() =>
+                  handleDetailSave(detailCell.row, detailCell.col, detailCell.body)
+                }
+                data-testid="side-panel-save"
+              >
+                Save
+              </button>
+              <button type="button" onClick={() => setDetailCell(null)}>
+                Clear
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="matrix-detail-empty">Select a cell to edit markdown body.</p>
+        )}
+      </aside>
     </div>
   );
 }

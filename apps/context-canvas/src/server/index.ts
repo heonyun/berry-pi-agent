@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
-import { getModel, type AssistantMessage, type KnownProvider } from "@earendil-works/pi-ai";
+import { getModel, type KnownProvider } from "@earendil-works/pi-ai";
 import { createAgentSession, SessionManager, type AgentSession } from "@earendil-works/pi-coding-agent";
 import { compilePromptContext, formatPromptForPi, type CompiledPromptContext } from "../shared/compiler.ts";
 import { compileQABlockContext } from "../shared/compile-qablock-context.ts";
@@ -14,12 +14,20 @@ import { loadBundleToDocument } from "../storage/markdown/load.ts";
 import { projectDocumentToBundle } from "../storage/markdown/project.ts";
 import { assertSafeId, resolveWithinBundle } from "../storage/markdown/paths.ts";
 import {
+  assistantMessageText,
+  assistantRunErrorMessage,
+  findAssistantRunError,
+} from "./assistant-message.ts";
+import {
   buildCorsHeaders,
   resolveAgentTools,
   resolveContextCanvasServerConfig,
   verifyRequestAccess,
   type ContextCanvasServerConfig,
 } from "./security.ts";
+import { handleMatrixRun, type MatrixRunRequestBody } from "./matrix-run.ts";
+
+export { assistantMessageText, assistantRunErrorMessage, findAssistantRunError } from "./assistant-message.ts";
 
 const MAX_REQUEST_BODY_BYTES = 5 * 1024 * 1024;
 const monorepoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
@@ -90,40 +98,6 @@ function setCors(res: ServerResponse, origin: string | undefined, config = serve
 
 function writeSse(res: ServerResponse, event: SseEvent): void {
   res.write(`data: ${JSON.stringify(event)}\n\n`);
-}
-
-export function assistantMessageText(message: AssistantMessage): string {
-  return message.content
-    .filter((entry): entry is Extract<(typeof message.content)[number], { type: "text" }> => entry.type === "text")
-    .map((entry) => entry.text)
-    .join("");
-}
-
-export function assistantRunErrorMessage(message: AssistantMessage): string | undefined {
-  if (message.errorMessage) {
-    return message.errorMessage;
-  }
-  if (message.stopReason === "error") {
-    return "Agent run failed before producing an answer.";
-  }
-  if (message.stopReason === "aborted") {
-    return "Agent run was aborted.";
-  }
-  return undefined;
-}
-
-export function findAssistantRunError(messages: Array<{ role: string; errorMessage?: string; stopReason?: string }>): string | undefined {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message?.role !== "assistant") {
-      continue;
-    }
-    const error = assistantRunErrorMessage(message as AssistantMessage);
-    if (error) {
-      return error;
-    }
-  }
-  return undefined;
 }
 
 async function readJsonBody<T>(req: IncomingMessage): Promise<T> {
@@ -367,6 +341,19 @@ export function createContextCanvasServer(config: ContextCanvasServerConfig = se
         } else {
           throw new Error("Invalid prompt request body.");
         }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        const statusCode = error instanceof RequestBodyTooLargeError ? 413 : 400;
+        res.writeHead(statusCode, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: message }));
+      }
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/api/matrix-run") {
+      try {
+        const body = await readJsonBody<MatrixRunRequestBody>(req);
+        await handleMatrixRun(body, res, getSession);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         const statusCode = error instanceof RequestBodyTooLargeError ? 413 : 400;

@@ -75,6 +75,55 @@ describe("context canvas server security", () => {
     ).toEqual({ ok: true });
   });
 
+  it("blocks matrix-run requests from non-allowlisted origins", () => {
+    const config = resolveContextCanvasServerConfig({
+      CONTEXT_CANVAS_TOKEN: "dev-secret",
+    });
+
+    expect(
+      verifyRequestAccess(
+        {
+          method: "POST",
+          url: "/api/matrix-run",
+          origin: "https://evil.example",
+          token: "dev-secret",
+        },
+        config,
+      ),
+    ).toEqual({ ok: false, statusCode: 403, message: "Origin is not allowed." });
+  });
+
+  it("blocks matrix-run requests without the configured dev token", () => {
+    const config = resolveContextCanvasServerConfig({
+      CONTEXT_CANVAS_TOKEN: "dev-secret",
+    });
+
+    expect(
+      verifyRequestAccess(
+        { method: "POST", url: "/api/matrix-run", origin: "http://localhost:5173" },
+        config,
+      ),
+    ).toEqual({ ok: false, statusCode: 403, message: "Invalid context canvas token." });
+  });
+
+  it("allows matrix-run requests from allowlisted origins with the configured dev token", () => {
+    const config = resolveContextCanvasServerConfig({
+      CONTEXT_CANVAS_TOKEN: "dev-secret",
+    });
+
+    expect(
+      verifyRequestAccess(
+        {
+          method: "POST",
+          url: "/api/matrix-run",
+          origin: "http://localhost:5173",
+          token: "dev-secret",
+        },
+        config,
+      ),
+    ).toEqual({ ok: true });
+  });
+
   it("blocks bundle export requests from non-allowlisted origins", () => {
     const config = resolveContextCanvasServerConfig({
       CONTEXT_CANVAS_TOKEN: "dev-secret",

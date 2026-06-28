@@ -338,11 +338,19 @@ export interface Sheet {
   readonly cells: ReadonlyMap<string, Cell>;
 }
 
+/** User-defined label for a rectangular region. */
+export interface NamedRange {
+  readonly name: string;
+  readonly range: RangeRefDTO;
+  readonly role?: "context" | "target" | "neutral";
+}
+
 /** Top-level matrix document: the single source of truth. */
 export interface MatrixDocument {
   readonly kind: "matrix";
-  readonly schemaVersion: 2;
+  readonly schemaVersion: 3;
   readonly sheet: Sheet;
+  readonly namedRanges: ReadonlyMap<string, NamedRange>;
 }
 
 /** Helper: encode row,col into a map key. */
@@ -354,7 +362,7 @@ export function cellKey(row: number, col: number): string {
 export function createEmptyMatrixDocument(): MatrixDocument {
   return {
     kind: "matrix",
-    schemaVersion: 2,
+    schemaVersion: 3,
     sheet: {
       id: MATRIX_SHEET_ID,
       name: "Context Matrix",
@@ -362,7 +370,32 @@ export function createEmptyMatrixDocument(): MatrixDocument {
       cols: MATRIX_DEFAULT_COLS,
       cells: new Map(),
     },
+    namedRanges: new Map(),
   };
+}
+
+export function rangesEqual(a: RangeRefDTO, b: RangeRefDTO): boolean {
+  return (
+    a.startRow === b.startRow &&
+    a.startCol === b.startCol &&
+    a.endRow === b.endRow &&
+    a.endCol === b.endCol
+  );
+}
+
+export function findNamedRangeForSelection(
+  document: MatrixDocument,
+  selection: RangeRefDTO,
+): NamedRange | undefined {
+  if (!document.namedRanges) {
+    return undefined;
+  }
+  for (const namedRange of document.namedRanges.values()) {
+    if (rangesEqual(namedRange.range, selection)) {
+      return namedRange;
+    }
+  }
+  return undefined;
 }
 
 /** Helper: column label like "A" or "AA" from a 0-based coordinate. */
