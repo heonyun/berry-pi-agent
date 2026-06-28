@@ -214,13 +214,40 @@ if command -v jq >/dev/null 2>&1; then
   usage_fixture="$(mktemp)"
   trap 'rm -f "${usage_fixture}"' EXIT
   cat > "${usage_fixture}" <<'EOF'
-{"usage":{"prompt_tokens":1200,"completion_tokens":80,"prompt_cache_hit_tokens":704,"prompt_cache_miss_tokens":496}}
+{"usage":{"prompt_tokens":1200,"completion_tokens":80,"prompt_cache_hit_tokens":704,"prompt_cache_miss_tokens":496,"completion_tokens_details":{"reasoning_tokens":42}}}
 EOF
   usage_line="$(agent_log_deepseek_usage "${usage_fixture}")"
   assert_contains "${usage_line}" "cache_hit=704" "deepseek usage cache_hit"
   assert_contains "${usage_line}" "cache_miss=496" "deepseek usage cache_miss"
   assert_contains "${usage_line}" "prompt=1200" "deepseek usage prompt"
   assert_contains "${usage_line}" "completion=80" "deepseek usage completion"
+  assert_contains "${usage_line}" "reasoning=42" "deepseek usage reasoning_tokens"
+
+  payload_fixture="$(mktemp)"
+  DEEPSEEK_REASONING_EFFORT=high agent_deepseek_write_payload "${payload_fixture}" "deepseek-v4-flash" "sys" "user" "0.2"
+  high_payload="$(cat "${payload_fixture}")"
+  assert_contains "${high_payload}" '"type": "enabled"' "deepseek payload thinking enabled"
+  assert_contains "${high_payload}" '"reasoning_effort": "high"' "deepseek payload reasoning_effort high"
+  if [[ "${high_payload}" == *temperature* ]]; then
+    fail_count=$((fail_count + 1))
+    echo "FAIL: thinking-enabled payload must omit temperature" >&2
+  else
+    pass_count=$((pass_count + 1))
+    echo "PASS: thinking-enabled payload omits temperature"
+  fi
+
+  DEEPSEEK_REASONING_EFFORT=off agent_deepseek_write_payload "${payload_fixture}" "deepseek-v4-flash" "sys" "user" "0.2"
+  off_payload="$(cat "${payload_fixture}")"
+  assert_contains "${off_payload}" '"type": "disabled"' "deepseek payload thinking disabled"
+  assert_contains "${off_payload}" '"temperature": 0.2' "deepseek payload temperature when thinking off"
+  if [[ "${off_payload}" == *reasoning_effort* ]]; then
+    fail_count=$((fail_count + 1))
+    echo "FAIL: thinking-disabled payload must omit reasoning_effort" >&2
+  else
+    pass_count=$((pass_count + 1))
+    echo "PASS: thinking-disabled payload omits reasoning_effort"
+  fi
+  rm -f "${payload_fixture}"
 else
   echo "SKIP: jq not available; skipping deepseek usage tests"
 fi

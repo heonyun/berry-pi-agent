@@ -1,5 +1,6 @@
 # Automated PR code review via DeepSeek API.
 # Secret: DEEPSEEK_V4 (API key). Variable: DEEPSEEK_V4 (model, e.g. deepseek-v4-flash).
+# DEEPSEEK_REASONING_EFFORT default high (thinking enabled; set off to disable).
 
 name: DeepSeek PR Review
 

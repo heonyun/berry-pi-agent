@@ -452,10 +452,77 @@ agent_pr_failed_ci_logs() {
   fi
 }
 
+# DeepSeek V4 thinking mode ignores temperature/top_p/penalties (no API error).
+# DEEPSEEK_REASONING_EFFORT: high (default) | max | off
+agent_deepseek_write_payload() {
+  local payload_file="${1:?payload file required}"
+  local model="${2:?model required}"
+  local system="${3:?system required}"
+  local user="${4:?user required}"
+  local temperature="${5:-0.2}"
+
+  local effort_raw="${DEEPSEEK_REASONING_EFFORT:-high}"
+  effort_raw="$(printf '%s' "${effort_raw}" | tr '[:upper:]' '[:lower:]')"
+
+  case "${effort_raw}" in
+    off|disabled|none|false|0)
+      jq -n \
+        --arg model "${model}" \
+        --arg system "${system}" \
+        --arg user "${user}" \
+        --arg temperature "${temperature}" \
+        '{
+          model: $model,
+          stream: false,
+          thinking: {type: "disabled"},
+          temperature: ($temperature | tonumber),
+          messages: [
+            {role: "system", content: $system},
+            {role: "user", content: $user}
+          ]
+        }' > "${payload_file}"
+      ;;
+    max|xhigh)
+      jq -n \
+        --arg model "${model}" \
+        --arg system "${system}" \
+        --arg user "${user}" \
+        --arg reasoning_effort "max" \
+        '{
+          model: $model,
+          stream: false,
+          thinking: {type: "enabled"},
+          reasoning_effort: $reasoning_effort,
+          messages: [
+            {role: "system", content: $system},
+            {role: "user", content: $user}
+          ]
+        }' > "${payload_file}"
+      ;;
+    *)
+      jq -n \
+        --arg model "${model}" \
+        --arg system "${system}" \
+        --arg user "${user}" \
+        --arg reasoning_effort "high" \
+        '{
+          model: $model,
+          stream: false,
+          thinking: {type: "enabled"},
+          reasoning_effort: $reasoning_effort,
+          messages: [
+            {role: "system", content: $system},
+            {role: "user", content: $user}
+          ]
+        }' > "${payload_file}"
+      ;;
+  esac
+}
+
 # Log DeepSeek prompt cache usage from a chat/completions response JSON file.
 agent_log_deepseek_usage() {
   local response_file="${1:?response file required}"
-  jq -r '.usage | "DeepSeek usage: cache_hit=\(.prompt_cache_hit_tokens // 0) cache_miss=\(.prompt_cache_miss_tokens // 0) prompt=\(.prompt_tokens // 0) completion=\(.completion_tokens // 0)"' \
+  jq -r '.usage | "DeepSeek usage: cache_hit=\(.prompt_cache_hit_tokens // 0) cache_miss=\(.prompt_cache_miss_tokens // 0) prompt=\(.prompt_tokens // 0) completion=\(.completion_tokens // 0) reasoning=\(.completion_tokens_details.reasoning_tokens // 0)"' \
     "${response_file}"
 }
 

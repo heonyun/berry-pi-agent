@@ -70,19 +70,7 @@ ${diff_text}
 EOF
 )"
 
-jq -n \
-  --arg model "${MODEL}" \
-  --arg system "${SYSTEM_CONTENT}" \
-  --arg user "${user_content}" \
-  '{
-    model: $model,
-    stream: false,
-    temperature: 0.2,
-    messages: [
-      {role: "system", content: $system},
-      {role: "user", content: $user}
-    ]
-  }' > "${payload_file}"
+agent_deepseek_write_payload "${payload_file}" "${MODEL}" "${SYSTEM_CONTENT}" "${user_content}" "0.2"
 
 http_code="$(curl -sS -o "${response_file}" -w "%{http_code}" \
   https://api.deepseek.com/chat/completions \

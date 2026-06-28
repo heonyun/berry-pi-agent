@@ -1,5 +1,6 @@
 # Post CI failure analysis comments when the Verify workflow fails on a PR.
 # Secret: DEEPSEEK_V4 (API key). Variable: DEEPSEEK_V4 (model name).
+# DEEPSEEK_REASONING_EFFORT default high (thinking enabled; set off to disable).
 
 name: CI Failure Explain
 
