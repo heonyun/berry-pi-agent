@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { MatrixHistoryEntry } from "../../shared/domain.ts";
+import { isMatrixHistoryEntry } from "../../shared/matrix-validation.ts";
 import { HISTORY_DIR, historyRunsPath } from "./paths.ts";
 import type { MatrixHistoryRunsFile } from "./types.ts";
 
@@ -33,21 +34,4 @@ export function readMatrixHistory(bundleRoot: string): MatrixHistoryEntry[] {
   } catch {
     return [];
   }
-}
-
-function isMatrixHistoryEntry(value: unknown): value is MatrixHistoryEntry {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const entry = value as Record<string, unknown>;
-  return (
-    typeof entry.id === "string" &&
-    typeof entry.timestamp === "string" &&
-    typeof entry.intent === "string" &&
-    Array.isArray(entry.contextRangeNames) &&
-    Array.isArray(entry.contextRanges) &&
-    typeof entry.targetRangeLabel === "string" &&
-    typeof entry.targetRange === "object" &&
-    typeof entry.patchesApplied === "number"
-  );
 }

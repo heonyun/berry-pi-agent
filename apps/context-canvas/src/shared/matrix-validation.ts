@@ -1,5 +1,11 @@
 import { z } from "zod";
-import type { AiCommand, RangeRefDTO, WritePatch } from "./domain.ts";
+import type {
+  AiCommand,
+  MatrixHistoryContextRange,
+  MatrixHistoryEntry,
+  RangeRefDTO,
+  WritePatch,
+} from "./domain.ts";
 
 // ── Zod schemas for Context Matrix AI boundary ───────────────────────────
 // These schemas validate AI-generated commands and write patches before
@@ -49,6 +55,39 @@ export function parseAiCommand(raw: unknown):
  * Validate a batch of write patches. Returns the validated patches
  * or an array of error messages by index.
  */
+export function isRangeRefDTO(value: unknown): value is RangeRefDTO {
+  return RangeRefDTOSchema.safeParse(value).success;
+}
+
+export function isMatrixHistoryContextRange(value: unknown): value is MatrixHistoryContextRange {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const range = value as Record<string, unknown>;
+  return typeof range.label === "string" && isRangeRefDTO(range.range);
+}
+
+export function isMatrixHistoryEntry(value: unknown): value is MatrixHistoryEntry {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry.id === "string" &&
+    typeof entry.timestamp === "string" &&
+    typeof entry.intent === "string" &&
+    Array.isArray(entry.contextRangeNames) &&
+    entry.contextRangeNames.every((name) => typeof name === "string") &&
+    Array.isArray(entry.contextRanges) &&
+    entry.contextRanges.every(isMatrixHistoryContextRange) &&
+    typeof entry.targetRangeLabel === "string" &&
+    isRangeRefDTO(entry.targetRange) &&
+    typeof entry.patchesApplied === "number" &&
+    (entry.compiledContextPreview === undefined || typeof entry.compiledContextPreview === "string") &&
+    (entry.patchesSummary === undefined || typeof entry.patchesSummary === "string")
+  );
+}
+
 export function isCellInRange(row: number, col: number, range: RangeRefDTO): boolean {
   return (
     row >= range.startRow &&

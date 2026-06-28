@@ -5,6 +5,7 @@ import {
   type MatrixHistoryEntry,
   type RangeRefDTO,
 } from "../shared/domain.ts";
+import { isMatrixHistoryEntry } from "../shared/matrix-validation.ts";
 
 const STORAGE_KEY = "context-matrix-history";
 const MAX_HISTORY = 50;
@@ -106,21 +107,4 @@ export function createHistoryEntry(input: CreateHistoryEntryInput): MatrixHistor
     ...(input.compiledContextPreview ? { compiledContextPreview: input.compiledContextPreview } : {}),
     ...(input.patchesSummary ? { patchesSummary: input.patchesSummary } : {}),
   };
-}
-
-function isMatrixHistoryEntry(value: unknown): value is MatrixHistoryEntry {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const entry = value as Record<string, unknown>;
-  return (
-    typeof entry.id === "string" &&
-    typeof entry.timestamp === "string" &&
-    typeof entry.intent === "string" &&
-    Array.isArray(entry.contextRangeNames) &&
-    Array.isArray(entry.contextRanges) &&
-    typeof entry.targetRangeLabel === "string" &&
-    typeof entry.targetRange === "object" &&
-    typeof entry.patchesApplied === "number"
-  );
 }
