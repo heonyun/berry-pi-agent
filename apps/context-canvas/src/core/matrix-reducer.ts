@@ -7,6 +7,7 @@ import type {
   RangeRefDTO,
 } from "../shared/domain.ts";
 import { cellKey } from "../shared/domain.ts";
+import { filterPatchesToTargetRange } from "../shared/matrix-validation.ts";
 
 // ── Context Matrix commands ───────────────────────────────────────────────
 
@@ -25,6 +26,7 @@ export interface MatrixApplyResult {
     updatedCells: number;
     message?: string;
     targetRange?: RangeRefDTO;
+    strippedPatches?: number;
   };
 }
 
@@ -75,13 +77,22 @@ export function applyMatrixCommand(
     }
 
     case "apply_ai_command": {
-      const result = applyPatches(document, command.command.patches);
+      const { patches, strippedCount } = filterPatchesToTargetRange(
+        command.command.patches,
+        command.command.targetRange,
+      );
+      const result = applyPatches(document, patches);
+      let message = command.command.intent;
+      if (strippedCount > 0) {
+        message = `${message} — ${strippedCount} patch(es) outside target range skipped`;
+      }
       return {
         ...result,
         meta: {
           ...result.meta,
           targetRange: command.command.targetRange,
-          message: command.command.intent,
+          message,
+          strippedPatches: strippedCount > 0 ? strippedCount : undefined,
         },
       };
     }

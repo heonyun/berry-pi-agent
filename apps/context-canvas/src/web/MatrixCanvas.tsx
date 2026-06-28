@@ -7,18 +7,30 @@ import {
   findNamedRangeForSelection,
   formatColumnLabel,
   formatRangeLabel,
+  rangesEqual,
   type MatrixDocument,
   type RangeRefDTO,
 } from "../shared/domain.ts";
 import { applyMatrixCommand, type MatrixCommand } from "../core/matrix-reducer.ts";
 import { getCellContent, getMatrixGridConfig } from "../adapters/matrix-glide.ts";
-import { compileMatrixRangeContextStub } from "../shared/compile-matrix-range-context.ts";
+import {
+  compileMatrixRangeContext,
+  type MatrixContextRange,
+} from "../shared/compile-matrix-range-context.ts";
 import { parseAiCommand } from "../shared/matrix-validation.ts";
 import { runMatrix } from "./run-matrix.ts";
 
 // ── Context Matrix Canvas ────────────────────────────────────────────────
-// Phase 1: named ranges, real /api/matrix-run, pinned Markdown detail pane.
+// Phase 2: context vs target ranges, full compile, Summary/Provenance tabs.
 // ─────────────────────────────────────────────────────────────────────────
+
+type DetailTab = "markdown" | "summary" | "provenance";
+
+interface ContextChip {
+  readonly id: string;
+  readonly label: string;
+  readonly range: RangeRefDTO;
+}
 
 function selectionToRangeRef(selection: {
   startCol: number;
@@ -34,6 +46,26 @@ function selectionToRangeRef(selection: {
   };
 }
 
+function rangeLabelForSelection(
+  document: MatrixDocument,
+  range: RangeRefDTO,
+): string {
+  const named = findNamedRangeForSelection(document, range);
+  return named ? `@${named.name}` : formatRangeLabel(range.startCol, range.startRow, range.endCol, range.endRow);
+}
+
+function nextChipId(): string {
+  return `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function summarizeBody(body: string, maxLength = 280): string {
+  const trimmed = body.trim();
+  if (trimmed.length <= maxLength) {
+    return trimmed || "(empty body)";
+  }
+  return `${trimmed.slice(0, maxLength)}…`;
+}
+
 export function MatrixCanvas(): ReactElement {
   const [document, setDocument] = useState<MatrixDocument>(() => createEmptyMatrixDocument());
   const docRef = useRef(document);
@@ -46,11 +78,15 @@ export function MatrixCanvas(): ReactElement {
     endRow: number;
   } | null>(null);
 
+  const [contextChips, setContextChips] = useState<ContextChip[]>([]);
+  const [targetRange, setTargetRange] = useState<RangeRefDTO | null>(null);
+
   const [detailCell, setDetailCell] = useState<{
     row: number;
     col: number;
     body: string;
   } | null>(null);
+  const [detailTab, setDetailTab] = useState<DetailTab>("markdown");
 
   const [prompt, setPrompt] = useState("");
   const [rangeNameInput, setRangeNameInput] = useState("");
@@ -94,19 +130,25 @@ export function MatrixCanvas(): ReactElement {
   }, [document, selectionRange]);
 
   const selectionLabel = useMemo(() => {
-    if (!selection) {
+    if (!selectionRange) {
       return null;
     }
-    if (matchedNamedRange) {
-      return `@${matchedNamedRange.name}`;
+    return rangeLabelForSelection(document, selectionRange);
+  }, [document, selectionRange]);
+
+  const targetLabel = useMemo(() => {
+    if (!targetRange) {
+      return null;
     }
-    return formatRangeLabel(
-      selection.startCol,
-      selection.startRow,
-      selection.endCol,
-      selection.endRow,
-    );
-  }, [selection, matchedNamedRange]);
+    return rangeLabelForSelection(document, targetRange);
+  }, [document, targetRange]);
+
+  const detailDomainCell = useMemo(() => {
+    if (!detailCell) {
+      return null;
+    }
+    return document.sheet.cells.get(cellKey(detailCell.row, detailCell.col)) ?? null;
+  }, [detailCell, document]);
 
   const onGridSelectionChange = useCallback((newSelection: GridSelection) => {
     if (!newSelection.current) {
@@ -126,6 +168,36 @@ export function MatrixCanvas(): ReactElement {
     });
   }, []);
 
+  const handleAddContext = useCallback(() => {
+    if (!selectionRange || !selectionLabel) {
+      setStatus("Select a range to add as context");
+      return;
+    }
+    const duplicate = contextChips.some((chip) => rangesEqual(chip.range, selectionRange));
+    if (duplicate) {
+      setStatus("Context range already added");
+      return;
+    }
+    setContextChips((chips) => [
+      ...chips,
+      { id: nextChipId(), label: selectionLabel, range: selectionRange },
+    ]);
+    setStatus(`Context added: ${selectionLabel}`);
+  }, [contextChips, selectionLabel, selectionRange]);
+
+  const handleRemoveContext = useCallback((chipId: string) => {
+    setContextChips((chips) => chips.filter((chip) => chip.id !== chipId));
+  }, []);
+
+  const handleSetTarget = useCallback(() => {
+    if (!selectionRange || !selectionLabel) {
+      setStatus("Select a range to set as target");
+      return;
+    }
+    setTargetRange(selectionRange);
+    setStatus(`Target set: ${selectionLabel}`);
+  }, [selectionLabel, selectionRange]);
+
   const handleSaveNamedRange = useCallback(() => {
     if (!selectionRange) {
       setStatus("Select a range first");
@@ -144,8 +216,8 @@ export function MatrixCanvas(): ReactElement {
   }, [dispatch, rangeNameInput, selectionRange]);
 
   const handleRun = useCallback(async () => {
-    if (!selectionRange) {
-      setStatus("Select a range first");
+    if (!targetRange) {
+      setStatus("Set a target range before running");
       return;
     }
     if (!prompt.trim()) {
@@ -156,15 +228,20 @@ export function MatrixCanvas(): ReactElement {
     setIsRunning(true);
     setStatus("Running matrix AI...");
     try {
-      const compiled = compileMatrixRangeContextStub(
+      const contextRanges: MatrixContextRange[] = contextChips.map((chip) => ({
+        label: chip.label,
+        range: chip.range,
+      }));
+
+      const compiled = compileMatrixRangeContext(
         docRef.current,
-        selectionRange,
+        contextRanges,
+        targetRange,
         prompt.trim(),
-        matchedNamedRange ? [matchedNamedRange.name] : [],
       );
       const response = await runMatrix({
         prompt: prompt.trim(),
-        targetRange: selectionRange,
+        targetRange,
         compiled,
       });
 
@@ -175,14 +252,18 @@ export function MatrixCanvas(): ReactElement {
       }
 
       const result = dispatch({ type: "apply_ai_command", command: parsed.command });
-      setStatus(`Run applied: ${result.meta.updatedCells} cells updated`);
+      let message = `Run applied: ${result.meta.updatedCells} cells updated`;
+      if (result.meta.strippedPatches) {
+        message += ` — ${result.meta.strippedPatches} patch(es) outside target range skipped`;
+      }
+      setStatus(message);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       setStatus(`Run failed: ${message}`);
     } finally {
       setIsRunning(false);
     }
-  }, [dispatch, matchedNamedRange, prompt, selectionRange]);
+  }, [contextChips, dispatch, prompt, targetRange]);
 
   const handleDetailSave = useCallback(
     (row: number, col: number, body: string) => {
@@ -206,6 +287,7 @@ export function MatrixCanvas(): ReactElement {
         col,
         body: domainCell?.body ?? "",
       });
+      setDetailTab("markdown");
     },
     [config.rows, config.cols],
   );
@@ -231,22 +313,65 @@ export function MatrixCanvas(): ReactElement {
         </div>
 
         <footer className="bottom-composer matrix-composer" data-testid="matrix-composer">
-          <div className="matrix-composer-bar">
-            {selectionLabel && (
-              <span className="matrix-context-chip" data-testid="context-chip">
-                {selectionLabel}
+          <div className="matrix-chip-row">
+            {contextChips.map((chip) => (
+              <span
+                key={chip.id}
+                className="matrix-context-chip"
+                data-testid={`context-chip-${chip.label.replace(/^@/, "")}`}
+              >
+                ctx: {chip.label}
+                <button
+                  type="button"
+                  className="matrix-chip-remove nodrag nopan"
+                  aria-label={`Remove context ${chip.label}`}
+                  onClick={() => handleRemoveContext(chip.id)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {targetLabel && (
+              <span className="matrix-target-chip" data-testid="target-range-chip">
+                target: {targetLabel}
               </span>
             )}
+          </div>
 
+          <div className="matrix-composer-bar">
             <input
               className="matrix-composer-input nodrag nopan"
               type="text"
-              placeholder={selectionLabel ? `Apply AI on ${selectionLabel}...` : "Select a range, then run AI..."}
+              placeholder={
+                targetLabel
+                  ? `Apply AI to ${targetLabel}...`
+                  : "Set target range, add context, then run AI..."
+              }
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
               disabled={isRunning}
               data-testid="matrix-composer-input"
             />
+
+            <button
+              type="button"
+              className="matrix-context-add-button nodrag nopan"
+              disabled={!selectionLabel || isRunning}
+              onClick={handleAddContext}
+              data-testid="matrix-add-context"
+            >
+              + Context
+            </button>
+
+            <button
+              type="button"
+              className="matrix-target-set-button nodrag nopan"
+              disabled={!selectionLabel || isRunning}
+              onClick={handleSetTarget}
+              data-testid="matrix-set-target"
+            >
+              Set target
+            </button>
 
             <input
               className="matrix-range-name-input nodrag nopan"
@@ -271,7 +396,7 @@ export function MatrixCanvas(): ReactElement {
             <button
               type="button"
               className="matrix-composer-run nodrag nopan"
-              disabled={!selectionLabel || !prompt.trim() || isRunning}
+              disabled={!targetRange || !prompt.trim() || isRunning}
               onClick={() => void handleRun()}
               data-testid="matrix-run"
             >
@@ -279,26 +404,31 @@ export function MatrixCanvas(): ReactElement {
             </button>
           </div>
           <div className="matrix-composer-hint">
-            Select a range · name it optionally · enter prompt · Run calls POST /api/matrix-run
+            Select range · + Context / Set target · name optionally · Run → POST /api/matrix-run
+            {selectionLabel && <span> · selection: {selectionLabel}</span>}
           </div>
         </footer>
 
         <div className="v2-status-bar matrix-status-bar" aria-live="polite" data-testid="matrix-status-bar">
           <span>{status}</span>
-          {selectionLabel && <span className="v2-status-selection">Range: {selectionLabel}</span>}
+          {targetLabel && <span className="v2-status-selection">Target: {targetLabel}</span>}
         </div>
       </div>
 
       <aside className="matrix-detail-pane" data-testid="matrix-detail-pane">
         <div className="matrix-detail-tabs">
-          <button
-            type="button"
-            className="matrix-detail-tab active"
-            data-testid="detail-tab-markdown"
-            aria-current="true"
-          >
-            Markdown
-          </button>
+          {(["summary", "provenance", "markdown"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              className={`matrix-detail-tab${detailTab === tab ? " active" : ""}`}
+              data-testid={`detail-tab-${tab}`}
+              aria-current={detailTab === tab ? "true" : undefined}
+              onClick={() => setDetailTab(tab)}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
         </div>
 
         {detailCell ? (
@@ -307,35 +437,80 @@ export function MatrixCanvas(): ReactElement {
               Cell {formatColumnLabel(detailCell.col)}
               {detailCell.row + 1}
             </h3>
-            <label>
-              Markdown body:
-              <textarea
-                className="matrix-detail-textarea"
-                rows={14}
-                value={detailCell.body}
-                onChange={(event) =>
-                  setDetailCell({ ...detailCell, body: event.target.value })
-                }
-                data-testid="side-panel-textarea"
-              />
-            </label>
-            <div className="matrix-detail-actions">
-              <button
-                type="button"
-                onClick={() =>
-                  handleDetailSave(detailCell.row, detailCell.col, detailCell.body)
-                }
-                data-testid="side-panel-save"
-              >
-                Save
-              </button>
-              <button type="button" onClick={() => setDetailCell(null)}>
-                Clear
-              </button>
-            </div>
+
+            {detailTab === "markdown" && (
+              <>
+                <label>
+                  Markdown body:
+                  <textarea
+                    className="matrix-detail-textarea"
+                    rows={14}
+                    value={detailCell.body}
+                    onChange={(event) =>
+                      setDetailCell({ ...detailCell, body: event.target.value })
+                    }
+                    data-testid="side-panel-textarea"
+                  />
+                </label>
+                <div className="matrix-detail-actions">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleDetailSave(detailCell.row, detailCell.col, detailCell.body)
+                    }
+                    data-testid="side-panel-save"
+                  >
+                    Save
+                  </button>
+                  <button type="button" onClick={() => setDetailCell(null)}>
+                    Clear
+                  </button>
+                </div>
+              </>
+            )}
+
+            {detailTab === "summary" && (
+              <div className="matrix-detail-readonly" data-testid="detail-summary-panel">
+                <p>
+                  <strong>Value:</strong>{" "}
+                  {detailDomainCell?.value === null || detailDomainCell?.value === undefined
+                    ? "(null)"
+                    : String(detailDomainCell.value)}
+                </p>
+                <p>
+                  <strong>Body preview:</strong>
+                </p>
+                <pre className="matrix-detail-preview">
+                  {summarizeBody(detailDomainCell?.body ?? detailCell.body)}
+                </pre>
+                {detailDomainCell?.frontmatter?.trim() ? (
+                  <>
+                    <p>
+                      <strong>Frontmatter:</strong>
+                    </p>
+                    <pre className="matrix-detail-preview">{detailDomainCell.frontmatter}</pre>
+                  </>
+                ) : null}
+              </div>
+            )}
+
+            {detailTab === "provenance" && (
+              <div className="matrix-detail-readonly" data-testid="detail-provenance-panel">
+                <p>
+                  <strong>Provenance:</strong>{" "}
+                  {detailDomainCell?.provenance?.trim() || "(none)"}
+                </p>
+                <p>
+                  <strong>Frontmatter (raw):</strong>
+                </p>
+                <pre className="matrix-detail-preview">
+                  {detailDomainCell?.frontmatter?.trim() || "(empty)"}
+                </pre>
+              </div>
+            )}
           </div>
         ) : (
-          <p className="matrix-detail-empty">Select a cell to edit markdown body.</p>
+          <p className="matrix-detail-empty">Select a cell to inspect Summary, Provenance, or Markdown.</p>
         )}
       </aside>
     </div>

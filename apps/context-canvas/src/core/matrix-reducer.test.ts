@@ -259,6 +259,29 @@ describe("applyMatrixCommand", () => {
       expect(result.meta.message).toBe("Fill status cells");
       expect(result.document.sheet.cells.get(cellKey(1, 4))?.provenance).toBe("matrix-run");
     });
+
+    it("apply_ai_command strips patches outside targetRange with warning meta", () => {
+      const doc = createEmptyMatrixDocument();
+      const targetRange = { startRow: 0, startCol: 0, endRow: 0, endCol: 0 };
+
+      const result = applyMatrixCommand(doc, {
+        type: "apply_ai_command",
+        command: {
+          intent: "Fill A1 only",
+          targetRange,
+          patches: [
+            { row: 0, col: 0, value: "ok", body: "In range" },
+            { row: 1, col: 1, value: "skip", body: "Out of range" },
+          ],
+        },
+      });
+
+      expect(result.meta.updatedCells).toBe(1);
+      expect(result.meta.strippedPatches).toBe(1);
+      expect(result.meta.message).toContain("outside target range skipped");
+      expect(result.document.sheet.cells.has(cellKey(1, 1))).toBe(false);
+      expect(result.document.sheet.cells.get(cellKey(0, 0))?.body).toBe("In range");
+    });
   });
 
   describe("cell summary and metadata badge contract", () => {
