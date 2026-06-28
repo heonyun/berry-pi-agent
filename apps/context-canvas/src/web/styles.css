@@ -733,12 +733,22 @@ button.active {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.matrix-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 .matrix-context-chip {
   display: inline-flex;
   align-items: center;
-  padding: 2px 10px;
+  gap: 4px;
+  padding: 2px 8px 2px 10px;
   background: var(--accent);
   color: white;
   border-radius: 12px;
@@ -746,6 +756,52 @@ button.active {
   font-weight: 600;
   white-space: nowrap;
   letter-spacing: 0.3px;
+}
+
+.matrix-target-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  background: #c45c26;
+  color: white;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+}
+
+.matrix-chip-remove {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.85;
+}
+
+.matrix-chip-remove:hover {
+  opacity: 1;
+}
+
+.matrix-context-add-button,
+.matrix-target-set-button {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--bg-warm);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.matrix-context-add-button:disabled,
+.matrix-target-set-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .matrix-composer-input {
@@ -919,6 +975,27 @@ button.active {
   margin: 0;
   font-size: 13px;
   color: var(--muted);
+}
+
+.matrix-detail-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.matrix-detail-preview {
+  margin: 0;
+  padding: 10px;
+  background: var(--bg-warm);
+  border: 1px solid var(--panel-soft);
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
 }
 
 /* Legacy overlay side panel — superseded by matrix-detail-pane */

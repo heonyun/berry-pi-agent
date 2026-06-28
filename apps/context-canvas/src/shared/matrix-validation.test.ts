@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { parseAiCommand, validateWritePatches, WritePatchSchema, AiCommandSchema } from "./matrix-validation.ts";
+import { parseAiCommand, validateWritePatches, WritePatchSchema, AiCommandSchema, filterPatchesToTargetRange } from "./matrix-validation.ts";
 
 describe("matrix-validation", () => {
   describe("WritePatchSchema", () => {
@@ -120,6 +120,24 @@ describe("matrix-validation", () => {
     it("returns ok:false for null input", () => {
       const result = parseAiCommand(null);
       expect(result.ok).toBe(false);
+    });
+  });
+
+  describe("filterPatchesToTargetRange", () => {
+    it("keeps patches inside targetRange and strips others", () => {
+      const targetRange = { startRow: 1, startCol: 4, endRow: 2, endCol: 4 };
+      const { patches, strippedCount } = filterPatchesToTargetRange(
+        [
+          { row: 1, col: 4, value: "ok", body: "in target" },
+          { row: 0, col: 0, value: "bad", body: "outside" },
+          { row: 3, col: 4, value: "bad2", body: "also outside" },
+        ],
+        targetRange,
+      );
+
+      expect(patches).toHaveLength(1);
+      expect(patches[0]?.body).toBe("in target");
+      expect(strippedCount).toBe(2);
     });
   });
 

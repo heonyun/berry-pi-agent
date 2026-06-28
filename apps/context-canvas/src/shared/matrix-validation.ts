@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AiCommand, WritePatch } from "./domain.ts";
+import type { AiCommand, RangeRefDTO, WritePatch } from "./domain.ts";
 
 // ── Zod schemas for Context Matrix AI boundary ───────────────────────────
 // These schemas validate AI-generated commands and write patches before
@@ -49,6 +49,32 @@ export function parseAiCommand(raw: unknown):
  * Validate a batch of write patches. Returns the validated patches
  * or an array of error messages by index.
  */
+export function isCellInRange(row: number, col: number, range: RangeRefDTO): boolean {
+  return (
+    row >= range.startRow &&
+    row <= range.endRow &&
+    col >= range.startCol &&
+    col <= range.endCol
+  );
+}
+
+/** Strip patches outside targetRange; return count removed for user-visible warnings. */
+export function filterPatchesToTargetRange(
+  patches: readonly WritePatch[],
+  targetRange: RangeRefDTO,
+): { patches: WritePatch[]; strippedCount: number } {
+  const inRange: WritePatch[] = [];
+  let strippedCount = 0;
+  for (const patch of patches) {
+    if (isCellInRange(patch.row, patch.col, targetRange)) {
+      inRange.push(patch);
+    } else {
+      strippedCount++;
+    }
+  }
+  return { patches: inRange, strippedCount };
+}
+
 export function validateWritePatches(patches: unknown[]):
   | { ok: true; patches: WritePatch[] }
   | { ok: false; errors: Array<{ index: number; message: string }> } {
