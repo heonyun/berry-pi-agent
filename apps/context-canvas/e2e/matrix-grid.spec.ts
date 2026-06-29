@@ -1,59 +1,57 @@
 import { expect, test } from "@playwright/test";
+import {
+  clickMatrixCell,
+  commitDetailCellBody,
+  dragMatrixRange,
+  expectActiveSelection,
+  expectDetailMarkdownBody,
+  expectSelectionSummary,
+  prepareMatrixGrid,
+  typeIntoMatrixCell,
+} from "./matrix-grid-helpers.ts";
 
-test.describe("matrix grid excel interaction", () => {
+test.describe("Feature: Matrix grid Excel-like cell interaction", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/");
-    await expect(page.getByTestId("matrix-grid")).toBeVisible();
-    const onboardingDismiss = page.getByTestId("matrix-onboarding").getByRole("button", {
-      name: "Got it",
-    });
-    if (await onboardingDismiss.isVisible().catch(() => false)) {
-      await onboardingDismiss.click();
-    }
+    await prepareMatrixGrid(page);
   });
 
-  test("inline edit, Enter moves down, Tab moves right", async ({ page }) => {
-    const grid = page.getByTestId("matrix-grid");
-    const box = await grid.boundingBox();
-    expect(box).not.toBeNull();
-    if (!box) {
-      return;
-    }
+  test("Scenario: Type into a selected cell", async ({ page }) => {
+    await clickMatrixCell(page, "A1");
+    await commitDetailCellBody(page, "hello");
+    await expect(page.getByTestId("matrix-status-bar")).toContainText("Cell A1 updated");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("ArrowUp");
 
-    const cellA1X = box.x + 80;
-    const cellA1Y = box.y + 60;
+    await expectActiveSelection(page, "A1");
+    await expectDetailMarkdownBody(page, "hello");
+  });
 
-    await page.mouse.click(cellA1X, cellA1Y);
-    await page.keyboard.type("hello");
+  test("Scenario: Press Enter after editing moves selection down", async ({ page }) => {
+    await clickMatrixCell(page, "A1");
+    await typeIntoMatrixCell(page, "hello");
     await page.keyboard.press("Enter");
 
-    await expect(page.getByTestId("matrix-status-selection")).toContainText("A2");
-
-    await page.keyboard.type("world");
-    await page.keyboard.press("Tab");
-
-    await expect(page.getByTestId("matrix-status-selection")).toContainText("B2");
+    await expectActiveSelection(page, "A2");
   });
 
-  test("drag range updates selection summary", async ({ page }) => {
-    const grid = page.getByTestId("matrix-grid");
-    const box = await grid.boundingBox();
-    expect(box).not.toBeNull();
-    if (!box) {
-      return;
-    }
+  test("Scenario: Press Tab moves selection right", async ({ page }) => {
+    await clickMatrixCell(page, "A2");
+    await typeIntoMatrixCell(page, "world");
+    await page.keyboard.press("Tab");
 
-    const startX = box.x + 80;
-    const startY = box.y + 60;
-    const endX = box.x + 80 + 120 * 2;
-    const endY = box.y + 60;
+    await expectActiveSelection(page, "B2");
+  });
 
-    await page.mouse.move(startX, startY);
-    await page.mouse.down();
-    await page.mouse.move(endX, endY, { steps: 8 });
-    await page.mouse.up();
+  test("Scenario: Shift plus Arrow extends the range", async ({ page }) => {
+    await clickMatrixCell(page, "C12");
+    await page.keyboard.press("Shift+ArrowRight");
 
-    await expect(page.getByTestId("matrix-status-selection")).toContainText("A1:C1");
-    await expect(page.getByTestId("matrix-status-selection")).toContainText("3×1");
+    await expectSelectionSummary(page, "C12:D12", "2×1");
+  });
+
+  test("Scenario: Drag selects a rectangular range", async ({ page }) => {
+    await dragMatrixRange(page, "A1", "C1");
+
+    await expectSelectionSummary(page, "A1:C1", "3×1");
   });
 });
