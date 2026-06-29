@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { parseAiCommand, validateWritePatches, WritePatchSchema, AiCommandSchema, filterPatchesToTargetRange, coerceAiCommandPayload } from "./matrix-validation.ts";
+import { parseAiCommand, validateWritePatches, WritePatchSchema, AiCommandSchema, filterPatchesToTargetRange, coerceAiCommandPayload, bindAiCommandToUserTarget } from "./matrix-validation.ts";
 
 describe("matrix-validation", () => {
   describe("WritePatchSchema", () => {
@@ -168,6 +168,40 @@ describe("matrix-validation", () => {
       expect(patches).toHaveLength(1);
       expect(patches[0]?.body).toBe("in target");
       expect(strippedCount).toBe(2);
+    });
+  });
+
+  describe("bindAiCommandToUserTarget", () => {
+    it("replaces model targetRange with user selection and filters patches", () => {
+      const userTarget = { startRow: 0, startCol: 0, endRow: 0, endCol: 0 };
+      const modelCommand = {
+        intent: "Summarize",
+        targetRange: { startRow: 1, startCol: 1, endRow: 1, endCol: 1 },
+        patches: [
+          { row: 1, col: 1, value: "wrong cell", body: "wrong cell" },
+          { row: 0, col: 0, value: "right cell", body: "right cell" },
+        ],
+      };
+
+      const bound = bindAiCommandToUserTarget(modelCommand, userTarget);
+
+      expect(bound.targetRange).toEqual(userTarget);
+      expect(bound.patches).toHaveLength(1);
+      expect(bound.patches[0]).toMatchObject({ row: 0, col: 0, body: "right cell" });
+    });
+
+    it("keeps history label and stored range aligned for A1 target", () => {
+      const userTarget = { startRow: 0, startCol: 0, endRow: 0, endCol: 0 };
+      const modelCommand = {
+        intent: "Fill",
+        targetRange: { startRow: 1, startCol: 1, endRow: 1, endCol: 1 },
+        patches: [{ row: 1, col: 1, value: "x", body: "x" }],
+      };
+
+      const bound = bindAiCommandToUserTarget(modelCommand, userTarget);
+
+      expect(bound.targetRange).toEqual(userTarget);
+      expect(bound.patches).toHaveLength(0);
     });
   });
 

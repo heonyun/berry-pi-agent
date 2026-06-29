@@ -5,6 +5,7 @@ import {
   findNamedRangeForSelection,
   formatRangeLabel,
   rangesEqual,
+  type Cell,
   type MatrixDocument,
   type MatrixHistoryEntry,
   type RangeRefDTO,
@@ -15,7 +16,7 @@ import {
   compileMatrixRangeContext,
   type MatrixContextRange,
 } from "../shared/compile-matrix-range-context.ts";
-import { filterPatchesToTargetRange, parseAiCommand } from "../shared/matrix-validation.ts";
+import { bindAiCommandToUserTarget, parseAiCommand } from "../shared/matrix-validation.ts";
 import { runMatrix } from "./run-matrix.ts";
 import { MatrixShell } from "./MatrixShell.tsx";
 import { MatrixGrid } from "./MatrixGrid.tsx";
@@ -129,10 +130,19 @@ export function MatrixCanvas(): ReactElement {
       return null;
     }
     const cell = document.sheet.cells.get(cellKey(detailCell.row, detailCell.col)) ?? null;
-    if (cell && detailFrontmatter !== cell.frontmatter) {
-      return { ...cell, frontmatter: detailFrontmatter };
+    const base: Cell = cell ?? {
+      value: null,
+      body: "",
+      frontmatter: "",
+      provenance: undefined,
+    };
+    const body = detailCell.body !== base.body ? detailCell.body : base.body;
+    const frontmatter =
+      detailFrontmatter !== base.frontmatter ? detailFrontmatter : base.frontmatter;
+    if (cell && body === cell.body && frontmatter === cell.frontmatter) {
+      return cell;
     }
-    return cell;
+    return { ...base, body, frontmatter };
   }, [detailCell, detailFrontmatter, document]);
 
   const touchRecentRange = useCallback((name: string, rangeLabel: string) => {
@@ -238,23 +248,20 @@ export function MatrixCanvas(): ReactElement {
         return;
       }
 
-      const result = dispatch({ type: "apply_ai_command", command: parsed.command });
+      const boundCommand = bindAiCommandToUserTarget(parsed.command, targetRange);
+      const result = dispatch({ type: "apply_ai_command", command: boundCommand });
       if (targetLabel) {
         touchRecentRange(`run:${targetLabel.replace(/^@/, "")}`, targetLabel);
       }
 
-      const { patches: appliedPatches } = filterPatchesToTargetRange(
-        parsed.command.patches,
-        parsed.command.targetRange,
-      );
       const historyEntry = createHistoryEntry({
         intent: prompt.trim(),
         contextRanges: contextChips.map((chip) => ({ label: chip.label, range: chip.range })),
-        targetRange: parsed.command.targetRange,
+        targetRange,
         targetRangeLabel: targetLabel ?? compiled.targetRangeLabel,
         patchesApplied: result.meta.updatedCells,
         compiledContextPreview: truncatePreview(compiled.contextText),
-        patchesSummary: summarizePatches({ ...parsed.command, patches: appliedPatches }),
+        patchesSummary: summarizePatches(boundCommand),
       });
       let updatedHistory: MatrixHistoryEntry[] | undefined;
       setHistoryEntries((entries) => {
