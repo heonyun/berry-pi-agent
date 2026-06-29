@@ -31,22 +31,4 @@ describe("MatrixDetailPane", () => {
     expect(screen.getByText("status: draft")).toBeTruthy();
     expect(screen.queryByText("(empty)")).toBeNull();
   });
-
-  it("falls back to detailFrontmatter when domainCell is null", () => {
-    render(
-      <MatrixDetailPane
-        detailCell={{ row: 0, col: 0, body: "Body" }}
-        detailFrontmatter="status: draft"
-        detailTab="provenance"
-        domainCell={null}
-        onTabChange={vi.fn()}
-        onBodyChange={vi.fn()}
-        onSave={vi.fn()}
-        onClear={vi.fn()}
-        onFrontmatterChange={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText("status: draft")).toBeTruthy();
-  });
 });

@@ -265,12 +265,9 @@ export function MatrixCanvas(): ReactElement {
         compiledContextPreview: truncatePreview(compiled.contextText),
         patchesSummary: summarizePatches(boundCommand),
       });
-      let updatedHistory: MatrixHistoryEntry[] | undefined;
-      setHistoryEntries((entries) => {
-        updatedHistory = appendMatrixHistory(entries, historyEntry);
-        return updatedHistory;
-      });
-      scheduleMatrixBundleExport(docRef.current, updatedHistory!);
+      const nextHistory = appendMatrixHistory(historyEntries, historyEntry);
+      setHistoryEntries(nextHistory);
+      scheduleMatrixBundleExport(docRef.current, nextHistory);
       setDetailCell(null);
       setDetailFrontmatter("");
       setSelectedHistory(historyEntry);
@@ -286,7 +283,7 @@ export function MatrixCanvas(): ReactElement {
     } finally {
       setIsRunning(false);
     }
-  }, [contextChips, dispatch, prompt, targetLabel, targetRange, touchRecentRange]);
+  }, [contextChips, dispatch, historyEntries, prompt, targetLabel, targetRange, touchRecentRange]);
 
   const handleDetailSave = useCallback(
     (row: number, col: number, body: string, frontmatter: string) => {

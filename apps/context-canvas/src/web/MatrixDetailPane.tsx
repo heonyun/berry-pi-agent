@@ -133,7 +133,7 @@ export function MatrixDetailPane({
                 <strong>Frontmatter (raw):</strong>
               </p>
               <pre className="matrix-detail-preview">
-                {(domainCell?.frontmatter ?? detailFrontmatter)?.trim() || "(empty)"}
+                {domainCell?.frontmatter?.trim() || "(empty)"}
               </pre>
             </div>
           )}
