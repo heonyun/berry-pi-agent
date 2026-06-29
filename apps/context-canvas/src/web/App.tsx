@@ -508,7 +508,7 @@ function ViewToggle({ view, onToggle }: { view: "canvas" | "matrix"; onToggle: (
 }
 
 export function App() {
-  const [view, setView] = useState<"canvas" | "matrix">("canvas");
+  const [view, setView] = useState<"canvas" | "matrix">("matrix");
 
   return (
     <>

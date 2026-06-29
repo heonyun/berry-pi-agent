@@ -27,9 +27,10 @@ describe("matrix-glide adapter", () => {
       expect(cell.kind).toBe("text");
       expect("data" in cell ? cell.data : "").toBe("");
       expect("displayData" in cell ? cell.displayData : "").toBe("");
+      expect("allowOverlay" in cell ? cell.allowOverlay : false).toBe(true);
     });
 
-    it("shows first line of body as display summary", () => {
+    it("shows first line of body as display text (no badges in grid)", () => {
       let doc = createEmptyMatrixDocument();
       // Manually add a cell to the document
       const cell: Cell = {
@@ -44,11 +45,10 @@ describe("matrix-glide adapter", () => {
 
       const contentFn = getCellContent(doc);
       const result = contentFn([10, 5]);
-      // displayData should show provenance badge + first line of body
-      expect(displayDataOf(result)).toBe("[ai-v2] Task completed successfully.");
+      expect(displayDataOf(result)).toBe("Task completed successfully.");
     });
 
-    it("shows provenance badge in display text when provenance is set", () => {
+    it("does not show provenance badge in grid display text", () => {
       let doc = createEmptyMatrixDocument();
       const cell: Cell = {
         value: "imported",
@@ -62,8 +62,8 @@ describe("matrix-glide adapter", () => {
 
       const contentFn = getCellContent(doc);
       const result = contentFn([0, 0]);
-      expect(displayDataOf(result)).toContain("[import]");
-      expect(displayDataOf(result)).toContain("Imported content");
+      expect(displayDataOf(result)).toBe("Imported content");
+      expect(displayDataOf(result)).not.toContain("[import]");
     });
 
     it("does not show frontmatter in display text", () => {
@@ -100,7 +100,7 @@ describe("matrix-glide adapter", () => {
       expect(displayDataOf(result)).toContain("42");
     });
 
-    it("shows status chip from frontmatter.status", () => {
+    it("shows status from body only, not frontmatter chips in grid", () => {
       let doc = createEmptyMatrixDocument();
       const cell: Cell = {
         value: "draft",
@@ -113,8 +113,8 @@ describe("matrix-glide adapter", () => {
 
       const contentFn = getCellContent(doc);
       const result = contentFn([0, 0]);
-      expect(displayDataOf(result)).toContain("[draft]");
-      expect(displayDataOf(result)).toContain("Work in progress");
+      expect(displayDataOf(result)).toBe("Work in progress");
+      expect(displayDataOf(result)).not.toContain("[draft]");
     });
   });
 });

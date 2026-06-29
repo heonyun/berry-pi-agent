@@ -493,3 +493,14 @@ export function formatColumnLabel(col: number): string {
 export function formatRangeLabel(startCol: number, startRow: number, endCol: number, endRow: number): string {
   return `${formatColumnLabel(startCol)}${startRow + 1}:${formatColumnLabel(endCol)}${endRow + 1}`;
 }
+
+/** Excel-style selection summary, e.g. "A1:C3 (3×3)" or "B2" for single cell. */
+export function formatSelectionSummary(range: RangeRefDTO): string {
+  const label = formatRangeLabel(range.startCol, range.startRow, range.endCol, range.endRow);
+  const width = range.endCol - range.startCol + 1;
+  const height = range.endRow - range.startRow + 1;
+  if (width === 1 && height === 1) {
+    return label;
+  }
+  return `${label} (${width}×${height})`;
+}

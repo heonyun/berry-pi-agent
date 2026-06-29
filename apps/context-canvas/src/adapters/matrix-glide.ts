@@ -1,22 +1,23 @@
 import type { MatrixDocument, Cell } from "../shared/domain.ts";
 import { cellKey } from "../shared/domain.ts";
-import { formatStatusChip, parseCellFrontmatter } from "../shared/matrix-frontmatter.ts";
 import {
+  getDefaultTheme,
   GridCellKind,
   Item,
   GridCell,
   TextCell,
   NumberCell,
   BooleanCell,
+  type Theme,
 } from "@glideapps/glide-data-grid";
 
 // ── Context Matrix -> glide-data-grid adapter ─────────────────────────────
 // Grid library is renderer adapter only. Domain state (MatrixDocument) is the
 // single source of truth. This module maps domain state to grid cells.
 //
-// NOTE: All cells use allowOverlay: false intentionally. Inline grid editing
-// is out of scope for this app. Markdown body editing is owned by the side
-// panel, which commits through the command/reducer path (update_cell_body).
+// INVARIANT: Inline text edits commit through onCellEdited → update_cell_body.
+// Number/boolean cells stay read-only in-grid; markdown/frontmatter editing
+// remains in the detail pane for multi-line and YAML.
 // ─────────────────────────────────────────────────────────────────────────
 
 export interface MatrixGridConfig {
@@ -32,6 +33,33 @@ export function getMatrixGridConfig(doc: MatrixDocument): MatrixGridConfig {
   };
 }
 
+/** Plain grid text — badges live in detail pane, not in-grid (Excel-familiar). */
+function gridDisplayText(domainCell: Cell | undefined): string {
+  if (!domainCell) {
+    return "";
+  }
+  const firstLine = domainCell.body.split("\n")[0];
+  if (firstLine) {
+    return firstLine;
+  }
+  if (domainCell.value === null || domainCell.value === undefined) {
+    return "";
+  }
+  return String(domainCell.value);
+}
+
+/** Theme tuned for visible range/active-cell highlights. */
+export function getMatrixGridTheme(): Partial<Theme> {
+  const base = getDefaultTheme();
+  return {
+    ...base,
+    accentColor: "#586f8e",
+    accentLight: "rgba(88, 111, 142, 0.22)",
+    bgHeaderHasFocus: "#e4e9ef",
+    textHeaderSelected: "#586f8e",
+  };
+}
+
 /** Map a domain cell to a glide-data-grid cell. */
 function domainCellToGridCell(domainCell: Cell | undefined): GridCell {
   if (!domainCell) {
@@ -39,16 +67,13 @@ function domainCellToGridCell(domainCell: Cell | undefined): GridCell {
       kind: GridCellKind.Text,
       data: "",
       displayData: "",
-      allowOverlay: false,
+      allowOverlay: true,
       copyData: "",
     } as TextCell;
   }
 
-  const summary = domainCell.body.split("\n")[0] || String(domainCell.value ?? "");
-  const provenanceBadge = domainCell.provenance ? `[${domainCell.provenance}] ` : "";
-  const parsedFm = parseCellFrontmatter(domainCell.frontmatter);
-  const statusBadge = parsedFm.status ? `${formatStatusChip(String(parsedFm.status))} ` : "";
-  const displayText = statusBadge + provenanceBadge + (summary || String(domainCell.value ?? ""));
+  const displayText = gridDisplayText(domainCell);
+  const editText = domainCell.body || String(domainCell.value ?? "");
 
   if (typeof domainCell.value === "number") {
     return {
@@ -72,11 +97,16 @@ function domainCellToGridCell(domainCell: Cell | undefined): GridCell {
 
   return {
     kind: GridCellKind.Text,
-    data: domainCell.body || String(domainCell.value ?? ""),
+    data: editText,
     displayData: displayText,
-    allowOverlay: false,
-    copyData: domainCell.body || String(domainCell.value ?? ""),
+    allowOverlay: true,
+    copyData: editText,
   } as TextCell;
+}
+
+/** Whether the grid should allow in-cell overlay editing for this cell kind. */
+export function isMatrixCellEditable(cell: GridCell): boolean {
+  return cell.kind === GridCellKind.Text && cell.allowOverlay === true;
 }
 
 /** Get a cell content function for glide-data-grid DataEditor. */
