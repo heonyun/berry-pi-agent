@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { parseAiCommand, validateWritePatches, WritePatchSchema, AiCommandSchema, filterPatchesToTargetRange, coerceAiCommandPayload, bindAiCommandToUserTarget } from "./matrix-validation.ts";
+import { parseAiCommand, validateWritePatches, WritePatchSchema, AiCommandSchema, filterPatchesToTargetRange, coerceAiCommandPayload, bindAiCommandToUserTarget, relocatePatchesToUserTarget } from "./matrix-validation.ts";
 
 describe("matrix-validation", () => {
   describe("WritePatchSchema", () => {
@@ -171,8 +171,21 @@ describe("matrix-validation", () => {
     });
   });
 
+  describe("relocatePatchesToUserTarget", () => {
+    it("maps model B2 patch to user A1 when model target is B2", () => {
+      const modelTarget = { startRow: 1, startCol: 1, endRow: 1, endCol: 1 };
+      const userTarget = { startRow: 0, startCol: 0, endRow: 0, endCol: 0 };
+      const relocated = relocatePatchesToUserTarget(
+        [{ row: 1, col: 1, value: "x", body: "summarized" }],
+        modelTarget,
+        userTarget,
+      );
+      expect(relocated[0]).toMatchObject({ row: 0, col: 0, body: "summarized" });
+    });
+  });
+
   describe("bindAiCommandToUserTarget", () => {
-    it("replaces model targetRange with user selection and filters patches", () => {
+    it("replaces model targetRange with user selection and relocates drifted patches", () => {
       const userTarget = { startRow: 0, startCol: 0, endRow: 0, endCol: 0 };
       const modelCommand = {
         intent: "Summarize",
@@ -187,7 +200,7 @@ describe("matrix-validation", () => {
 
       expect(bound.command.targetRange).toEqual(userTarget);
       expect(bound.command.patches).toHaveLength(1);
-      expect(bound.command.patches[0]).toMatchObject({ row: 0, col: 0, body: "right cell" });
+      expect(bound.command.patches[0]).toMatchObject({ row: 0, col: 0, body: "wrong cell" });
       expect(bound.strippedCount).toBe(1);
     });
 
@@ -202,8 +215,9 @@ describe("matrix-validation", () => {
       const bound = bindAiCommandToUserTarget(modelCommand, userTarget);
 
       expect(bound.command.targetRange).toEqual(userTarget);
-      expect(bound.command.patches).toHaveLength(0);
-      expect(bound.strippedCount).toBe(1);
+      expect(bound.command.patches).toHaveLength(1);
+      expect(bound.command.patches[0]).toMatchObject({ row: 0, col: 0, body: "x" });
+      expect(bound.strippedCount).toBe(0);
     });
   });
 

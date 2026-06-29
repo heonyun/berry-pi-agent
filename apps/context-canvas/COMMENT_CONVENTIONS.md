@@ -44,6 +44,6 @@ Read this when editing non-obvious behavior in `apps/context-canvas/`. Tracked m
 | Kind | Location |
 | --- | --- |
 | Work instructions | Obsidian `Projects/berry-pi-agent/tasks/<task>/00-index.md` or `doc/orchestrator/task-record-template/` |
-| Worker disposition | `.../worker-ticket-*-disposition.md` |
+| Worker disposition | Obsidian `tasks/<task>/20-build/worker-ticket-*-disposition.md` — see [worker-tickets.md](../../../doc/orchestrator/worker-tickets.md) |
 | Architecture | `doc/working-log/` when needed |
 | harness_flow | `doc/orchestrator/harness-flow.md` |

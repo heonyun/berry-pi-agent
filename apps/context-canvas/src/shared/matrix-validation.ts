@@ -120,6 +120,23 @@ export function isCellInRange(row: number, col: number, range: RangeRefDTO): boo
 }
 
 /**
+ * Translate patch coordinates from the model's target anchor to the user's target anchor.
+ */
+export function relocatePatchesToUserTarget(
+  patches: readonly WritePatch[],
+  modelTargetRange: RangeRefDTO,
+  userTargetRange: RangeRefDTO,
+): WritePatch[] {
+  const rowOffset = userTargetRange.startRow - modelTargetRange.startRow;
+  const colOffset = userTargetRange.startCol - modelTargetRange.startCol;
+  return patches.map((patch) => ({
+    ...patch,
+    row: patch.row + rowOffset,
+    col: patch.col + colOffset,
+  }));
+}
+
+/**
  * Bind an AI command to the user-selected target range.
  * The UI/composer target is canonical; model-returned targetRange may drift.
  */
@@ -127,7 +144,12 @@ export function bindAiCommandToUserTarget(
   command: AiCommand,
   userTargetRange: RangeRefDTO,
 ): { command: AiCommand; strippedCount: number } {
-  const { patches, strippedCount } = filterPatchesToTargetRange(command.patches, userTargetRange);
+  const relocated = relocatePatchesToUserTarget(
+    command.patches,
+    command.targetRange,
+    userTargetRange,
+  );
+  const { patches, strippedCount } = filterPatchesToTargetRange(relocated, userTargetRange);
   return {
     command: {
       ...command,
