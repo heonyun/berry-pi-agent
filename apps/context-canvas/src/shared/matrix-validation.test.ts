@@ -185,9 +185,10 @@ describe("matrix-validation", () => {
 
       const bound = bindAiCommandToUserTarget(modelCommand, userTarget);
 
-      expect(bound.targetRange).toEqual(userTarget);
-      expect(bound.patches).toHaveLength(1);
-      expect(bound.patches[0]).toMatchObject({ row: 0, col: 0, body: "right cell" });
+      expect(bound.command.targetRange).toEqual(userTarget);
+      expect(bound.command.patches).toHaveLength(1);
+      expect(bound.command.patches[0]).toMatchObject({ row: 0, col: 0, body: "right cell" });
+      expect(bound.strippedCount).toBe(1);
     });
 
     it("keeps history label and stored range aligned for A1 target", () => {
@@ -200,8 +201,9 @@ describe("matrix-validation", () => {
 
       const bound = bindAiCommandToUserTarget(modelCommand, userTarget);
 
-      expect(bound.targetRange).toEqual(userTarget);
-      expect(bound.patches).toHaveLength(0);
+      expect(bound.command.targetRange).toEqual(userTarget);
+      expect(bound.command.patches).toHaveLength(0);
+      expect(bound.strippedCount).toBe(1);
     });
   });
 

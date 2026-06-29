@@ -136,9 +136,8 @@ export function MatrixCanvas(): ReactElement {
       frontmatter: "",
       provenance: undefined,
     };
-    const body = detailCell.body !== base.body ? detailCell.body : base.body;
-    const frontmatter =
-      detailFrontmatter !== base.frontmatter ? detailFrontmatter : base.frontmatter;
+    const body = detailCell.body;
+    const frontmatter = detailFrontmatter;
     if (cell && body === cell.body && frontmatter === cell.frontmatter) {
       return cell;
     }
@@ -248,7 +247,10 @@ export function MatrixCanvas(): ReactElement {
         return;
       }
 
-      const boundCommand = bindAiCommandToUserTarget(parsed.command, targetRange);
+      const { command: boundCommand, strippedCount } = bindAiCommandToUserTarget(
+        parsed.command,
+        targetRange,
+      );
       const result = dispatch({ type: "apply_ai_command", command: boundCommand });
       if (targetLabel) {
         touchRecentRange(`run:${targetLabel.replace(/^@/, "")}`, targetLabel);
@@ -274,8 +276,8 @@ export function MatrixCanvas(): ReactElement {
       setSelectedHistory(historyEntry);
 
       let message = `Run applied: ${result.meta.updatedCells} cells updated`;
-      if (result.meta.strippedPatches) {
-        message += ` — ${result.meta.strippedPatches} patch(es) outside target range skipped`;
+      if (strippedCount > 0) {
+        message += ` — ${strippedCount} patch(es) outside target range skipped`;
       }
       setStatus(message);
     } catch (error: unknown) {

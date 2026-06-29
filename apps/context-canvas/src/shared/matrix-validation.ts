@@ -126,12 +126,15 @@ export function isCellInRange(row: number, col: number, range: RangeRefDTO): boo
 export function bindAiCommandToUserTarget(
   command: AiCommand,
   userTargetRange: RangeRefDTO,
-): AiCommand {
-  const { patches } = filterPatchesToTargetRange(command.patches, userTargetRange);
+): { command: AiCommand; strippedCount: number } {
+  const { patches, strippedCount } = filterPatchesToTargetRange(command.patches, userTargetRange);
   return {
-    ...command,
-    targetRange: userTargetRange,
-    patches,
+    command: {
+      ...command,
+      targetRange: userTargetRange,
+      patches,
+    },
+    strippedCount,
   };
 }
 
