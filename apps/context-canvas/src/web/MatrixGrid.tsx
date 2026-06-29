@@ -9,27 +9,36 @@ import {
 } from "@glideapps/glide-data-grid";
 import "@glideapps/glide-data-grid/dist/index.css";
 import { getColumnHeader, type MatrixDocument } from "../shared/domain.ts";
-import { getCellContent, getMatrixGridConfig } from "../adapters/matrix-glide.ts";
+import {
+  getCellContent,
+  getMatrixGridConfig,
+  getMatrixGridTheme,
+} from "../adapters/matrix-glide.ts";
+import {
+  gridSelectionToMatrixSelection,
+  rangeRefToGridSelection,
+  type MatrixGridSelectionState,
+} from "../adapters/matrix-grid-selection.ts";
+
+export type { MatrixGridSelectionState };
 
 export interface MatrixGridProps {
   readonly document: MatrixDocument;
+  readonly selection: MatrixGridSelectionState | null;
   readonly onCellClick: (row: number, col: number) => void;
   readonly onCellEdited: (row: number, col: number, body: string) => void;
-  readonly onSelectionChange: (selection: {
-    startCol: number;
-    startRow: number;
-    endCol: number;
-    endRow: number;
-  } | null) => void;
+  readonly onSelectionChange: (selection: MatrixGridSelectionState | null) => void;
 }
 
 export function MatrixGrid({
   document,
+  selection,
   onCellClick,
   onCellEdited,
   onSelectionChange,
 }: MatrixGridProps): ReactElement {
   const config = useMemo(() => getMatrixGridConfig(document), [document]);
+  const theme = useMemo(() => getMatrixGridTheme(), []);
 
   const columns = useMemo(
     () =>
@@ -43,23 +52,22 @@ export function MatrixGrid({
 
   const cellContent = useMemo(() => getCellContent(document), [document]);
 
-  const handleGridSelectionChange = (newSelection: GridSelection) => {
-    if (!newSelection.current) {
-      onSelectionChange(null);
-      return;
+  const gridSelection = useMemo((): GridSelection | undefined => {
+    if (!selection) {
+      return undefined;
     }
-    const { range } = newSelection.current;
-    if (range.width <= 0 || range.height <= 0) {
-      onSelectionChange(null);
-      return;
-    }
-    onSelectionChange({
-      startCol: range.x,
-      startRow: range.y,
-      endCol: range.x + range.width - 1,
-      endRow: range.y + range.height - 1,
+    return rangeRefToGridSelection(selection, {
+      col: selection.activeCol,
+      row: selection.activeRow,
     });
-  };
+  }, [selection]);
+
+  const handleGridSelectionChange = useCallback(
+    (newSelection: GridSelection) => {
+      onSelectionChange(gridSelectionToMatrixSelection(newSelection));
+    },
+    [onSelectionChange],
+  );
 
   const handleCellClicked = (cell: Item) => {
     const [col, row] = cell;
@@ -91,11 +99,17 @@ export function MatrixGrid({
         columns={columns}
         rows={config.rows}
         rowMarkers="number"
+        theme={theme}
+        gridSelection={gridSelection}
         onCellClicked={handleCellClicked}
         onCellEdited={handleCellEdited}
         onGridSelectionChange={handleGridSelectionChange}
         rangeSelect="rect"
+        drawFocusRing={true}
+        cellActivationBehavior="second-click"
         editOnType={true}
+        trapFocus={true}
+        scrollToActiveCell={true}
         smoothScrollX
         smoothScrollY
         height="100%"

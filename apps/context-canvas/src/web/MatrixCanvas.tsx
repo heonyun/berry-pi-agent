@@ -20,7 +20,7 @@ import {
 import { bindAiCommandToUserTarget, parseAiCommand } from "../shared/matrix-validation.ts";
 import { runMatrix } from "./run-matrix.ts";
 import { MatrixShell } from "./MatrixShell.tsx";
-import { MatrixGrid } from "./MatrixGrid.tsx";
+import { MatrixGrid, type MatrixGridSelectionState } from "./MatrixGrid.tsx";
 import { MatrixComposer, type ContextChip } from "./MatrixComposer.tsx";
 import { MatrixDetailPane, type DetailTab, type DetailCellState } from "./MatrixDetailPane.tsx";
 import { MatrixLeftNav } from "./MatrixLeftNav.tsx";
@@ -37,12 +37,7 @@ import {
 } from "./matrix-history.ts";
 import { scheduleMatrixBundleExport } from "./export-matrix-bundle.ts";
 
-function selectionToRangeRef(selection: {
-  startCol: number;
-  startRow: number;
-  endCol: number;
-  endRow: number;
-}): RangeRefDTO {
+function selectionToRangeRef(selection: MatrixGridSelectionState): RangeRefDTO {
   return {
     startRow: selection.startRow,
     startCol: selection.startCol,
@@ -67,12 +62,7 @@ export function MatrixCanvas(): ReactElement {
   const docRef = useRef(document);
   docRef.current = document;
 
-  const [selection, setSelection] = useState<{
-    startCol: number;
-    startRow: number;
-    endCol: number;
-    endRow: number;
-  } | null>(null);
+  const [selection, setSelection] = useState<MatrixGridSelectionState | null>(null);
 
   const [contextChips, setContextChips] = useState<ContextChip[]>([]);
   const [targetRange, setTargetRange] = useState<RangeRefDTO | null>(null);
@@ -107,6 +97,28 @@ export function MatrixCanvas(): ReactElement {
     }
     return result;
   }, []);
+
+  const syncDetailFromActiveCell = useCallback((row: number, col: number) => {
+    setSelectedHistory(null);
+    const key = cellKey(row, col);
+    const domainCell = docRef.current.sheet.cells.get(key);
+    setDetailCell({
+      row,
+      col,
+      body: domainCell?.body ?? "",
+    });
+    setDetailFrontmatter(domainCell?.frontmatter ?? "");
+  }, []);
+
+  const handleSelectionChange = useCallback(
+    (next: MatrixGridSelectionState | null) => {
+      setSelection(next);
+      if (next) {
+        syncDetailFromActiveCell(next.activeRow, next.activeCol);
+      }
+    },
+    [syncDetailFromActiveCell],
+  );
 
   const selectionRange = useMemo(
     () => (selection ? selectionToRangeRef(selection) : null),
@@ -311,18 +323,13 @@ export function MatrixCanvas(): ReactElement {
     [dispatch],
   );
 
-  const handleCellClick = useCallback((row: number, col: number) => {
-    setSelectedHistory(null);
-    const key = cellKey(row, col);
-    const domainCell = docRef.current.sheet.cells.get(key);
-    setDetailCell({
-      row,
-      col,
-      body: domainCell?.body ?? "",
-    });
-    setDetailFrontmatter(domainCell?.frontmatter ?? "");
-    setDetailTab("markdown");
-  }, []);
+  const handleCellClick = useCallback(
+    (row: number, col: number) => {
+      syncDetailFromActiveCell(row, col);
+      setDetailTab("markdown");
+    },
+    [syncDetailFromActiveCell],
+  );
 
   const handleCellEdited = useCallback(
     (row: number, col: number, body: string) => {
@@ -383,19 +390,23 @@ export function MatrixCanvas(): ReactElement {
     (entry: RecentRangeEntry) => {
       const named = document.namedRanges.get(entry.name);
       if (named) {
-        setSelection({
+        const nextSelection: MatrixGridSelectionState = {
           startRow: named.range.startRow,
           startCol: named.range.startCol,
           endRow: named.range.endRow,
           endCol: named.range.endCol,
-        });
+          activeRow: named.range.startRow,
+          activeCol: named.range.startCol,
+        };
+        setSelection(nextSelection);
+        syncDetailFromActiveCell(nextSelection.activeRow, nextSelection.activeCol);
         setStatus(`Selected recent range: ${entry.rangeLabel}`);
         touchRecentRange(entry.name, entry.rangeLabel);
         return;
       }
       setStatus(`Recent range "${entry.name}" — select matching cells on grid`);
     },
-    [document.namedRanges, touchRecentRange],
+    [document.namedRanges, syncDetailFromActiveCell, touchRecentRange],
   );
 
   return (
@@ -414,9 +425,10 @@ export function MatrixCanvas(): ReactElement {
           <div className="matrix-grid-wrap">
             <MatrixGrid
               document={document}
+              selection={selection}
               onCellClick={handleCellClick}
               onCellEdited={handleCellEdited}
-              onSelectionChange={setSelection}
+              onSelectionChange={handleSelectionChange}
             />
             <MatrixOnboarding />
           </div>
