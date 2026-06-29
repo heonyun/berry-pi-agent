@@ -119,6 +119,25 @@ export function isCellInRange(row: number, col: number, range: RangeRefDTO): boo
   );
 }
 
+/**
+ * Bind an AI command to the user-selected target range.
+ * The UI/composer target is canonical; model-returned targetRange may drift.
+ */
+export function bindAiCommandToUserTarget(
+  command: AiCommand,
+  userTargetRange: RangeRefDTO,
+): { command: AiCommand; strippedCount: number } {
+  const { patches, strippedCount } = filterPatchesToTargetRange(command.patches, userTargetRange);
+  return {
+    command: {
+      ...command,
+      targetRange: userTargetRange,
+      patches,
+    },
+    strippedCount,
+  };
+}
+
 /** Strip patches outside targetRange; return count removed for user-visible warnings. */
 export function filterPatchesToTargetRange(
   patches: readonly WritePatch[],
