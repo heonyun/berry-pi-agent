@@ -27,6 +27,7 @@ describe("matrix-glide adapter", () => {
       expect(cell.kind).toBe("text");
       expect("data" in cell ? cell.data : "").toBe("");
       expect("displayData" in cell ? cell.displayData : "").toBe("");
+      expect("allowOverlay" in cell ? cell.allowOverlay : false).toBe(true);
     });
 
     it("shows first line of body as display summary", () => {

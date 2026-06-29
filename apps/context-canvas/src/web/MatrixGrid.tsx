@@ -1,5 +1,12 @@
-import { useMemo, type ReactElement } from "react";
-import { DataEditor, type GridColumn, type GridSelection, type Item } from "@glideapps/glide-data-grid";
+import { useCallback, useMemo, type ReactElement } from "react";
+import {
+  DataEditor,
+  GridCellKind,
+  type EditableGridCell,
+  type GridColumn,
+  type GridSelection,
+  type Item,
+} from "@glideapps/glide-data-grid";
 import "@glideapps/glide-data-grid/dist/index.css";
 import { getColumnHeader, type MatrixDocument } from "../shared/domain.ts";
 import { getCellContent, getMatrixGridConfig } from "../adapters/matrix-glide.ts";
@@ -7,6 +14,7 @@ import { getCellContent, getMatrixGridConfig } from "../adapters/matrix-glide.ts
 export interface MatrixGridProps {
   readonly document: MatrixDocument;
   readonly onCellClick: (row: number, col: number) => void;
+  readonly onCellEdited: (row: number, col: number, body: string) => void;
   readonly onSelectionChange: (selection: {
     startCol: number;
     startRow: number;
@@ -18,6 +26,7 @@ export interface MatrixGridProps {
 export function MatrixGrid({
   document,
   onCellClick,
+  onCellEdited,
   onSelectionChange,
 }: MatrixGridProps): ReactElement {
   const config = useMemo(() => getMatrixGridConfig(document), [document]);
@@ -60,6 +69,20 @@ export function MatrixGrid({
     onCellClick(row, col);
   };
 
+  const handleCellEdited = useCallback(
+    (cell: Item, newValue: EditableGridCell) => {
+      if (newValue.kind !== GridCellKind.Text) {
+        return;
+      }
+      const [col, row] = cell;
+      if (row < 0 || col < 0 || row >= config.rows || col >= config.cols) {
+        return;
+      }
+      onCellEdited(row, col, newValue.data);
+    },
+    [config.cols, config.rows, onCellEdited],
+  );
+
   return (
     <div className="matrix-grid-container" data-testid="matrix-grid">
       <DataEditor
@@ -69,8 +92,10 @@ export function MatrixGrid({
         rows={config.rows}
         rowMarkers="number"
         onCellClicked={handleCellClicked}
+        onCellEdited={handleCellEdited}
         onGridSelectionChange={handleGridSelectionChange}
         rangeSelect="rect"
+        editOnType={true}
         smoothScrollX
         smoothScrollY
         height="100%"

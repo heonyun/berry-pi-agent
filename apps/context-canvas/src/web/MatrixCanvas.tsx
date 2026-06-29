@@ -4,6 +4,7 @@ import {
   createEmptyMatrixDocument,
   findNamedRangeForSelection,
   formatRangeLabel,
+  formatSelectionSummary,
   rangesEqual,
   type Cell,
   type MatrixDocument,
@@ -24,6 +25,7 @@ import { MatrixComposer, type ContextChip } from "./MatrixComposer.tsx";
 import { MatrixDetailPane, type DetailTab, type DetailCellState } from "./MatrixDetailPane.tsx";
 import { MatrixLeftNav } from "./MatrixLeftNav.tsx";
 import { MatrixHistoryDetailPane } from "./MatrixHistoryDetailPane.tsx";
+import { MatrixOnboarding } from "./MatrixOnboarding.tsx";
 import { loadRecentRanges, recordRecentRange, saveRecentRanges } from "./matrix-recent-ranges.ts";
 import {
   appendMatrixHistory,
@@ -117,6 +119,19 @@ export function MatrixCanvas(): ReactElement {
     }
     return rangeLabelForSelection(document, selectionRange);
   }, [document, selectionRange]);
+
+  const selectionSummary = useMemo(() => {
+    if (!selectionRange) {
+      return null;
+    }
+    return formatSelectionSummary(selectionRange);
+  }, [selectionRange]);
+
+  const hasCellContent = useMemo(() => document.sheet.cells.size > 0, [document]);
+
+  const showAiSection = Boolean(
+    selectionRange || targetRange || contextChips.length > 0 || hasCellContent,
+  );
 
   const targetLabel = useMemo(() => {
     if (!targetRange) {
@@ -309,6 +324,37 @@ export function MatrixCanvas(): ReactElement {
     setDetailTab("markdown");
   }, []);
 
+  const handleCellEdited = useCallback(
+    (row: number, col: number, body: string) => {
+      dispatch({ type: "update_cell_body", row, col, body });
+      setDetailCell((prev) =>
+        prev?.row === row && prev?.col === col ? { row, col, body } : prev,
+      );
+      const label = formatRangeLabel(col, row, col, row);
+      setStatus(`Cell ${label} updated`);
+    },
+    [dispatch],
+  );
+
+  const handleQuickSummarize = useCallback(() => {
+    if (!selectionRange || !selectionLabel) {
+      setStatus("Select a range to summarize");
+      return;
+    }
+    const duplicate = contextChips.some((chip) => rangesEqual(chip.range, selectionRange));
+    if (!duplicate) {
+      setContextChips((chips) => [
+        ...chips,
+        { id: nextChipId(), label: selectionLabel, range: selectionRange },
+      ]);
+      touchRecentRange(selectionLabel.replace(/^@/, ""), selectionLabel);
+    }
+    setTargetRange(selectionRange);
+    touchRecentRange(`target:${selectionLabel.replace(/^@/, "")}`, selectionLabel);
+    setPrompt("Summarize the selected context into this target cell.");
+    setStatus(`AI ready for ${selectionLabel} — review and Run`);
+  }, [contextChips, selectionLabel, selectionRange, touchRecentRange]);
+
   const handleHistorySelect = useCallback((entry: MatrixHistoryEntry) => {
     setSelectedHistory(entry);
     setDetailCell(null);
@@ -365,20 +411,26 @@ export function MatrixCanvas(): ReactElement {
       }
       center={
         <div className="matrix-main">
-          <MatrixGrid
-            document={document}
-            onCellClick={handleCellClick}
-            onSelectionChange={setSelection}
-          />
+          <div className="matrix-grid-wrap">
+            <MatrixGrid
+              document={document}
+              onCellClick={handleCellClick}
+              onCellEdited={handleCellEdited}
+              onSelectionChange={setSelection}
+            />
+            <MatrixOnboarding />
+          </div>
 
           <MatrixComposer
             contextChips={contextChips}
             targetLabel={targetLabel}
             selectionLabel={selectionLabel}
+            selectionSummary={selectionSummary}
             prompt={prompt}
             rangeNameInput={rangeNameInput}
             isRunning={isRunning}
             hasTarget={targetRange !== null}
+            showAiSection={showAiSection}
             onPromptChange={setPrompt}
             onRangeNameChange={setRangeNameInput}
             onAddContext={handleAddContext}
@@ -386,6 +438,7 @@ export function MatrixCanvas(): ReactElement {
             onMoveContextUp={handleMoveContextUp}
             onSetTarget={handleSetTarget}
             onSaveNamedRange={handleSaveNamedRange}
+            onQuickSummarize={handleQuickSummarize}
             onRun={() => void handleRun()}
           />
 
@@ -395,6 +448,11 @@ export function MatrixCanvas(): ReactElement {
             data-testid="matrix-status-bar"
           >
             <span>{status}</span>
+            {selectionSummary && (
+              <span className="v2-status-selection" data-testid="matrix-status-selection">
+                Selection: {selectionSummary}
+              </span>
+            )}
             {document.template && (
               <span className="v2-status-selection">Template: {document.template.name}</span>
             )}

@@ -14,9 +14,9 @@ import {
 // Grid library is renderer adapter only. Domain state (MatrixDocument) is the
 // single source of truth. This module maps domain state to grid cells.
 //
-// NOTE: All cells use allowOverlay: false intentionally. Inline grid editing
-// is out of scope for this app. Markdown body editing is owned by the side
-// panel, which commits through the command/reducer path (update_cell_body).
+// INVARIANT: Inline text edits commit through onCellEdited → update_cell_body.
+// Number/boolean cells stay read-only in-grid; markdown/frontmatter editing
+// remains in the detail pane for multi-line and YAML.
 // ─────────────────────────────────────────────────────────────────────────
 
 export interface MatrixGridConfig {
@@ -39,7 +39,7 @@ function domainCellToGridCell(domainCell: Cell | undefined): GridCell {
       kind: GridCellKind.Text,
       data: "",
       displayData: "",
-      allowOverlay: false,
+      allowOverlay: true,
       copyData: "",
     } as TextCell;
   }
@@ -74,9 +74,14 @@ function domainCellToGridCell(domainCell: Cell | undefined): GridCell {
     kind: GridCellKind.Text,
     data: domainCell.body || String(domainCell.value ?? ""),
     displayData: displayText,
-    allowOverlay: false,
+    allowOverlay: true,
     copyData: domainCell.body || String(domainCell.value ?? ""),
   } as TextCell;
+}
+
+/** Whether the grid should allow in-cell overlay editing for this cell kind. */
+export function isMatrixCellEditable(cell: GridCell): boolean {
+  return cell.kind === GridCellKind.Text && cell.allowOverlay === true;
 }
 
 /** Get a cell content function for glide-data-grid DataEditor. */
