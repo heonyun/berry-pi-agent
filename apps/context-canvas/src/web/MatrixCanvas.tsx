@@ -3,6 +3,7 @@ import {
   cellKey,
   createEmptyMatrixDocument,
   findNamedRangeForSelection,
+  formatColumnLabel,
   formatRangeLabel,
   formatSelectionSummary,
   rangesEqual,
@@ -114,10 +115,18 @@ export function MatrixCanvas(): ReactElement {
     (next: MatrixGridSelectionState | null) => {
       setSelection(next);
       if (next) {
-        syncDetailFromActiveCell(next.activeRow, next.activeCol);
+        const key = cellKey(next.activeRow, next.activeCol);
+        const domainCell = docRef.current.sheet.cells.get(key);
+        setSelectedHistory(null);
+        setDetailCell({
+          row: next.activeRow,
+          col: next.activeCol,
+          body: domainCell?.body ?? "",
+        });
+        setDetailFrontmatter(domainCell?.frontmatter ?? "");
       }
     },
-    [syncDetailFromActiveCell],
+    [],
   );
 
   const selectionRange = useMemo(
@@ -318,13 +327,22 @@ export function MatrixCanvas(): ReactElement {
       dispatch({ type: "update_cell_frontmatter", row, col, frontmatter });
       setDetailCell({ row, col, body });
       setDetailFrontmatter(frontmatter);
-      setStatus(`Cell updated`);
+      const label = `${formatColumnLabel(col)}${row + 1}`;
+      setStatus(`Cell ${label} updated`);
     },
     [dispatch],
   );
 
   const handleCellClick = useCallback(
     (row: number, col: number) => {
+      setSelection({
+        startRow: row,
+        startCol: col,
+        endRow: row,
+        endCol: col,
+        activeRow: row,
+        activeCol: col,
+      });
       syncDetailFromActiveCell(row, col);
       setDetailTab("markdown");
     },
@@ -334,10 +352,8 @@ export function MatrixCanvas(): ReactElement {
   const handleCellEdited = useCallback(
     (row: number, col: number, body: string) => {
       dispatch({ type: "update_cell_body", row, col, body });
-      setDetailCell((prev) =>
-        prev?.row === row && prev?.col === col ? { row, col, body } : prev,
-      );
-      const label = formatRangeLabel(col, row, col, row);
+      setDetailCell({ row, col, body });
+      const label = `${formatColumnLabel(col)}${row + 1}`;
       setStatus(`Cell ${label} updated`);
     },
     [dispatch],

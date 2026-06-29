@@ -1,4 +1,5 @@
 import { useCallback, useMemo, type ReactElement } from "react";
+import { flushSync } from "react-dom";
 import {
   DataEditor,
   GridCellKind,
@@ -65,18 +66,25 @@ export function MatrixGrid({
 
   const handleGridSelectionChange = useCallback(
     (newSelection: GridSelection) => {
-      onSelectionChange(gridSelectionToMatrixSelection(newSelection));
+      // WHY: Glide defers controlled selection when onGridSelectionChange is set;
+      // flushSync keeps gridSelection.current available for editOnType/activation.
+      flushSync(() => {
+        onSelectionChange(gridSelectionToMatrixSelection(newSelection));
+      });
     },
     [onSelectionChange],
   );
 
-  const handleCellClicked = (cell: Item) => {
-    const [col, row] = cell;
-    if (row < 0 || col < 0 || row >= config.rows || col >= config.cols) {
-      return;
-    }
-    onCellClick(row, col);
-  };
+  const handleCellClicked = useCallback(
+    (cell: Item) => {
+      const [col, row] = cell;
+      if (row < 0 || col < 0 || row >= config.rows || col >= config.cols) {
+        return;
+      }
+      onCellClick(row, col);
+    },
+    [config.cols, config.rows, onCellClick],
+  );
 
   const handleCellEdited = useCallback(
     (cell: Item, newValue: EditableGridCell) => {
@@ -101,7 +109,7 @@ export function MatrixGrid({
         rows={config.rows}
         rowMarkers="number"
         theme={theme}
-        gridSelection={gridSelection}
+        gridSelection={selection !== null ? gridSelection : undefined}
         onCellClicked={handleCellClicked}
         onCellEdited={handleCellEdited}
         onGridSelectionChange={handleGridSelectionChange}
