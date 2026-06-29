@@ -348,6 +348,12 @@ export function MatrixCanvas(): ReactElement {
       setStatus("Select a range to summarize");
       return;
     }
+    const width = selectionRange.endCol - selectionRange.startCol + 1;
+    const height = selectionRange.endRow - selectionRange.startRow + 1;
+    if (width * height < 2) {
+      setStatus("Select at least two cells to summarize into a target");
+      return;
+    }
     const duplicate = contextChips.some((chip) => rangesEqual(chip.range, selectionRange));
     if (!duplicate) {
       setContextChips((chips) => [

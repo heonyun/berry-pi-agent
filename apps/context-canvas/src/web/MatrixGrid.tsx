@@ -15,6 +15,7 @@ import {
   getMatrixGridTheme,
 } from "../adapters/matrix-glide.ts";
 import {
+  clearedGridSelection,
   gridSelectionToMatrixSelection,
   rangeRefToGridSelection,
   type MatrixGridSelectionState,
@@ -52,9 +53,9 @@ export function MatrixGrid({
 
   const cellContent = useMemo(() => getCellContent(document), [document]);
 
-  const gridSelection = useMemo((): GridSelection | undefined => {
+  const gridSelection = useMemo((): GridSelection => {
     if (!selection) {
-      return undefined;
+      return clearedGridSelection();
     }
     return rangeRefToGridSelection(selection, {
       col: selection.activeCol,

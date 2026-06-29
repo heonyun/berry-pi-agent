@@ -1,5 +1,6 @@
 import {
   CompactSelection,
+  emptyGridSelection,
   type GridSelection,
 } from "@glideapps/glide-data-grid";
 import type { RangeRefDTO } from "../shared/domain.ts";
@@ -48,6 +49,10 @@ export function matrixSelectionToRangeRef(
     endCol: selection.endCol,
     endRow: selection.endRow,
   };
+}
+
+export function clearedGridSelection(): GridSelection {
+  return emptyGridSelection;
 }
 
 export function gridSelectionToMatrixSelection(

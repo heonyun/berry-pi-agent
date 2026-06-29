@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  clearedGridSelection,
   gridSelectionToMatrixSelection,
   matrixSelectionToRangeRef,
   rangeRefToGridSelection,
@@ -30,11 +31,6 @@ describe("matrix-grid-selection", () => {
   });
 
   it("returns null for empty GridSelection", () => {
-    expect(
-      gridSelectionToMatrixSelection({
-        columns: rangeRefToGridSelection(range).columns,
-        rows: rangeRefToGridSelection(range).rows,
-      }),
-    ).toBeNull();
+    expect(gridSelectionToMatrixSelection(clearedGridSelection())).toBeNull();
   });
 });
