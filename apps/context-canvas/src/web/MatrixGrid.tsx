@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { flushSync } from "react-dom";
 import {
   DataEditor,
@@ -32,6 +32,16 @@ export interface MatrixGridProps {
   readonly onSelectionChange: (selection: MatrixGridSelectionState | null) => void;
 }
 
+function matrixSelectionToGridSelection(selection: MatrixGridSelectionState | null): GridSelection {
+  if (!selection) {
+    return clearedGridSelection();
+  }
+  return rangeRefToGridSelection(selection, {
+    col: selection.activeCol,
+    row: selection.activeRow,
+  });
+}
+
 export function MatrixGrid({
   document,
   selection,
@@ -54,21 +64,38 @@ export function MatrixGrid({
 
   const cellContent = useMemo(() => getCellContent(document), [document]);
 
-  const gridSelection = useMemo((): GridSelection => {
+  const [gridSelection, setGridSelection] = useState<GridSelection>(() =>
+    matrixSelectionToGridSelection(selection),
+  );
+
+  const externalSelectionKey = useMemo(() => {
     if (!selection) {
-      return clearedGridSelection();
+      return "";
     }
-    return rangeRefToGridSelection(selection, {
-      col: selection.activeCol,
-      row: selection.activeRow,
-    });
+    const { startCol, startRow, endCol, endRow, activeCol, activeRow } = selection;
+    return `${startCol}:${startRow}:${endCol}:${endRow}:${activeCol}:${activeRow}`;
   }, [selection]);
+
+  const lastExternalSelectionKey = useRef(externalSelectionKey);
+
+  useEffect(() => {
+    if (lastExternalSelectionKey.current === externalSelectionKey) {
+      return;
+    }
+    lastExternalSelectionKey.current = externalSelectionKey;
+    if (!selection) {
+      setGridSelection(clearedGridSelection());
+      return;
+    }
+    setGridSelection(matrixSelectionToGridSelection(selection));
+  }, [externalSelectionKey, selection]);
 
   const handleGridSelectionChange = useCallback(
     (newSelection: GridSelection) => {
       // WHY: Glide defers controlled selection when onGridSelectionChange is set;
-      // flushSync keeps gridSelection.current available for editOnType/activation.
+      // local flushSync keeps gridSelection.current available for editOnType/activation.
       flushSync(() => {
+        setGridSelection(newSelection);
         onSelectionChange(gridSelectionToMatrixSelection(newSelection));
       });
     },
@@ -109,7 +136,7 @@ export function MatrixGrid({
         rows={config.rows}
         rowMarkers="number"
         theme={theme}
-        gridSelection={selection !== null ? gridSelection : undefined}
+        gridSelection={gridSelection}
         onCellClicked={handleCellClicked}
         onCellEdited={handleCellEdited}
         onGridSelectionChange={handleGridSelectionChange}

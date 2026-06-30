@@ -990,6 +990,12 @@ button.active {
   font-weight: 600;
 }
 
+.matrix-ai-range-hint {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .matrix-composer-section-label {
   font-size: 11px;
   font-weight: 700;

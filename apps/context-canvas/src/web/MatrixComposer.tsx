@@ -12,6 +12,7 @@ export interface MatrixComposerProps {
   readonly targetLabel: string | null;
   readonly selectionLabel: string | null;
   readonly selectionSummary: string | null;
+  readonly selectionIsMultiCell: boolean;
   readonly prompt: string;
   readonly rangeNameInput: string;
   readonly isRunning: boolean;
@@ -33,6 +34,7 @@ export function MatrixComposer({
   targetLabel,
   selectionLabel,
   selectionSummary,
+  selectionIsMultiCell,
   prompt,
   rangeNameInput,
   isRunning,
@@ -55,6 +57,12 @@ export function MatrixComposer({
           <span className="matrix-name-box-label">Selection</span>
           <span className="matrix-name-box-value">{selectionSummary}</span>
         </div>
+      )}
+
+      {selectionIsMultiCell && selectionSummary && (
+        <p className="matrix-ai-range-hint" data-testid="matrix-ai-range-hint">
+          Selected range — use + Context or Set target below
+        </p>
       )}
 
       {showAiSection && (

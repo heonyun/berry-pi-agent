@@ -115,18 +115,10 @@ export function MatrixCanvas(): ReactElement {
     (next: MatrixGridSelectionState | null) => {
       setSelection(next);
       if (next) {
-        const key = cellKey(next.activeRow, next.activeCol);
-        const domainCell = docRef.current.sheet.cells.get(key);
-        setSelectedHistory(null);
-        setDetailCell({
-          row: next.activeRow,
-          col: next.activeCol,
-          body: domainCell?.body ?? "",
-        });
-        setDetailFrontmatter(domainCell?.frontmatter ?? "");
+        syncDetailFromActiveCell(next.activeRow, next.activeCol);
       }
     },
-    [],
+    [syncDetailFromActiveCell],
   );
 
   const selectionRange = useMemo(
@@ -146,6 +138,15 @@ export function MatrixCanvas(): ReactElement {
       return null;
     }
     return formatSelectionSummary(selectionRange);
+  }, [selectionRange]);
+
+  const selectionIsMultiCell = useMemo(() => {
+    if (!selectionRange) {
+      return false;
+    }
+    const width = selectionRange.endCol - selectionRange.startCol + 1;
+    const height = selectionRange.endRow - selectionRange.startRow + 1;
+    return width * height > 1;
   }, [selectionRange]);
 
   const hasCellContent = useMemo(() => document.sheet.cells.size > 0, [document]);
@@ -335,14 +336,6 @@ export function MatrixCanvas(): ReactElement {
 
   const handleCellClick = useCallback(
     (row: number, col: number) => {
-      setSelection({
-        startRow: row,
-        startCol: col,
-        endRow: row,
-        endCol: col,
-        activeRow: row,
-        activeCol: col,
-      });
       syncDetailFromActiveCell(row, col);
       setDetailTab("markdown");
     },
@@ -460,6 +453,7 @@ export function MatrixCanvas(): ReactElement {
             targetLabel={targetLabel}
             selectionLabel={selectionLabel}
             selectionSummary={selectionSummary}
+            selectionIsMultiCell={selectionIsMultiCell}
             prompt={prompt}
             rangeNameInput={rangeNameInput}
             isRunning={isRunning}
