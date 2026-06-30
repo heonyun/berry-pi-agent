@@ -1,9 +1,10 @@
-import { useCallback, useMemo, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { flushSync } from "react-dom";
 import {
   DataEditor,
   GridCellKind,
   type EditableGridCell,
+  type GridCell,
   type GridColumn,
   type GridSelection,
   type Item,
@@ -54,21 +55,41 @@ export function MatrixGrid({
 
   const cellContent = useMemo(() => getCellContent(document), [document]);
 
-  const gridSelection = useMemo((): GridSelection => {
+  const [gridSelection, setGridSelection] = useState<GridSelection>(() => clearedGridSelection());
+
+  const externalSelectionKey = useMemo(() => {
     if (!selection) {
-      return clearedGridSelection();
+      return "";
     }
-    return rangeRefToGridSelection(selection, {
-      col: selection.activeCol,
-      row: selection.activeRow,
-    });
+    const { startCol, startRow, endCol, endRow, activeCol, activeRow } = selection;
+    return `${startCol}:${startRow}:${endCol}:${endRow}:${activeCol}:${activeRow}`;
   }, [selection]);
+
+  const lastExternalSelectionKey = useRef(externalSelectionKey);
+
+  useEffect(() => {
+    if (lastExternalSelectionKey.current === externalSelectionKey) {
+      return;
+    }
+    lastExternalSelectionKey.current = externalSelectionKey;
+    if (!selection) {
+      setGridSelection(clearedGridSelection());
+      return;
+    }
+    setGridSelection(
+      rangeRefToGridSelection(selection, {
+        col: selection.activeCol,
+        row: selection.activeRow,
+      }),
+    );
+  }, [externalSelectionKey, selection]);
 
   const handleGridSelectionChange = useCallback(
     (newSelection: GridSelection) => {
       // WHY: Glide defers controlled selection when onGridSelectionChange is set;
-      // flushSync keeps gridSelection.current available for editOnType/activation.
+      // local flushSync keeps gridSelection.current available for editOnType/activation.
       flushSync(() => {
+        setGridSelection(newSelection);
         onSelectionChange(gridSelectionToMatrixSelection(newSelection));
       });
     },
@@ -100,6 +121,29 @@ export function MatrixGrid({
     [config.cols, config.rows, onCellEdited],
   );
 
+  const editingCellRef = useRef<Item | null>(null);
+
+  const handleCellActivated = useCallback((cell: Item) => {
+    editingCellRef.current = cell;
+  }, []);
+
+  const handleFinishedEditing = useCallback(
+    (newValue: GridCell | undefined) => {
+      const cell = editingCellRef.current;
+      editingCellRef.current = null;
+      if (cell === null || newValue === undefined || newValue.kind !== GridCellKind.Text) {
+        return;
+      }
+      const [col, row] = cell;
+      if (row < 0 || col < 0 || row >= config.rows || col >= config.cols) {
+        return;
+      }
+      // Backup commit when overlay closes; onCellEdited usually fires first via Glide.
+      onCellEdited(row, col, newValue.data);
+    },
+    [config.cols, config.rows, onCellEdited],
+  );
+
   return (
     <div className="matrix-grid-container" data-testid="matrix-grid">
       <DataEditor
@@ -109,9 +153,11 @@ export function MatrixGrid({
         rows={config.rows}
         rowMarkers="number"
         theme={theme}
-        gridSelection={selection !== null ? gridSelection : undefined}
+        gridSelection={gridSelection}
         onCellClicked={handleCellClicked}
         onCellEdited={handleCellEdited}
+        onCellActivated={handleCellActivated}
+        onFinishedEditing={handleFinishedEditing}
         onGridSelectionChange={handleGridSelectionChange}
         rangeSelect="rect"
         drawFocusRing={true}

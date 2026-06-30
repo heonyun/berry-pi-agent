@@ -148,6 +148,15 @@ export function MatrixCanvas(): ReactElement {
     return formatSelectionSummary(selectionRange);
   }, [selectionRange]);
 
+  const selectionIsMultiCell = useMemo(() => {
+    if (!selectionRange) {
+      return false;
+    }
+    const width = selectionRange.endCol - selectionRange.startCol + 1;
+    const height = selectionRange.endRow - selectionRange.startRow + 1;
+    return width * height > 1;
+  }, [selectionRange]);
+
   const hasCellContent = useMemo(() => document.sheet.cells.size > 0, [document]);
 
   const showAiSection = Boolean(
@@ -335,14 +344,6 @@ export function MatrixCanvas(): ReactElement {
 
   const handleCellClick = useCallback(
     (row: number, col: number) => {
-      setSelection({
-        startRow: row,
-        startCol: col,
-        endRow: row,
-        endCol: col,
-        activeRow: row,
-        activeCol: col,
-      });
       syncDetailFromActiveCell(row, col);
       setDetailTab("markdown");
     },
@@ -460,6 +461,7 @@ export function MatrixCanvas(): ReactElement {
             targetLabel={targetLabel}
             selectionLabel={selectionLabel}
             selectionSummary={selectionSummary}
+            selectionIsMultiCell={selectionIsMultiCell}
             prompt={prompt}
             rangeNameInput={rangeNameInput}
             isRunning={isRunning}
