@@ -56,7 +56,7 @@ export async function focusMatrixCell(page: Page, address: string): Promise<void
   const target = parseCellAddress(address);
   const canvas = await gridCanvas(page);
   const summary = await page.getByTestId("matrix-status-selection").textContent({ timeout: 5000 }).catch(() => null);
-  const activeMatch = /Selection:\s*([A-Z]+\d+):/i.exec(summary ?? "");
+  const activeMatch = /Selection:\s*([A-Z]+\d+)/i.exec(summary ?? "");
   let current = activeMatch ? parseCellAddress(activeMatch[1]) : null;
 
   if (current === null) {

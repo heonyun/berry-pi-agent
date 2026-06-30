@@ -4,7 +4,6 @@ import {
   DataEditor,
   GridCellKind,
   type EditableGridCell,
-  type GridCell,
   type GridColumn,
   type GridSelection,
   type Item,
@@ -121,29 +120,6 @@ export function MatrixGrid({
     [config.cols, config.rows, onCellEdited],
   );
 
-  const editingCellRef = useRef<Item | null>(null);
-
-  const handleCellActivated = useCallback((cell: Item) => {
-    editingCellRef.current = cell;
-  }, []);
-
-  const handleFinishedEditing = useCallback(
-    (newValue: GridCell | undefined) => {
-      const cell = editingCellRef.current;
-      editingCellRef.current = null;
-      if (cell === null || newValue === undefined || newValue.kind !== GridCellKind.Text) {
-        return;
-      }
-      const [col, row] = cell;
-      if (row < 0 || col < 0 || row >= config.rows || col >= config.cols) {
-        return;
-      }
-      // Backup commit when overlay closes; onCellEdited usually fires first via Glide.
-      onCellEdited(row, col, newValue.data);
-    },
-    [config.cols, config.rows, onCellEdited],
-  );
-
   return (
     <div className="matrix-grid-container" data-testid="matrix-grid">
       <DataEditor
@@ -156,8 +132,6 @@ export function MatrixGrid({
         gridSelection={gridSelection}
         onCellClicked={handleCellClicked}
         onCellEdited={handleCellEdited}
-        onCellActivated={handleCellActivated}
-        onFinishedEditing={handleFinishedEditing}
         onGridSelectionChange={handleGridSelectionChange}
         rangeSelect="rect"
         drawFocusRing={true}

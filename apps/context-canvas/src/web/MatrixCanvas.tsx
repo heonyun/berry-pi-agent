@@ -115,18 +115,10 @@ export function MatrixCanvas(): ReactElement {
     (next: MatrixGridSelectionState | null) => {
       setSelection(next);
       if (next) {
-        const key = cellKey(next.activeRow, next.activeCol);
-        const domainCell = docRef.current.sheet.cells.get(key);
-        setSelectedHistory(null);
-        setDetailCell({
-          row: next.activeRow,
-          col: next.activeCol,
-          body: domainCell?.body ?? "",
-        });
-        setDetailFrontmatter(domainCell?.frontmatter ?? "");
+        syncDetailFromActiveCell(next.activeRow, next.activeCol);
       }
     },
-    [],
+    [syncDetailFromActiveCell],
   );
 
   const selectionRange = useMemo(
