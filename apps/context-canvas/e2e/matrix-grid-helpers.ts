@@ -129,7 +129,7 @@ export async function commitGridEdit(page: Page, key: "Enter" | "Tab"): Promise<
 
 /** Assert cell body persisted in domain (re-select and read detail pane). */
 export async function expectCellStored(page: Page, address: string, body: string): Promise<void> {
-  await page.locator(".gdg-input").waitFor({ state: "hidden", timeout: 3000 }).catch(() => undefined);
+  await page.locator(".gdg-input").waitFor({ state: "hidden", timeout: 3000 });
   await focusMatrixCell(page, address);
   await expectDetailMarkdownBody(page, body);
 }
@@ -145,8 +145,13 @@ export async function fillCellAndMove(
   address: string,
   text: string,
   key: "Enter" | "Tab",
+  options: { selectCell?: boolean } = {},
 ): Promise<void> {
-  await clickMatrixCell(page, address);
+  if (options.selectCell) {
+    await clickMatrixCell(page, address);
+  } else {
+    await expectActiveSelection(page, address);
+  }
   await typeDirectlyInGrid(page, address, text);
   await commitGridEdit(page, key);
 }
@@ -159,11 +164,11 @@ export async function fill2x2Matrix(
   page: Page,
   values: { a1: string; b1: string; a2: string; b2: string },
 ): Promise<void> {
-  await fillCellAndMove(page, "A1", values.a1, "Tab");
+  await fillCellAndMove(page, "A1", values.a1, "Tab", { selectCell: true });
   await fillCellAndMove(page, "B1", values.b1, "Enter");
+  await focusMatrixCell(page, "A2");
   await fillCellAndMove(page, "A2", values.a2, "Tab");
   await fillCellAndMove(page, "B2", values.b2, "Enter");
-  await clickMatrixCell(page, "B2");
 }
 
 export async function dragMatrixRange(

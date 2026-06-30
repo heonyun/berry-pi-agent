@@ -32,6 +32,16 @@ export interface MatrixGridProps {
   readonly onSelectionChange: (selection: MatrixGridSelectionState | null) => void;
 }
 
+function matrixSelectionToGridSelection(selection: MatrixGridSelectionState | null): GridSelection {
+  if (!selection) {
+    return clearedGridSelection();
+  }
+  return rangeRefToGridSelection(selection, {
+    col: selection.activeCol,
+    row: selection.activeRow,
+  });
+}
+
 export function MatrixGrid({
   document,
   selection,
@@ -54,7 +64,9 @@ export function MatrixGrid({
 
   const cellContent = useMemo(() => getCellContent(document), [document]);
 
-  const [gridSelection, setGridSelection] = useState<GridSelection>(() => clearedGridSelection());
+  const [gridSelection, setGridSelection] = useState<GridSelection>(() =>
+    matrixSelectionToGridSelection(selection),
+  );
 
   const externalSelectionKey = useMemo(() => {
     if (!selection) {
@@ -75,12 +87,7 @@ export function MatrixGrid({
       setGridSelection(clearedGridSelection());
       return;
     }
-    setGridSelection(
-      rangeRefToGridSelection(selection, {
-        col: selection.activeCol,
-        row: selection.activeRow,
-      }),
-    );
+    setGridSelection(matrixSelectionToGridSelection(selection));
   }, [externalSelectionKey, selection]);
 
   const handleGridSelectionChange = useCallback(

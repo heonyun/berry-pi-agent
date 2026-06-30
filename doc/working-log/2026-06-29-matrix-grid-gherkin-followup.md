@@ -30,7 +30,7 @@ Post–PR #69 Gherkin follow-up: inline grid edit e2e now commits through Glide 
 ### Product
 
 - **`index.html`**: added `<div id="portal"></div>` — required by Glide Data Grid overlay editor.
-- **`MatrixGrid.tsx`**: local `gridSelection` state with `flushSync` on `onGridSelectionChange`; `onCellActivated` / `onFinishedEditing` backup commit path.
+- **`MatrixGrid.tsx`**: local `gridSelection` state initialized from the incoming selection prop; `flushSync` on `onGridSelectionChange`; inline edits commit through Glide `onCellEdited`.
 - **`MatrixComposer.tsx`**: `matrix-ai-range-hint` for multi-cell AI affordance.
 - **`MatrixCanvas.tsx`**: detail sync via `handleSelectionChange` only (no duplicate `setSelection` on click).
 
