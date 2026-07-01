@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   color-scheme: light;
   font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
   --bg: #f5eadc;
@@ -693,7 +693,7 @@ button.active {
 }
 
 
-/* ── Context Matrix styles ──────────────────────────────────────────────── */
+/* ?? Context Matrix styles ???????????????????????????????????????????????? */
 .matrix-canvas {
   display: flex;
   flex-direction: row;
@@ -1225,6 +1225,7 @@ button.active {
 }
 
 .matrix-status-bar .v2-status-selection {
+  min-width: 0;
   color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1359,7 +1360,7 @@ button.active {
   overflow-y: auto;
 }
 
-/* Legacy overlay side panel — superseded by matrix-detail-pane */
+/* Legacy overlay side panel ??superseded by matrix-detail-pane */
 .matrix-side-panel {
   position: absolute;
   top: 0;
