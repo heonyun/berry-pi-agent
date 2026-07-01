@@ -1,4 +1,5 @@
-import type { ReactElement } from "react";
+import type { KeyboardEvent, ReactElement } from "react";
+import { useRef } from "react";
 import { formatColumnLabel } from "../shared/domain.ts";
 import type { Cell } from "../shared/domain.ts";
 
@@ -22,6 +23,8 @@ export interface MatrixDetailPaneProps {
   readonly onFrontmatterChange: (frontmatter: string) => void;
 }
 
+const DETAIL_TABS: readonly DetailTab[] = ["summary", "provenance", "markdown"];
+
 function summarizeBody(body: string, maxLength = 280): string {
   const trimmed = body.trim();
   if (trimmed.length <= maxLength) {
@@ -41,16 +44,47 @@ export function MatrixDetailPane({
   onClear,
   onFrontmatterChange,
 }: MatrixDetailPaneProps): ReactElement {
+  const tabRefs = useRef<Partial<Record<DetailTab, HTMLButtonElement | null>>>({});
+
+  const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, tab: DetailTab) => {
+    const currentIndex = DETAIL_TABS.indexOf(tab);
+    const lastIndex = DETAIL_TABS.length - 1;
+    let nextTab: DetailTab | null = null;
+
+    if (event.key === "ArrowRight") {
+      nextTab = DETAIL_TABS[currentIndex === lastIndex ? 0 : currentIndex + 1];
+    } else if (event.key === "ArrowLeft") {
+      nextTab = DETAIL_TABS[currentIndex === 0 ? lastIndex : currentIndex - 1];
+    } else if (event.key === "Home") {
+      nextTab = DETAIL_TABS[0];
+    } else if (event.key === "End") {
+      nextTab = DETAIL_TABS[lastIndex];
+    }
+
+    if (nextTab) {
+      event.preventDefault();
+      // RISK: roving tabIndex does not move focus by itself; keyboard users must stay in the tablist.
+      tabRefs.current[nextTab]?.focus();
+      onTabChange(nextTab);
+    }
+  };
+
   return (
     <aside className="matrix-detail-pane" data-testid="matrix-detail-pane">
-      <div className="matrix-detail-tabs">
-        {(["summary", "provenance", "markdown"] as const).map((tab) => (
+      <div className="matrix-detail-tabs" role="tablist" aria-label="Cell detail views">
+        {DETAIL_TABS.map((tab) => (
           <button
             key={tab}
             type="button"
+            role="tab"
             className={`matrix-detail-tab${detailTab === tab ? " active" : ""}`}
             data-testid={`detail-tab-${tab}`}
-            aria-current={detailTab === tab ? "true" : undefined}
+            aria-selected={detailTab === tab}
+            tabIndex={detailTab === tab ? 0 : -1}
+            ref={(button) => {
+              tabRefs.current[tab] = button;
+            }}
+            onKeyDown={(event) => handleTabKeyDown(event, tab)}
             onClick={() => onTabChange(tab)}
           >
             {tab.charAt(0).toUpperCase() + tab.slice(1)}
