@@ -127,6 +127,14 @@ export function MatrixGrid({
     [config.cols, config.rows, onCellEdited],
   );
 
+  const keybindings = useMemo(
+    () => ({
+      // Glide default activateCell is Space|Enter|shift+Enter; add F2 for spreadsheet parity (#73).
+      activateCell: " |Enter|shift+Enter|F2",
+    }),
+    [],
+  );
+
   return (
     <div className="matrix-grid-container" data-testid="matrix-grid">
       <DataEditor
@@ -144,6 +152,7 @@ export function MatrixGrid({
         drawFocusRing={true}
         cellActivationBehavior="second-click"
         editOnType={true}
+        keybindings={keybindings}
         trapFocus={true}
         scrollToActiveCell={true}
         smoothScrollX
