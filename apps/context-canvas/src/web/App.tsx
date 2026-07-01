@@ -499,6 +499,7 @@ function ViewToggle({ view, onToggle }: { view: "canvas" | "matrix"; onToggle: (
   return (
     <button
       className="view-toggle-button"
+      data-testid="view-toggle"
       onClick={onToggle}
       title={view === "canvas" ? "Switch to Matrix view" : "Switch to Canvas view"}
     >
@@ -511,15 +512,19 @@ export function App() {
   const [view, setView] = useState<"canvas" | "matrix">("matrix");
 
   return (
-    <>
-      <ViewToggle view={view} onToggle={() => setView((v) => (v === "canvas" ? "matrix" : "canvas"))} />
-      {view === "canvas" ? (
-        <ReactFlowProvider>
-          <QABlockCanvasApp />
-        </ReactFlowProvider>
-      ) : (
-        <MatrixCanvas />
-      )}
-    </>
+    <div className="context-app-shell" data-testid="context-app-shell">
+      <header className="app-chrome" data-testid="app-chrome">
+        <ViewToggle view={view} onToggle={() => setView((v) => (v === "canvas" ? "matrix" : "canvas"))} />
+      </header>
+      <div className="app-body" data-testid="app-body">
+        {view === "canvas" ? (
+          <ReactFlowProvider>
+            <QABlockCanvasApp />
+          </ReactFlowProvider>
+        ) : (
+          <MatrixCanvas />
+        )}
+      </div>
+    </div>
   );
 }

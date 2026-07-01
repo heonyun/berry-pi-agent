@@ -516,7 +516,7 @@ button.active {
 .v2-status-bar {
   position: absolute;
   left: 16px;
-  top: 44px; /* clear fixed view toggle (top:8px) */
+  top: 16px;
   z-index: 6;
   display: flex;
   gap: 12px;
@@ -1442,12 +1442,41 @@ button.active {
   opacity: 0.85;
 }
 
+.context-app-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-chrome {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.app-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.app-body > * {
+  flex: 1;
+  min-width: 0;
+}
+
 /* View toggle button */
 .view-toggle-button {
-  position: fixed;
-  top: 8px;
-  left: 8px;
-  z-index: 1000;
+  min-height: 28px;
   padding: 4px 14px;
   background: var(--accent-strong);
   color: white;
