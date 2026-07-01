@@ -60,6 +60,21 @@ test.describe("Feature: Excel-like matrix cell editing", () => {
 
     await expectSelectionSummary(page, "A1:C1", "3×1");
   });
+
+  test("Scenario: F2 edits the active existing cell", async ({ page }) => {
+    await clickMatrixCell(page, "C1");
+    await typeDirectlyInGrid(page, "C1", "initial");
+    await commitGridEdit(page, "Enter");
+
+    await clickMatrixCell(page, "C1");
+    await page.keyboard.press("F2");
+    const overlayInput = page.locator(".gdg-input");
+    await overlayInput.waitFor({ state: "visible", timeout: 5000 });
+    await overlayInput.fill("edited");
+    await overlayInput.press("Enter");
+
+    await expectCellStored(page, "C1", "edited");
+  });
 });
 
 test.describe("Feature: 2x2 matrix workflow", () => {
