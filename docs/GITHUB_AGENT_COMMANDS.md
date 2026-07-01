@@ -13,6 +13,17 @@ Antigravity, Codex, and other delegators must open pi-agent issues/PRs on **`heo
 
 Do not interpret upstream auto-close text as a DeepSeek refusal. It is maintainer gate policy, not an AI review result.
 
+## Fork PR guardrail
+
+**Never open PRs against `earendil-works/pi` from this fork workflow.** A `gh pr create` without an explicit repo flag can target upstream and open an unintended cross-repo PR.
+
+| Rule | Detail |
+| --- | --- |
+| Create PR | Always `gh pr create --repo heonyun/berry-pi-agent` — never rely on the default upstream repo |
+| View/list PR | `gh pr view`, `gh pr list`, and related commands should use `--repo heonyun/berry-pi-agent` unless the user explicitly asks for upstream |
+| Default repo | Run `gh repo set-default heonyun/berry-pi-agent` in this workspace; still pass `--repo` on PR mutations |
+| Script wrapper | Prefer `scripts/gh-fork.ps1` (sets `GH_REPO=heonyun/berry-pi-agent`) for fork issue/PR/check commands |
+
 ## For agents (handoff)
 
 | Layer | Role |
