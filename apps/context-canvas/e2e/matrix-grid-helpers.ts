@@ -171,6 +171,37 @@ export async function fill2x2Matrix(
   await fillCellAndMove(page, "B2", values.b2, "Enter");
 }
 
+const ROW_MARKER_WIDTH = 32;
+const HEADER_HEIGHT = 36;
+
+export async function clickRowMarker(page: Page, rowNumber: number): Promise<void> {
+  const row = rowNumber - 1;
+  const canvas = await gridCanvas(page);
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) {
+    return;
+  }
+  const x = box.x + ROW_MARKER_WIDTH / 2;
+  const y = box.y + HEADER_HEIGHT + row * ROW_HEIGHT + ROW_HEIGHT / 2;
+  await page.mouse.click(x, y);
+  await canvas.focus();
+}
+
+export async function clickColumnHeader(page: Page, colLetter: string): Promise<void> {
+  const { col } = parseCellAddress(`${colLetter}1`);
+  const canvas = await gridCanvas(page);
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) {
+    return;
+  }
+  const x = box.x + ROW_MARKER_WIDTH + col * COL_WIDTH + COL_WIDTH / 2;
+  const y = box.y + HEADER_HEIGHT / 2;
+  await page.mouse.click(x, y);
+  await canvas.focus();
+}
+
 export async function dragMatrixRange(
   page: Page,
   fromAddress: string,

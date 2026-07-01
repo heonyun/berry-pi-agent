@@ -96,10 +96,10 @@ export function MatrixGrid({
       // local flushSync keeps gridSelection.current available for editOnType/activation.
       flushSync(() => {
         setGridSelection(newSelection);
-        onSelectionChange(gridSelectionToMatrixSelection(newSelection));
+        onSelectionChange(gridSelectionToMatrixSelection(newSelection, config));
       });
     },
-    [onSelectionChange],
+    [config, onSelectionChange],
   );
 
   const handleCellClicked = useCallback(
@@ -142,13 +142,15 @@ export function MatrixGrid({
         getCellsForSelection={true}
         columns={columns}
         rows={config.rows}
-        rowMarkers="number"
+        rowMarkers={{ kind: "clickable-number", width: 32 }}
         theme={theme}
         gridSelection={gridSelection}
         onCellClicked={handleCellClicked}
         onCellEdited={handleCellEdited}
         onGridSelectionChange={handleGridSelectionChange}
         rangeSelect="rect"
+        rowSelect="single"
+        columnSelect="single"
         drawFocusRing={true}
         cellActivationBehavior="second-click"
         editOnType={true}
