@@ -71,7 +71,7 @@ function matrixShortcutDirection(event: KeyboardEvent): MatrixTargetDirection | 
 }
 
 function shouldHandleMatrixShortcut(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
+  if (!(target instanceof Element)) {
     return false;
   }
   if (target.closest('[data-testid="matrix-composer-input"]')) {
@@ -430,10 +430,7 @@ export function MatrixCanvas(): ReactElement {
     ],
   );
   const handleMatrixShortcutRunRef = useRef(handleMatrixShortcutRun);
-
-  useEffect(() => {
-    handleMatrixShortcutRunRef.current = handleMatrixShortcutRun;
-  }, [handleMatrixShortcutRun]);
+  handleMatrixShortcutRunRef.current = handleMatrixShortcutRun;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

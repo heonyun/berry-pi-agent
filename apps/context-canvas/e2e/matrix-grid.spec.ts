@@ -331,6 +331,30 @@ test.describe("Feature: Matrix inferred target shortcuts", () => {
     await expect(page.getByTestId("target-range-chip")).toContainText("E1");
   });
 
+  test("Scenario: Ctrl+Enter runs against an existing explicit target", async ({ page }) => {
+    const requests = await mockMatrixRun(page);
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+    await focusMatrixCell(page, "E1");
+    await page.getByTestId("matrix-set-target").click();
+    await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
+    await page.getByTestId("matrix-composer-input").fill("run explicit target");
+
+    await page.getByTestId("data-grid-canvas").focus();
+    await page.keyboard.press("Control+Enter");
+
+    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Run applied/i, {
+      timeout: 60000,
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.targetRange).toEqual({
+      startRow: 0,
+      startCol: 4,
+      endRow: 0,
+      endCol: 4,
+    });
+    await expect(page.getByTestId("target-range-chip")).toContainText("E1");
+  });
+
   test("Scenario: Shortcuts do not run while detail textarea has focus", async ({ page }) => {
     const requests = await mockMatrixRun(page);
     await clickMatrixCell(page, "A1");
@@ -354,6 +378,20 @@ test.describe("Feature: Matrix inferred target shortcuts", () => {
     await page.keyboard.press("Control+Shift+Enter");
 
     await expect(page.getByTestId("matrix-status-bar")).toContainText("No room right");
+    expect(requests).toHaveLength(0);
+  });
+
+  test("Scenario: Out-of-bounds below inference fails visibly and does not run", async ({
+    page,
+  }) => {
+    const requests = await mockMatrixRun(page);
+    await focusMatrixCell(page, "A20");
+    await page.getByTestId("matrix-composer-input").fill("no room below");
+
+    await page.getByTestId("data-grid-canvas").focus();
+    await page.keyboard.press("Control+Enter");
+
+    await expect(page.getByTestId("matrix-status-bar")).toContainText("No room below");
     expect(requests).toHaveLength(0);
   });
 });
