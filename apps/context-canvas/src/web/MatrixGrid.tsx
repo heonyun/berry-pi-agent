@@ -4,6 +4,7 @@ import {
   DataEditor,
   GridCellKind,
   type EditableGridCell,
+  type EditListItem,
   type GridColumn,
   type GridSelection,
   type Item,
@@ -24,11 +25,18 @@ import {
 
 export type { MatrixGridSelectionState };
 
+export interface MatrixCellEdit {
+  readonly row: number;
+  readonly col: number;
+  readonly body: string;
+}
+
 export interface MatrixGridProps {
   readonly document: MatrixDocument;
   readonly selection: MatrixGridSelectionState | null;
   readonly onCellClick: (row: number, col: number) => void;
   readonly onCellEdited: (row: number, col: number, body: string) => void;
+  readonly onCellsEdited: (edits: readonly MatrixCellEdit[]) => void;
   readonly onSelectionChange: (selection: MatrixGridSelectionState | null) => void;
 }
 
@@ -47,6 +55,7 @@ export function MatrixGrid({
   selection,
   onCellClick,
   onCellEdited,
+  onCellsEdited,
   onSelectionChange,
 }: MatrixGridProps): ReactElement {
   const config = useMemo(() => getMatrixGridConfig(document), [document]);
@@ -127,6 +136,25 @@ export function MatrixGrid({
     [config.cols, config.rows, onCellEdited],
   );
 
+  const handleCellsEdited = useCallback(
+    (items: readonly EditListItem[]) => {
+      const edits: MatrixCellEdit[] = [];
+      for (const item of items) {
+        if (item.value.kind !== GridCellKind.Text) {
+          continue;
+        }
+        const [col, row] = item.location;
+        if (row < 0 || col < 0 || row >= config.rows || col >= config.cols) {
+          continue;
+        }
+        edits.push({ row, col, body: item.value.data });
+      }
+      onCellsEdited(edits);
+      return true;
+    },
+    [config.cols, config.rows, onCellsEdited],
+  );
+
   const keybindings = useMemo(
     () => ({
       // Glide default activateCell is Space|Enter|shift+Enter; add F2 for spreadsheet parity (#73).
@@ -147,6 +175,9 @@ export function MatrixGrid({
         gridSelection={gridSelection}
         onCellClicked={handleCellClicked}
         onCellEdited={handleCellEdited}
+        onCellsEdited={handleCellsEdited}
+        onDelete={(deletedSelection) => deletedSelection}
+        onPaste={true}
         onGridSelectionChange={handleGridSelectionChange}
         rangeSelect="rect"
         rowSelect="single"

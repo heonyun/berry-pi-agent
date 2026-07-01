@@ -21,7 +21,7 @@ import {
 import { bindAiCommandToUserTarget, parseAiCommand } from "../shared/matrix-validation.ts";
 import { runMatrix } from "./run-matrix.ts";
 import { MatrixShell } from "./MatrixShell.tsx";
-import { MatrixGrid, type MatrixGridSelectionState } from "./MatrixGrid.tsx";
+import { MatrixGrid, type MatrixCellEdit, type MatrixGridSelectionState } from "./MatrixGrid.tsx";
 import { MatrixComposer, type ContextChip } from "./MatrixComposer.tsx";
 import { MatrixDetailPane, type DetailTab, type DetailCellState } from "./MatrixDetailPane.tsx";
 import { MatrixLeftNav } from "./MatrixLeftNav.tsx";
@@ -352,6 +352,27 @@ export function MatrixCanvas(): ReactElement {
     [dispatch],
   );
 
+  const handleCellsEdited = useCallback(
+    (edits: readonly MatrixCellEdit[]) => {
+      if (edits.length === 0) {
+        return;
+      }
+
+      for (const edit of edits) {
+        dispatch({ type: "update_cell_body", row: edit.row, col: edit.col, body: edit.body });
+      }
+
+      const activeEdit =
+        selection &&
+        edits.find((edit) => edit.row === selection.activeRow && edit.col === selection.activeCol);
+      const detailEdit = activeEdit || edits[0];
+      setDetailCell({ row: detailEdit.row, col: detailEdit.col, body: detailEdit.body });
+      const label = `${formatColumnLabel(detailEdit.col)}${detailEdit.row + 1}`;
+      setStatus(edits.length === 1 ? `Cell ${label} updated` : `${edits.length} cells updated`);
+    },
+    [dispatch, selection],
+  );
+
   const handleQuickSummarize = useCallback(() => {
     if (!selectionRange || !selectionLabel) {
       setStatus("Select a range to summarize");
@@ -443,6 +464,7 @@ export function MatrixCanvas(): ReactElement {
               selection={selection}
               onCellClick={handleCellClick}
               onCellEdited={handleCellEdited}
+              onCellsEdited={handleCellsEdited}
               onSelectionChange={handleSelectionChange}
             />
             <MatrixOnboarding />

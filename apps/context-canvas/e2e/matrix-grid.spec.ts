@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import {
   clickMatrixCell,
   commitGridEdit,
@@ -15,6 +15,17 @@ import {
   clickRowMarker,
   clickColumnHeader,
 } from "./matrix-grid-helpers.ts";
+
+async function selectRangeByKeyboard(page: Page, anchor: string, keys: readonly string[]): Promise<void> {
+  await focusMatrixCell(page, anchor);
+  const canvas = page.getByTestId("data-grid-canvas");
+  await canvas.focus();
+  await page.keyboard.down("Shift");
+  for (const key of keys) {
+    await page.keyboard.press(key);
+  }
+  await page.keyboard.up("Shift");
+}
 
 test.describe("Feature: Excel-like matrix cell editing", () => {
   test.beforeEach(async ({ page }) => {
@@ -108,6 +119,72 @@ test.describe("Feature: 2x2 matrix workflow", () => {
     await expect(page.getByTestId("matrix-name-box")).toContainText("A1:B2");
     await expect(page.getByTestId("matrix-name-box")).toContainText("2×2");
     await expectComposerAiRangeReady(page);
+  });
+});
+
+test.describe("Feature: Matrix clipboard", () => {
+  test.beforeEach(async ({ context, page }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await prepareMatrixGrid(page);
+  });
+
+  test("Scenario: Copy and paste a 2x2 range as TSV cells", async ({ page }) => {
+    await page.evaluate(() =>
+      navigator.clipboard.writeText("Write a short friendly Korean summary into the target cell."),
+    );
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+    await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
+    await expectSelectionSummary(page, "A1:B2", "2×2");
+
+    await page.keyboard.press("Control+C");
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe("q1\tq2\nq3\tq4");
+
+    await focusMatrixCell(page, "C1");
+    await page.keyboard.press("Control+V");
+
+    await expectCellStored(page, "C1", "q1");
+    await expectCellStored(page, "D1", "q2");
+    await expectCellStored(page, "C2", "q3");
+    await expectCellStored(page, "D2", "q4");
+  });
+
+  test("Scenario: Cut clears the source range and can paste into another range", async ({ page }) => {
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+    await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
+    await expectSelectionSummary(page, "A1:B2", "2×2");
+
+    await page.keyboard.press("Control+X");
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe("q1\tq2\nq3\tq4");
+
+    await expectCellStored(page, "A1", "");
+    await expectCellStored(page, "B1", "");
+    await expectCellStored(page, "A2", "");
+    await expectCellStored(page, "B2", "");
+
+    await focusMatrixCell(page, "C1");
+    await page.keyboard.press("Control+V");
+
+    await expectCellStored(page, "C1", "q1");
+    await expectCellStored(page, "D1", "q2");
+    await expectCellStored(page, "C2", "q3");
+    await expectCellStored(page, "D2", "q4");
+  });
+
+  test("Scenario: Delete clears every selected cell", async ({ page }) => {
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+    await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
+    await expectSelectionSummary(page, "A1:B2", "2×2");
+
+    await page.keyboard.press("Delete");
+
+    await expectCellStored(page, "A1", "");
+    await expectCellStored(page, "B1", "");
+    await expectCellStored(page, "A2", "");
+    await expectCellStored(page, "B2", "");
   });
 });
 
