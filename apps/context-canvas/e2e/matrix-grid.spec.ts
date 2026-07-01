@@ -186,6 +186,38 @@ test.describe("Feature: Matrix clipboard", () => {
     await expectCellStored(page, "A2", "");
     await expectCellStored(page, "B2", "");
   });
+
+  test("Scenario: Clipboard shortcuts leave grid cells unchanged while detail textarea has focus", async ({
+    page,
+  }) => {
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+    await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
+    await expectSelectionSummary(page, "A1:B2", "2×2");
+
+    const detailTextarea = page.getByTestId("side-panel-textarea");
+    await detailTextarea.fill("detail clipboard text");
+    await detailTextarea.selectText();
+    await page.keyboard.press("Control+C");
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe("detail clipboard text");
+
+    await detailTextarea.fill("");
+    await page.evaluate(() => navigator.clipboard.writeText("external paste text"));
+    await detailTextarea.focus();
+    await page.keyboard.press("Control+V");
+    await expect(detailTextarea).toHaveValue("external paste text");
+
+    await detailTextarea.selectText();
+    await page.keyboard.press("Control+X");
+    await expect(detailTextarea).toHaveValue("");
+
+    await focusMatrixCell(page, "C3");
+    await expectCellStored(page, "A1", "q1");
+    await expectCellStored(page, "B1", "q2");
+    await expectCellStored(page, "A2", "q3");
+    await expectCellStored(page, "B2", "q4");
+  });
 });
 
 test.describe("Feature: Side panel and recent ranges (real clicks)", () => {
