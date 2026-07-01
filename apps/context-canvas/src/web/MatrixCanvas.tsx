@@ -437,6 +437,9 @@ export function MatrixCanvas(): ReactElement {
       if (event.isComposing) {
         return;
       }
+      if (event.repeat) {
+        return;
+      }
       const direction = matrixShortcutDirection(event);
       if (!direction || !shouldHandleMatrixShortcut(event.target)) {
         return;

@@ -367,6 +367,30 @@ test.describe("Feature: Matrix inferred target shortcuts", () => {
     expect(requests).toHaveLength(0);
   });
 
+  test("Scenario: Repeated shortcut keydown does not run again", async ({ page }) => {
+    const requests = await mockMatrixRun(page);
+    await clickMatrixCell(page, "A1");
+    const composerInput = page.getByTestId("matrix-composer-input");
+    await composerInput.fill("ignore repeat");
+    await composerInput.focus();
+
+    await page.evaluate(() => {
+      const input = document.querySelector('[data-testid="matrix-composer-input"]');
+      input?.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          ctrlKey: true,
+          repeat: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    await expect(page.getByTestId("matrix-status-bar")).not.toContainText(/Run applied/i);
+    expect(requests).toHaveLength(0);
+  });
+
   test("Scenario: Out-of-bounds right inference fails visibly and does not run", async ({
     page,
   }) => {
