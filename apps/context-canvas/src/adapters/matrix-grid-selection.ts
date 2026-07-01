@@ -15,6 +15,19 @@ export interface MatrixGridSelectionState {
   readonly activeRow: number;
 }
 
+export interface GridSheetBounds {
+  readonly rows: number;
+  readonly cols: number;
+}
+
+function compactSelectionSpan(selection: CompactSelection): { start: number; end: number } | null {
+  if (selection.length === 0) {
+    return null;
+  }
+  const indices = selection.toArray();
+  return { start: Math.min(...indices), end: Math.max(...indices) };
+}
+
 export function rangeRefToGridSelection(
   range: RangeRefDTO,
   activeCell?: { readonly col: number; readonly row: number },
@@ -57,7 +70,32 @@ export function clearedGridSelection(): GridSelection {
 
 export function gridSelectionToMatrixSelection(
   selection: GridSelection,
+  bounds?: GridSheetBounds,
 ): MatrixGridSelectionState | null {
+  const rowSpan = bounds ? compactSelectionSpan(selection.rows) : null;
+  if (rowSpan && bounds) {
+    return {
+      startCol: 0,
+      startRow: rowSpan.start,
+      endCol: bounds.cols - 1,
+      endRow: rowSpan.end,
+      activeCol: 0,
+      activeRow: rowSpan.start,
+    };
+  }
+
+  const colSpan = bounds ? compactSelectionSpan(selection.columns) : null;
+  if (colSpan && bounds) {
+    return {
+      startCol: colSpan.start,
+      startRow: 0,
+      endCol: colSpan.end,
+      endRow: bounds.rows - 1,
+      activeCol: colSpan.start,
+      activeRow: 0,
+    };
+  }
+
   if (!selection.current) {
     return null;
   }

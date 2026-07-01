@@ -12,6 +12,8 @@ import {
   focusMatrixCell,
   prepareMatrixGrid,
   typeDirectlyInGrid,
+  clickRowMarker,
+  clickColumnHeader,
 } from "./matrix-grid-helpers.ts";
 
 test.describe("Feature: Excel-like matrix cell editing", () => {
@@ -134,5 +136,21 @@ test.describe("Feature: Side panel and recent ranges (real clicks)", () => {
     await expect(page.getByTestId("matrix-status-selection")).toContainText("C1");
     await page.getByTestId("recent-range-inputs").click({ timeout: 5000 });
     await expectSelectionSummary(page, "A1:B1", "2×1");
+  });
+});
+
+test.describe("Feature: Row and column header selection", () => {
+  test.beforeEach(async ({ page }) => {
+    await prepareMatrixGrid(page);
+  });
+
+  test("Scenario: Click a row marker to select the whole row", async ({ page }) => {
+    await clickRowMarker(page, 2);
+    await expectSelectionSummary(page, "A2:AX2", "50×1");
+  });
+
+  test("Scenario: Click a column header to select the whole column", async ({ page }) => {
+    await clickColumnHeader(page, "B");
+    await expectSelectionSummary(page, "B1:B20", "1×20");
   });
 });
