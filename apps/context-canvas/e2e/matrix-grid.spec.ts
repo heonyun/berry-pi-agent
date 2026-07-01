@@ -27,6 +27,48 @@ async function selectRangeByKeyboard(page: Page, anchor: string, keys: readonly 
   await page.keyboard.up("Shift");
 }
 
+type MatrixRunRequest = {
+  readonly prompt: string;
+  readonly targetRange: {
+    readonly startRow: number;
+    readonly startCol: number;
+    readonly endRow: number;
+    readonly endCol: number;
+  };
+  readonly compiled: {
+    readonly contextRangeLabels: readonly string[];
+    readonly targetRangeLabel: string;
+    readonly contextText: string;
+  };
+};
+
+async function mockMatrixRun(page: Page): Promise<MatrixRunRequest[]> {
+  const requests: MatrixRunRequest[] = [];
+  await page.route("**/api/matrix-run", async (route) => {
+    const request = route.request().postDataJSON() as MatrixRunRequest;
+    requests.push(request);
+    const { targetRange } = request;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        intent: request.prompt,
+        targetRange,
+        patches: [
+          {
+            row: targetRange.startRow,
+            col: targetRange.startCol,
+            value: "shortcut-result",
+            body: "Shortcut result",
+            provenance: "e2e",
+          },
+        ],
+      }),
+    });
+  });
+  return requests;
+}
+
 test.describe("Feature: Excel-like matrix cell editing", () => {
   test.beforeEach(async ({ page }) => {
     await prepareMatrixGrid(page);
@@ -217,6 +259,164 @@ test.describe("Feature: Matrix clipboard", () => {
     await expectCellStored(page, "B1", "q2");
     await expectCellStored(page, "A2", "q3");
     await expectCellStored(page, "B2", "q4");
+  });
+});
+
+test.describe("Feature: Matrix inferred target shortcuts", () => {
+  test.beforeEach(async ({ page }) => {
+    await prepareMatrixGrid(page);
+  });
+
+  test("Scenario: Ctrl+Enter infers a below target, adds context, and runs", async ({ page }) => {
+    const requests = await mockMatrixRun(page);
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+    await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
+    const composerInput = page.getByTestId("matrix-composer-input");
+    await composerInput.fill("answer below");
+    await composerInput.focus();
+    await page.keyboard.press("Control+Enter");
+
+    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Run applied/i, {
+      timeout: 60000,
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.targetRange).toEqual({
+      startRow: 2,
+      startCol: 0,
+      endRow: 3,
+      endCol: 1,
+    });
+    expect(requests[0]?.compiled.targetRangeLabel).toBe("A3:B4");
+    expect(requests[0]?.compiled.contextRangeLabels).toContain("A1:B2 (A1:B2)");
+    await expect(page.getByTestId("target-range-chip")).toContainText("A3:B4");
+    await expect(page.getByTestId("context-chip-A1:B2")).toBeVisible();
+  });
+
+  test("Scenario: Ctrl+Shift+Enter infers a right target and runs", async ({ page }) => {
+    const requests = await mockMatrixRun(page);
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+    await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
+    await page.getByTestId("matrix-composer-input").fill("answer right");
+
+    await page.getByTestId("data-grid-canvas").focus();
+    await page.keyboard.press("Control+Shift+Enter");
+
+    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Run applied/i, {
+      timeout: 60000,
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.targetRange).toEqual({
+      startRow: 0,
+      startCol: 2,
+      endRow: 1,
+      endCol: 3,
+    });
+    expect(requests[0]?.compiled.targetRangeLabel).toBe("C1:D2");
+    await expect(page.getByTestId("target-range-chip")).toContainText("C1:D2");
+  });
+
+  test("Scenario: Ctrl+Shift+Enter respects an existing explicit target", async ({ page }) => {
+    const requests = await mockMatrixRun(page);
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+    await focusMatrixCell(page, "E1");
+    await page.getByTestId("matrix-set-target").click();
+    await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
+    await page.getByTestId("matrix-composer-input").fill("do not retarget");
+
+    await page.getByTestId("data-grid-canvas").focus();
+    await page.keyboard.press("Control+Shift+Enter");
+
+    await expect(page.getByTestId("matrix-status-bar")).toContainText("Target already set");
+    expect(requests).toHaveLength(0);
+    await expect(page.getByTestId("target-range-chip")).toContainText("E1");
+  });
+
+  test("Scenario: Ctrl+Enter runs against an existing explicit target", async ({ page }) => {
+    const requests = await mockMatrixRun(page);
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+    await focusMatrixCell(page, "E1");
+    await page.getByTestId("matrix-set-target").click();
+    await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
+    await page.getByTestId("matrix-composer-input").fill("run explicit target");
+
+    await page.getByTestId("data-grid-canvas").focus();
+    await page.keyboard.press("Control+Enter");
+
+    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Run applied/i, {
+      timeout: 60000,
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.targetRange).toEqual({
+      startRow: 0,
+      startCol: 4,
+      endRow: 0,
+      endCol: 4,
+    });
+    await expect(page.getByTestId("target-range-chip")).toContainText("E1");
+  });
+
+  test("Scenario: Shortcuts do not run while detail textarea has focus", async ({ page }) => {
+    const requests = await mockMatrixRun(page);
+    await clickMatrixCell(page, "A1");
+    await page.getByTestId("matrix-composer-input").fill("ignored shortcut");
+    await page.getByTestId("side-panel-textarea").focus();
+
+    await page.keyboard.press("Control+Enter");
+
+    await expect(page.getByTestId("matrix-status-bar")).not.toContainText(/Run applied/i);
+    expect(requests).toHaveLength(0);
+  });
+
+  test("Scenario: Repeated shortcut keydown does not run again", async ({ page }) => {
+    const requests = await mockMatrixRun(page);
+    await clickMatrixCell(page, "A1");
+    const composerInput = page.getByTestId("matrix-composer-input");
+    await composerInput.fill("ignore repeat");
+    await composerInput.focus();
+
+    await page.evaluate(() => {
+      const input = document.querySelector('[data-testid="matrix-composer-input"]');
+      input?.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          ctrlKey: true,
+          repeat: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    await expect(page.getByTestId("matrix-status-bar")).not.toContainText(/Run applied/i);
+    expect(requests).toHaveLength(0);
+  });
+
+  test("Scenario: Out-of-bounds right inference fails visibly and does not run", async ({
+    page,
+  }) => {
+    const requests = await mockMatrixRun(page);
+    await focusMatrixCell(page, "AX1");
+    await page.getByTestId("matrix-composer-input").fill("no room");
+
+    await page.getByTestId("data-grid-canvas").focus();
+    await page.keyboard.press("Control+Shift+Enter");
+
+    await expect(page.getByTestId("matrix-status-bar")).toContainText("No room right");
+    expect(requests).toHaveLength(0);
+  });
+
+  test("Scenario: Out-of-bounds below inference fails visibly and does not run", async ({
+    page,
+  }) => {
+    const requests = await mockMatrixRun(page);
+    await focusMatrixCell(page, "A20");
+    await page.getByTestId("matrix-composer-input").fill("no room below");
+
+    await page.getByTestId("data-grid-canvas").focus();
+    await page.keyboard.press("Control+Enter");
+
+    await expect(page.getByTestId("matrix-status-bar")).toContainText("No room below");
+    expect(requests).toHaveLength(0);
   });
 });
 

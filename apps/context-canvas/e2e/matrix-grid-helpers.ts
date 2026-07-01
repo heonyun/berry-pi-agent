@@ -87,7 +87,14 @@ async function gridCanvas(page: Page) {
 }
 
 function cellLabel(col: number, row: number): string {
-  return `${String.fromCharCode(65 + col)}${row + 1}`;
+  let n = col + 1;
+  let label = "";
+  while (n > 0) {
+    n -= 1;
+    label = String.fromCharCode(65 + (n % 26)) + label;
+    n = Math.floor(n / 26);
+  }
+  return `${label}${row + 1}`;
 }
 
 export async function clickMatrixCell(page: Page, address: string): Promise<void> {
@@ -225,7 +232,7 @@ export async function dragMatrixRange(
 
 export async function expectActiveSelection(page: Page, address: string): Promise<void> {
   const { col, row } = parseCellAddress(address);
-  const label = `${String.fromCharCode(65 + col)}${row + 1}`;
+  const label = cellLabel(col, row);
   const summary = page.getByTestId("matrix-status-selection");
   await expect(summary).toContainText(label);
   await expect(summary).not.toContainText(`${label}0`);
