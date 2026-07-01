@@ -51,7 +51,7 @@ export function MatrixComposer({
   onRun,
 }: MatrixComposerProps): ReactElement {
   return (
-    <footer className="bottom-composer matrix-composer" data-testid="matrix-composer">
+    <footer className="matrix-composer" data-testid="matrix-composer">
       {selectionSummary && (
         <div className="matrix-name-box" data-testid="matrix-name-box">
           <span className="matrix-name-box-label">Selection</span>
