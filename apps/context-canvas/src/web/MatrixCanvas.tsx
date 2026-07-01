@@ -19,6 +19,10 @@ import {
   compileMatrixRangeContext,
   type MatrixContextRange,
 } from "../shared/compile-matrix-range-context.ts";
+import {
+  inferMatrixTargetRange,
+  type MatrixTargetDirection,
+} from "../shared/matrix-target-inference.ts";
 import { bindAiCommandToUserTarget, parseAiCommand } from "../shared/matrix-validation.ts";
 import { runMatrix } from "./run-matrix.ts";
 import { MatrixShell } from "./MatrixShell.tsx";
@@ -57,6 +61,26 @@ function rangeLabelForSelection(document: MatrixDocument, range: RangeRefDTO): s
 
 function nextChipId(): string {
   return `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function matrixShortcutDirection(event: KeyboardEvent): MatrixTargetDirection | null {
+  if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey) || event.altKey) {
+    return null;
+  }
+  return event.shiftKey ? "right" : "below";
+}
+
+function shouldHandleMatrixShortcut(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  if (target.closest('[data-testid="matrix-composer-input"]')) {
+    return true;
+  }
+  if (target.closest(".gdg-input, textarea, input, button, [contenteditable]:not([contenteditable='false'])")) {
+    return false;
+  }
+  return Boolean(target.closest('[data-testid="matrix-grid"]'));
 }
 
 export function MatrixCanvas(): ReactElement {
@@ -249,79 +273,183 @@ export function MatrixCanvas(): ReactElement {
     setRangeNameInput("");
   }, [dispatch, rangeNameInput, selectionLabel, selectionRange, touchRecentRange]);
 
+  const runWithTarget = useCallback(
+    async (runTargetRange: RangeRefDTO, runContextChips: readonly ContextChip[]) => {
+      if (!prompt.trim()) {
+        setStatus("Enter a prompt before running");
+        return;
+      }
+
+      const runTargetLabel = rangeLabelForSelection(docRef.current, runTargetRange);
+      setIsRunning(true);
+      setStatus("Running matrix AI...");
+      try {
+        const contextRanges: MatrixContextRange[] = runContextChips.map((chip) => ({
+          label: chip.label,
+          range: chip.range,
+        }));
+
+        const compiled = compileMatrixRangeContext(
+          docRef.current,
+          contextRanges,
+          runTargetRange,
+          prompt.trim(),
+        );
+        const response = await runMatrix({
+          prompt: prompt.trim(),
+          targetRange: runTargetRange,
+          compiled,
+        });
+
+        const parsed = parseAiCommand(response.command);
+        if (!parsed.ok) {
+          setStatus(`AI command validation failed: ${parsed.errors.message}`);
+          return;
+        }
+
+        const { command: boundCommand, strippedCount } = bindAiCommandToUserTarget(
+          parsed.command,
+          runTargetRange,
+        );
+        const result = dispatch({ type: "apply_ai_command", command: boundCommand });
+        touchRecentRange(`run:${runTargetLabel.replace(/^@/, "")}`, runTargetLabel);
+
+        const historyEntry = createHistoryEntry({
+          intent: prompt.trim(),
+          contextRanges: runContextChips.map((chip) => ({ label: chip.label, range: chip.range })),
+          targetRange: runTargetRange,
+          targetRangeLabel: runTargetLabel ?? compiled.targetRangeLabel,
+          patchesApplied: result.meta.updatedCells,
+          compiledContextPreview: truncatePreview(compiled.contextText),
+          patchesSummary: summarizePatches(boundCommand),
+        });
+        const nextHistory = appendMatrixHistory(historyEntries, historyEntry);
+        setHistoryEntries(nextHistory);
+        scheduleMatrixBundleExport(docRef.current, nextHistory);
+        setDetailCell(null);
+        setDetailFrontmatter("");
+        setSelectedHistory(historyEntry);
+
+        let message = `Run applied: ${result.meta.updatedCells} cells updated`;
+        if (strippedCount > 0) {
+          message += ` — ${strippedCount} patch(es) outside target range skipped`;
+        }
+        setStatus(message);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        setStatus(`Run failed: ${message}`);
+      } finally {
+        setIsRunning(false);
+      }
+    },
+    [dispatch, historyEntries, prompt, touchRecentRange],
+  );
+
   const handleRun = useCallback(async () => {
     if (!targetRange) {
       setStatus("Set a target range before running");
       return;
     }
-    if (!prompt.trim()) {
-      setStatus("Enter a prompt before running");
-      return;
-    }
+    await runWithTarget(targetRange, contextChips);
+  }, [contextChips, runWithTarget, targetRange]);
 
-    setIsRunning(true);
-    setStatus("Running matrix AI...");
-    try {
-      const contextRanges: MatrixContextRange[] = contextChips.map((chip) => ({
-        label: chip.label,
-        range: chip.range,
-      }));
+  const contextChipsWithSelection = useCallback(
+    (
+      baseChips: readonly ContextChip[],
+    ): { readonly chips: readonly ContextChip[]; readonly added: boolean } => {
+      if (!selectionRange || !selectionLabel) {
+        return { chips: baseChips, added: false };
+      }
+      const duplicate = baseChips.some((chip) => rangesEqual(chip.range, selectionRange));
+      if (duplicate) {
+        return { chips: baseChips, added: false };
+      }
+      return {
+        chips: [...baseChips, { id: nextChipId(), label: selectionLabel, range: selectionRange }],
+        added: true,
+      };
+    },
+    [selectionLabel, selectionRange],
+  );
 
-      const compiled = compileMatrixRangeContext(
-        docRef.current,
-        contextRanges,
-        targetRange,
-        prompt.trim(),
-      );
-      const response = await runMatrix({
-        prompt: prompt.trim(),
-        targetRange,
-        compiled,
-      });
-
-      const parsed = parseAiCommand(response.command);
-      if (!parsed.ok) {
-        setStatus(`AI command validation failed: ${parsed.errors.message}`);
+  const handleMatrixShortcutRun = useCallback(
+    (direction: MatrixTargetDirection) => {
+      if (isRunning) {
+        return;
+      }
+      if (!prompt.trim()) {
+        setStatus("Enter a prompt before running");
+        return;
+      }
+      if (targetRange) {
+        if (direction === "right") {
+          setStatus("Target already set");
+          return;
+        }
+        void runWithTarget(targetRange, contextChips);
+        return;
+      }
+      if (!selectionRange || !selectionLabel) {
+        setStatus("Select a range before running");
         return;
       }
 
-      const { command: boundCommand, strippedCount } = bindAiCommandToUserTarget(
-        parsed.command,
-        targetRange,
-      );
-      const result = dispatch({ type: "apply_ai_command", command: boundCommand });
-      if (targetLabel) {
-        touchRecentRange(`run:${targetLabel.replace(/^@/, "")}`, targetLabel);
-      }
-
-      const historyEntry = createHistoryEntry({
-        intent: prompt.trim(),
-        contextRanges: contextChips.map((chip) => ({ label: chip.label, range: chip.range })),
-        targetRange,
-        targetRangeLabel: targetLabel ?? compiled.targetRangeLabel,
-        patchesApplied: result.meta.updatedCells,
-        compiledContextPreview: truncatePreview(compiled.contextText),
-        patchesSummary: summarizePatches(boundCommand),
+      const inferred = inferMatrixTargetRange(selectionRange, direction, {
+        rows: docRef.current.sheet.rows,
+        cols: docRef.current.sheet.cols,
       });
-      const nextHistory = appendMatrixHistory(historyEntries, historyEntry);
-      setHistoryEntries(nextHistory);
-      scheduleMatrixBundleExport(docRef.current, nextHistory);
-      setDetailCell(null);
-      setDetailFrontmatter("");
-      setSelectedHistory(historyEntry);
-
-      let message = `Run applied: ${result.meta.updatedCells} cells updated`;
-      if (strippedCount > 0) {
-        message += ` — ${strippedCount} patch(es) outside target range skipped`;
+      if (!inferred.ok) {
+        setStatus(
+          inferred.reason === "no-room-below"
+            ? "No room below selection for target"
+            : "No room right of selection for target",
+        );
+        return;
       }
-      setStatus(message);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      setStatus(`Run failed: ${message}`);
-    } finally {
-      setIsRunning(false);
-    }
-  }, [contextChips, dispatch, historyEntries, prompt, targetLabel, targetRange, touchRecentRange]);
+
+      const nextContext = contextChipsWithSelection(contextChips);
+      if (nextContext.added) {
+        setContextChips([...nextContext.chips]);
+        touchRecentRange(selectionLabel.replace(/^@/, ""), selectionLabel);
+      }
+      const inferredLabel = rangeLabelForSelection(docRef.current, inferred.targetRange);
+      setTargetRange(inferred.targetRange);
+      touchRecentRange(`target:${inferredLabel.replace(/^@/, "")}`, inferredLabel);
+      void runWithTarget(inferred.targetRange, nextContext.chips);
+    },
+    [
+      contextChips,
+      contextChipsWithSelection,
+      isRunning,
+      prompt,
+      runWithTarget,
+      selectionLabel,
+      selectionRange,
+      targetRange,
+      touchRecentRange,
+    ],
+  );
+  const handleMatrixShortcutRunRef = useRef(handleMatrixShortcutRun);
+
+  useEffect(() => {
+    handleMatrixShortcutRunRef.current = handleMatrixShortcutRun;
+  }, [handleMatrixShortcutRun]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing) {
+        return;
+      }
+      const direction = matrixShortcutDirection(event);
+      if (!direction || !shouldHandleMatrixShortcut(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      handleMatrixShortcutRunRef.current(direction);
+    };
+    window.document.addEventListener("keydown", onKeyDown, { capture: true });
+    return () => window.document.removeEventListener("keydown", onKeyDown, { capture: true });
+  }, []);
 
   const handleDetailSave = useCallback(
     (row: number, col: number, body: string, frontmatter: string) => {
