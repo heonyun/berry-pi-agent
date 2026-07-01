@@ -12,6 +12,7 @@ import {
   type MatrixHistoryEntry,
   type RangeRefDTO,
   type RecentRangeEntry,
+  type WritePatch,
 } from "../shared/domain.ts";
 import { applyMatrixCommand, type MatrixCommand } from "../core/matrix-reducer.ts";
 import {
@@ -358,14 +359,23 @@ export function MatrixCanvas(): ReactElement {
         return;
       }
 
-      for (const edit of edits) {
-        dispatch({ type: "update_cell_body", row: edit.row, col: edit.col, body: edit.body });
-      }
+      const patches: WritePatch[] = edits.map((edit) => {
+        const existing = docRef.current.sheet.cells.get(cellKey(edit.row, edit.col));
+        return {
+          row: edit.row,
+          col: edit.col,
+          value: existing?.value ?? null,
+          body: edit.body,
+          ...(existing?.frontmatter ? { frontmatter: existing.frontmatter } : {}),
+          ...(existing?.provenance ? { provenance: existing.provenance } : {}),
+        };
+      });
+      dispatch({ type: "apply_patches", patches });
 
-      const activeEdit =
-        selection &&
-        edits.find((edit) => edit.row === selection.activeRow && edit.col === selection.activeCol);
-      const detailEdit = activeEdit || edits[0];
+      const activeEdit = selection
+        ? edits.find((edit) => edit.row === selection.activeRow && edit.col === selection.activeCol)
+        : undefined;
+      const detailEdit = activeEdit ?? edits[0];
       setDetailCell({ row: detailEdit.row, col: detailEdit.col, body: detailEdit.body });
       const label = `${formatColumnLabel(detailEdit.col)}${detailEdit.row + 1}`;
       setStatus(edits.length === 1 ? `Cell ${label} updated` : `${edits.length} cells updated`);
