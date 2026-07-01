@@ -232,7 +232,7 @@ export async function dragMatrixRange(
 
 export async function expectActiveSelection(page: Page, address: string): Promise<void> {
   const { col, row } = parseCellAddress(address);
-  const label = `${String.fromCharCode(65 + col)}${row + 1}`;
+  const label = cellLabel(col, row);
   const summary = page.getByTestId("matrix-status-selection");
   await expect(summary).toContainText(label);
   await expect(summary).not.toContainText(`${label}0`);
