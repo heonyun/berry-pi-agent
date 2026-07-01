@@ -93,3 +93,31 @@ test.describe("Feature: 2x2 matrix workflow", () => {
     await expectComposerAiRangeReady(page);
   });
 });
+
+test.describe("Feature: Side panel and recent ranges (real clicks)", () => {
+  test.beforeEach(async ({ page }) => {
+    await prepareMatrixGrid(page);
+  });
+
+  test("Scenario: Save detail pane with a normal user click", async ({ page }) => {
+    await clickMatrixCell(page, "A1");
+    await page.getByTestId("side-panel-textarea").fill("detail body");
+    await page.getByTestId("side-panel-frontmatter").fill("status: draft");
+    await page.getByTestId("side-panel-save").click({ timeout: 5000 });
+    await expect(page.getByTestId("matrix-status-bar")).toContainText("Cell A1 updated");
+  });
+
+  test("Scenario: Select a saved range from recent list with a normal user click", async ({
+    page,
+  }) => {
+    await dragMatrixRange(page, "A1", "B1");
+    await expectSelectionSummary(page, "A1:B1", "2×1");
+    await page.getByTestId("matrix-range-name-input").fill("inputs");
+    await page.getByTestId("matrix-name-range").click();
+    await expect(page.getByTestId("recent-range-inputs")).toBeVisible();
+    await clickMatrixCell(page, "C1");
+    await expect(page.getByTestId("matrix-status-selection")).toContainText("C1");
+    await page.getByTestId("recent-range-inputs").click({ timeout: 5000 });
+    await expectSelectionSummary(page, "A1:B1", "2×1");
+  });
+});

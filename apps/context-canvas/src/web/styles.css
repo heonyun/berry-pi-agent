@@ -1211,6 +1211,26 @@ button.active {
   padding-left: 4px;
 }
 
+.matrix-status-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.matrix-status-bar .v2-status-selection {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Pinned right detail pane (Phase 1) */
 .matrix-detail-pane {
   width: 320px;

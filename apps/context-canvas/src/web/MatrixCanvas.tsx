@@ -470,11 +470,7 @@ export function MatrixCanvas(): ReactElement {
             onRun={() => void handleRun()}
           />
 
-          <div
-            className="v2-status-bar matrix-status-bar"
-            aria-live="polite"
-            data-testid="matrix-status-bar"
-          >
+          <div className="matrix-status-bar" aria-live="polite" data-testid="matrix-status-bar">
             <span>{status}</span>
             {selectionSummary && (
               <span className="v2-status-selection" data-testid="matrix-status-selection">
