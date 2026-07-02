@@ -16,10 +16,12 @@ import {
   type EditableGridCell,
   type EditListItem,
   type GridColumn,
+  type GridKeyEventArgs,
   type HeaderClickedEventArgs,
   type GridSelection,
   type Item,
 } from "@glideapps/glide-data-grid";
+import { shouldCancelMatrixEditOnTypeForIme } from "../shared/matrix-ime.ts";
 import "@glideapps/glide-data-grid/dist/index.css";
 import { getColumnHeader, type MatrixDocument, type MatrixGroup } from "../shared/domain.ts";
 import {
@@ -276,6 +278,22 @@ export function MatrixGrid({
     [],
   );
 
+  const handleGridKeyDown = useCallback((event: GridKeyEventArgs) => {
+    const native = event.rawEvent?.nativeEvent;
+    // WHY: Glide editOnType calls reselect(..., event.key) before IME composition; cancel avoids Latin seed.
+    // CONTRACT: event.cancel() skips edit-on-type only; F2/Enter activation unchanged.
+    // RELATED: issue-93, matrix-ime.test.ts
+    if (
+      shouldCancelMatrixEditOnTypeForIme({
+        key: event.key,
+        keyCode: event.keyCode,
+        isComposing: native?.isComposing,
+      })
+    ) {
+      event.cancel();
+    }
+  }, []);
+
   return (
     <div className="matrix-grid-container" data-testid="matrix-grid" ref={containerRef}>
       <DataEditor
@@ -296,6 +314,7 @@ export function MatrixGrid({
         onDelete={(deletedSelection) => deletedSelection}
         onPaste={true}
         onGridSelectionChange={handleGridSelectionChange}
+        onKeyDown={handleGridKeyDown}
         rangeSelect="rect"
         rowSelect="single"
         columnSelect="single"
@@ -303,6 +322,7 @@ export function MatrixGrid({
         cellActivationBehavior="second-click"
         editOnType={true}
         keybindings={keybindings}
+        // TODO: issue-93 — provideEditor with ImeTextarea for in-overlay IME; onKeyDown cancel is skeleton only.
         trapFocus={true}
         scrollToActiveCell={true}
         smoothScrollX

@@ -2,6 +2,7 @@ import type { KeyboardEvent, ReactElement } from "react";
 import { useRef } from "react";
 import { formatColumnLabel } from "../shared/domain.ts";
 import type { Cell } from "../shared/domain.ts";
+import { ImeTextarea } from "./ImeTextarea.tsx";
 
 export type DetailTab = "markdown" | "summary" | "provenance";
 
@@ -103,11 +104,13 @@ export function MatrixDetailPane({
             <>
               <label>
                 Markdown body:
-                <textarea
+                {/* WHY: plain textarea breaks Korean composition; ImeTextarea defers parent sync until blur. RELATED: issue-93 */}
+                <ImeTextarea
                   className="matrix-detail-textarea"
                   rows={10}
                   value={detailCell.body}
-                  onChange={(event) => onBodyChange(event.target.value)}
+                  onLocalChange={onBodyChange}
+                  onValueChange={onBodyChange}
                   data-testid="side-panel-textarea"
                 />
               </label>
