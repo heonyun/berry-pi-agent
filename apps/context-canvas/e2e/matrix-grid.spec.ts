@@ -479,4 +479,15 @@ test.describe("Feature: Row and column header selection", () => {
     await expect(page.getByTestId("matrix-column-label-start")).toBeVisible();
     await expectSelectionSummary(page, "B1:B20", "1×20");
   });
+
+  test("Scenario: Selecting another cell closes the active label editor", async ({ page }) => {
+    await doubleClickColumnHeader(page, "B");
+    await expect(page.getByTestId("matrix-column-label-input")).toBeVisible();
+
+    await clickMatrixCell(page, "C1");
+
+    await expect(page.getByTestId("matrix-column-label-input")).toBeHidden();
+    await expect(page.getByTestId("matrix-column-label-editor")).toBeHidden();
+    await expectActiveSelection(page, "C1");
+  });
 });

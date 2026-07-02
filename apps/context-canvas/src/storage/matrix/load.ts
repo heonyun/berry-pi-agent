@@ -55,8 +55,9 @@ export function loadMatrixBundle(bundleRoot: string): LoadResult {
   const template = loadTemplate(bundleRoot, manifest.templateId, warnings);
   const namedRanges = new Map(manifest.namedRanges.map((entry) => [entry.name, entry]));
   const customColumnLabels = new Map(
-    (manifest.customColumnLabels ?? [])
+    (Array.isArray(manifest.customColumnLabels) ? manifest.customColumnLabels : [])
       .filter((entry) => Number.isInteger(entry.col) && typeof entry.label === "string")
+      .filter((entry) => entry.col >= 0 && entry.col < manifest.cols)
       .map((entry) => [entry.col, entry.label.trim()] as const)
       .filter((entry) => entry[1].length > 0),
   );

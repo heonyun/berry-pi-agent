@@ -188,6 +188,13 @@ export function MatrixCanvas(): ReactElement {
     return isWholeColumn ? selectionRange.startCol : null;
   }, [document.sheet.rows, selectionRange]);
 
+  useEffect(() => {
+    if (editingColumn !== null && selectedColumnIndex !== editingColumn) {
+      setEditingColumn(null);
+      setColumnLabelDraft("");
+    }
+  }, [editingColumn, selectedColumnIndex]);
+
   const hasCellContent = useMemo(() => document.sheet.cells.size > 0, [document]);
 
   const showAiSection = Boolean(
@@ -282,9 +289,14 @@ export function MatrixCanvas(): ReactElement {
     (col: number, options: { readonly isDoubleClick: boolean }) => {
       if (options.isDoubleClick) {
         handleStartColumnLabelEdit(col);
+        return;
+      }
+      if (editingColumn !== null) {
+        setEditingColumn(null);
+        setColumnLabelDraft("");
       }
     },
-    [handleStartColumnLabelEdit],
+    [editingColumn, handleStartColumnLabelEdit],
   );
 
   const handleSaveColumnLabel = useCallback(() => {

@@ -151,6 +151,24 @@ describe("loadMatrixBundle", () => {
     });
   });
 
+  it("ignores invalid custom column label manifest entries", () => {
+    const bundleRoot = makeTempDir();
+    projectMatrixToBundle(sampleMatrixDocument(), bundleRoot);
+    const sidecarPath = path.join(bundleRoot, MATRIX_SIDECAR);
+    const manifest = JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
+    manifest.customColumnLabels = [
+      { col: 1, label: "Customer" },
+      { col: -1, label: "Negative" },
+      { col: manifest.cols, label: "Out of range" },
+      { col: 2, label: "   " },
+      { col: 3, label: 123 },
+    ];
+    fs.writeFileSync(sidecarPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    const loaded = loadMatrixBundle(bundleRoot);
+    expect(loaded.document?.customColumnLabels).toEqual(new Map([[1, "Customer"]]));
+  });
+
   it("reports forward-slash bundle-relative paths from projection", () => {
     const bundleRoot = makeTempDir();
     const result = projectMatrixToBundle(sampleMatrixDocument(), bundleRoot);

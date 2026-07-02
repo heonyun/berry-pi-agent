@@ -33,12 +33,12 @@ function numericMapFromWire<V>(
     return new Map();
   }
   if (value instanceof Map) {
-    return new Map(value);
+    return new Map([...value.entries()].filter(([key]) => Number.isInteger(key) && key >= 0));
   }
   return new Map(
     Object.entries(value)
       .map(([key, entry]) => [Number.parseInt(key, 10), entry] as const)
-      .filter(([key]) => Number.isInteger(key)),
+      .filter(([key]) => Number.isInteger(key) && key >= 0),
   );
 }
 
