@@ -437,6 +437,28 @@ describe("applyMatrixCommand", () => {
       expect(pastEnd.document).toBe(doc);
     });
 
+    it("set_row_height persists clamped height for in-bounds rows", () => {
+      const doc = createEmptyMatrixDocument();
+      const result = applyMatrixCommand(doc, { type: "set_row_height", row: 0, height: 72 });
+      expect(result.document.rowHeights?.get(0)).toBe(72);
+      expect(result.meta.message).toContain("Row 1 height: 72px");
+
+      const clamped = applyMatrixCommand(doc, { type: "set_row_height", row: 1, height: 999 });
+      expect(clamped.document.rowHeights?.get(1)).toBe(300);
+    });
+
+    it("set_row_height ignores out-of-bounds rows", () => {
+      const doc = createEmptyMatrixDocument();
+      const negative = applyMatrixCommand(doc, { type: "set_row_height", row: -1, height: 72 });
+      const pastEnd = applyMatrixCommand(doc, {
+        type: "set_row_height",
+        row: doc.sheet.rows,
+        height: 72,
+      });
+      expect(negative.document).toBe(doc);
+      expect(pastEnd.document).toBe(doc);
+    });
+
     it("dismiss_group marks a known group and ignores unknown groups", () => {
       let doc = createEmptyMatrixDocument({ withResearchTemplate: false });
       doc = applyMatrixCommand(doc, {

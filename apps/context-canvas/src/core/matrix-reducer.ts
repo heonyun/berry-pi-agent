@@ -9,6 +9,7 @@ import type {
 } from "../shared/domain.ts";
 import { cellKey, formatColumnLabel } from "../shared/domain.ts";
 import { clampMatrixColumnWidth } from "../shared/matrix-column-width.ts";
+import { clampMatrixRowHeight } from "../shared/matrix-row-height.ts";
 import { detectMatrixGroups } from "../shared/matrix-groups.ts";
 import { filterPatchesToTargetRange } from "../shared/matrix-validation.ts";
 
@@ -25,6 +26,7 @@ export type MatrixCommand =
   | { type: "dismiss_group"; id: string }
   | { type: "set_column_custom_label"; col: number; label: string }
   | { type: "set_column_width"; col: number; width: number }
+  | { type: "set_row_height"; row: number; height: number }
   | { type: "update_cell_frontmatter"; row: number; col: number; frontmatter: string }
   | { type: "apply_template"; template: SheetTemplate; resizeCols?: number }
   | { type: "clear_cell"; row: number; col: number };
@@ -213,6 +215,22 @@ export function applyMatrixCommand(
         meta: {
           updatedCells: 0,
           message: `Column ${coordinate} width: ${width}px`,
+        },
+      };
+    }
+
+    case "set_row_height": {
+      if (command.row < 0 || command.row >= document.sheet.rows) {
+        return { document, meta: { updatedCells: 0 } };
+      }
+      const height = clampMatrixRowHeight(command.height);
+      const nextHeights = new Map(document.rowHeights ?? []);
+      nextHeights.set(command.row, height);
+      return {
+        document: { ...document, rowHeights: nextHeights },
+        meta: {
+          updatedCells: 0,
+          message: `Row ${command.row + 1} height: ${height}px`,
         },
       };
     }

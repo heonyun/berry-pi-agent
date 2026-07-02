@@ -267,6 +267,47 @@ export async function readStoredColumnWidth(page: Page, col: number): Promise<nu
   }, col);
 }
 
+/** Drag the row marker bottom boundary to resize that row (#97). */
+export async function resizeMatrixRow(
+  page: Page,
+  rowNumber: number,
+  deltaY: number,
+): Promise<void> {
+  const handle = page.getByTestId(`matrix-row-resize-${rowNumber - 1}`);
+  await expect(handle).toBeVisible();
+  const box = await handle.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) {
+    return;
+  }
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + deltaY, { steps: 6 });
+  await page.mouse.up();
+}
+
+export async function expectStoredRowHeight(
+  page: Page,
+  row: number,
+  height: number,
+): Promise<void> {
+  const storedHeight = await readStoredRowHeight(page, row);
+  expect(storedHeight).toBe(height);
+}
+
+export async function readStoredRowHeight(page: Page, row: number): Promise<number> {
+  return page.evaluate((rowIndex) => {
+    const raw = localStorage.getItem("context-matrix-row-heights");
+    if (!raw) {
+      return 0;
+    }
+    const parsed = JSON.parse(raw) as Array<{ row: number; height: number }>;
+    return parsed.find((entry) => entry.row === rowIndex)?.height ?? 0;
+  }, row);
+}
+
 export async function dragMatrixRange(
   page: Page,
   fromAddress: string,

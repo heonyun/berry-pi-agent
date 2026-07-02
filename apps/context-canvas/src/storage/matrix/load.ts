@@ -9,6 +9,7 @@ import type {
 } from "../../shared/domain.ts";
 import { cellKey } from "../../shared/domain.ts";
 import { clampMatrixColumnWidth } from "../../shared/matrix-column-width.ts";
+import { clampMatrixRowHeight } from "../../shared/matrix-row-height.ts";
 import { detectMatrixGroups } from "../../shared/matrix-groups.ts";
 import { parse } from "../markdown/document.ts";
 import { assertSafeId } from "../markdown/paths.ts";
@@ -80,6 +81,12 @@ export function loadMatrixBundle(bundleRoot: string): LoadResult {
       .filter((entry) => entry.col >= 0 && entry.col < manifest.cols)
       .map((entry) => [entry.col, clampMatrixColumnWidth(entry.width)] as const),
   );
+  const rowHeights = new Map(
+    (Array.isArray(manifest.rowHeights) ? manifest.rowHeights : [])
+      .filter((entry) => Number.isInteger(entry.row) && typeof entry.height === "number")
+      .filter((entry) => entry.row >= 0 && entry.row < manifest.rows)
+      .map((entry) => [entry.row, clampMatrixRowHeight(entry.height)] as const),
+  );
 
   const document: MatrixDocument = {
     kind: "matrix",
@@ -95,6 +102,7 @@ export function loadMatrixBundle(bundleRoot: string): LoadResult {
     groups,
     customColumnLabels,
     ...(columnWidths.size > 0 ? { columnWidths } : {}),
+    ...(rowHeights.size > 0 ? { rowHeights } : {}),
     ...(manifest.templateId ? { templateId: manifest.templateId } : {}),
     ...(template ? { template } : {}),
   };

@@ -20,6 +20,7 @@ export interface MatrixBundleManifest {
   readonly groups?: MatrixGroup[];
   readonly customColumnLabels?: Array<{ readonly col: number; readonly label: string }>;
   readonly columnWidths?: Array<{ readonly col: number; readonly width: number }>;
+  readonly rowHeights?: Array<{ readonly row: number; readonly height: number }>;
   readonly templateId?: string;
 }
 

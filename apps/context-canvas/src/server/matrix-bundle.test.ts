@@ -23,6 +23,7 @@ function sampleMatrixDocument() {
     sheet: { ...document.sheet, cells },
     customColumnLabels: new Map([[1, "Customer"]]),
     columnWidths: new Map([[0, 180], [2, 95]]),
+    rowHeights: new Map([[0, 72], [2, 95]]),
   };
 }
 
@@ -149,6 +150,7 @@ describe("handleMatrixBundleExport", () => {
       namedRanges: Object.fromEntries(document.namedRanges),
       customColumnLabels: Object.fromEntries(document.customColumnLabels ?? []),
       columnWidths: Object.fromEntries(document.columnWidths ?? []),
+      rowHeights: Object.fromEntries(document.rowHeights ?? []),
     } as unknown as typeof document;
 
     try {
@@ -156,6 +158,7 @@ describe("handleMatrixBundleExport", () => {
       expect(result.errors).toEqual([]);
       const loadResult = handleMatrixBundleLoad(config, tempRoot);
       expect(loadResult.document?.columnWidths).toEqual(new Map([[0, 180], [2, 95]]));
+      expect(loadResult.document?.rowHeights).toEqual(new Map([[0, 72], [2, 95]]));
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }

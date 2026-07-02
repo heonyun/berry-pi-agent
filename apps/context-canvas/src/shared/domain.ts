@@ -411,6 +411,7 @@ export interface MatrixDocument {
   readonly groups: ReadonlyMap<string, MatrixGroup>;
   readonly customColumnLabels?: ReadonlyMap<number, string>;
   readonly columnWidths?: ReadonlyMap<number, number>;
+  readonly rowHeights?: ReadonlyMap<number, number>;
   readonly templateId?: string;
   readonly template?: SheetTemplate;
 }

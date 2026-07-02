@@ -58,6 +58,7 @@ function normalizeMatrixDocumentWire(document: MatrixDocument): MatrixDocument {
     groups: mapFromWire(document.groups),
     customColumnLabels: numericMapFromWire(document.customColumnLabels),
     columnWidths: numericMapFromWire(document.columnWidths),
+    rowHeights: numericMapFromWire(document.rowHeights),
   };
 }
 
