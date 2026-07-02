@@ -56,6 +56,9 @@ export function getMatrixGridTheme(): Partial<Theme> {
     accentColor: "#586f8e",
     accentLight: "rgba(88, 111, 142, 0.22)",
     bgHeaderHasFocus: "#e4e9ef",
+    borderColor: "transparent",
+    headerBottomBorderColor: "rgba(88, 111, 142, 0.12)",
+    horizontalBorderColor: "transparent",
     textHeaderSelected: "#586f8e",
   };
 }

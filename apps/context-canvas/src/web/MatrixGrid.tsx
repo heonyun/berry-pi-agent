@@ -89,6 +89,15 @@ interface RowResizeHandlePosition {
   readonly top: number;
 }
 
+interface CellCornerDotPosition {
+  readonly row: number;
+  readonly col: number;
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 interface RowResizeDrag {
   readonly row: number;
   readonly startY: number;
@@ -97,7 +106,9 @@ interface RowResizeDrag {
 }
 
 interface MatrixVisibleRows {
+  readonly x: number;
   readonly y: number;
+  readonly width: number;
   readonly height: number;
   readonly ty: number;
 }
@@ -141,8 +152,17 @@ export function MatrixGrid({
   const [rowResizeHandlePositions, setRowResizeHandlePositions] = useState<
     readonly RowResizeHandlePosition[]
   >([]);
+  const [cellCornerDotPositions, setCellCornerDotPositions] = useState<
+    readonly CellCornerDotPosition[]
+  >([]);
   const [rowResizeDrag, setRowResizeDrag] = useState<RowResizeDrag | null>(null);
-  const visibleRowsRef = useRef<MatrixVisibleRows>({ y: 0, height: config.rows, ty: 0 });
+  const visibleRowsRef = useRef<MatrixVisibleRows>({
+    x: 0,
+    y: 0,
+    width: config.cols,
+    height: config.rows,
+    ty: 0,
+  });
   const skipNextGroupLabelBlurSave = useRef(false);
 
   const columns = useMemo(
@@ -196,6 +216,7 @@ export function MatrixGrid({
     if (!container || !grid) {
       setGroupLabelPositions([]);
       setRowResizeHandlePositions([]);
+      setCellCornerDotPositions([]);
       return;
     }
     const containerBounds = container.getBoundingClientRect();
@@ -239,6 +260,7 @@ export function MatrixGrid({
       });
     }
     const nextRowResizeHandles: RowResizeHandlePosition[] = [];
+    const nextCellCornerDots: CellCornerDotPosition[] = [];
     const canvas = container.querySelector<HTMLElement>('[data-testid="data-grid-canvas"]');
     const canvasBounds = canvas?.getBoundingClientRect();
     if (canvasBounds) {
@@ -261,10 +283,46 @@ export function MatrixGrid({
         }
         nextRowResizeHandles.push({ row, top });
       }
+
+      const startCol = Math.max(0, Math.floor(visibleRows.x));
+      const endCol = Math.min(config.cols, Math.ceil(visibleRows.x + visibleRows.width) + 1);
+      // WHY: issue-99 corner dots are visual affordances; grid interaction stays in Glide.
+      // INVARIANT: This overlay must remain pointer-events:none so selection/edit/clipboard stay unchanged.
+      for (let row = startRow; row < endRow; row += 1) {
+        for (let col = startCol; col < endCol; col += 1) {
+          const bounds = grid.getBounds(col, row);
+          if (!bounds) {
+            continue;
+          }
+          const left = bounds.x - containerBounds.x;
+          const top = bounds.y - containerBounds.y;
+          const right = left + bounds.width;
+          const bottom = top + bounds.height;
+          if (
+            left > containerBounds.width ||
+            top > containerBounds.height ||
+            right < 0 ||
+            bottom < 0 ||
+            bounds.width <= 0 ||
+            bounds.height <= 0
+          ) {
+            continue;
+          }
+          nextCellCornerDots.push({
+            row,
+            col,
+            left,
+            top,
+            width: bounds.width,
+            height: bounds.height,
+          });
+        }
+      }
     }
     setGroupLabelPositions(nextPositions);
     setRowResizeHandlePositions(nextRowResizeHandles);
-  }, [config.rows, groups, rowHeight]);
+    setCellCornerDotPositions(nextCellCornerDots);
+  }, [config.cols, config.rows, groups, rowHeight]);
 
   const handleRowResizePointerDown = useCallback(
     (row: number, event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -313,7 +371,7 @@ export function MatrixGrid({
 
   const handleVisibleRegionChanged = useCallback<NonNullable<DataEditorProps["onVisibleRegionChanged"]>>(
     (range, _tx, ty) => {
-      visibleRowsRef.current = { y: range.y, height: range.height, ty };
+      visibleRowsRef.current = { x: range.x, y: range.y, width: range.width, height: range.height, ty };
       updateGroupLabelPositions();
     },
     [updateGroupLabelPositions],
@@ -503,6 +561,28 @@ export function MatrixGrid({
             }}
             onPointerDown={(event) => handleRowResizePointerDown(position.row, event)}
           />
+        ))}
+      </div>
+      <div className="matrix-cell-corner-dot-layer" aria-hidden="true">
+        {cellCornerDotPositions.map((position) => (
+          <div
+            key={`${position.row}:${position.col}`}
+            className="matrix-cell-corner-dot-anchor"
+            style={{
+              left: position.left,
+              top: position.top,
+              width: position.width,
+              height: position.height,
+            }}
+          >
+            {["top-left", "top-right", "bottom-left", "bottom-right"].map((corner) => (
+              <span
+                key={corner}
+                className={`matrix-cell-corner-dot matrix-cell-corner-dot-${corner}`}
+                data-testid={`matrix-cell-corner-dot-${position.row}-${position.col}-${corner}`}
+              />
+            ))}
+          </div>
         ))}
       </div>
       <div className="matrix-group-label-layer" aria-hidden={false}>

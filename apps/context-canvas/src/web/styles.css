@@ -1238,6 +1238,48 @@ button.active {
   outline-offset: -2px;
 }
 
+.matrix-cell-corner-dot-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.matrix-cell-corner-dot-anchor {
+  position: absolute;
+  pointer-events: none;
+}
+
+.matrix-cell-corner-dot {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 44%, transparent);
+}
+
+.matrix-cell-corner-dot-top-left {
+  top: -1px;
+  left: -1px;
+}
+
+.matrix-cell-corner-dot-top-right {
+  top: -1px;
+  right: -1px;
+}
+
+.matrix-cell-corner-dot-bottom-left {
+  bottom: -1px;
+  left: -1px;
+}
+
+.matrix-cell-corner-dot-bottom-right {
+  right: -1px;
+  bottom: -1px;
+}
+
 .matrix-group-label-layer {
   position: absolute;
   inset: 0;

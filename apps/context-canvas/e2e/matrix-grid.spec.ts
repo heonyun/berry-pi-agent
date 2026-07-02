@@ -123,6 +123,13 @@ test.describe("Feature: Excel-like matrix cell editing", () => {
     await expectSelectionSummary(page, "A1:C1", "3×1");
   });
 
+  test("Scenario: Visible cells show corner-dot affordances", async ({ page }) => {
+    const cornerDots = page.getByTestId(/matrix-cell-corner-dot-/);
+
+    await expect(cornerDots.first()).toBeVisible();
+    expect(await cornerDots.count()).toBeGreaterThan(20);
+  });
+
   test("Scenario: F2 edits the active existing cell", async ({ page }) => {
     await clickMatrixCell(page, "C1");
     await typeDirectlyInGrid(page, "C1", "initial");

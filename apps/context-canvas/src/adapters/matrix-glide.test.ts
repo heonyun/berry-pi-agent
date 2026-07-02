@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { getMatrixGridConfig, getCellContent } from "./matrix-glide.ts";
+import { getMatrixGridConfig, getCellContent, getMatrixGridTheme } from "./matrix-glide.ts";
 import { createEmptyMatrixDocument, cellKey } from "../shared/domain.ts";
 import type { Cell } from "../shared/domain.ts";
 import type { GridCell } from "@glideapps/glide-data-grid";
@@ -16,6 +16,16 @@ describe("matrix-glide adapter", () => {
       const config = getMatrixGridConfig(doc);
       expect(config.rows).toBe(20);
       expect(config.cols).toBe(50);
+    });
+  });
+
+  describe("getMatrixGridTheme", () => {
+    it("minimizes rigid grid lines for the corner-dot cell UI", () => {
+      const theme = getMatrixGridTheme();
+
+      expect(theme.borderColor).toBe("transparent");
+      expect(theme.horizontalBorderColor).toBe("transparent");
+      expect(theme.headerBottomBorderColor).toBe("rgba(88, 111, 142, 0.12)");
     });
   });
 
