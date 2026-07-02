@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -77,6 +78,10 @@ interface GroupLabelPosition {
   readonly left: number;
   readonly top: number;
   readonly maxWidth: number;
+  readonly boundaryLeft: number;
+  readonly boundaryTop: number;
+  readonly boundaryWidth: number;
+  readonly boundaryHeight: number;
 }
 
 interface RowResizeHandlePosition {
@@ -197,23 +202,41 @@ export function MatrixGrid({
     const nextPositions: GroupLabelPosition[] = [];
     for (const group of groups) {
       const bounds = grid.getBounds(group.range.startCol, group.range.startRow);
-      if (!bounds) {
+      const endBounds = grid.getBounds(group.range.endCol, group.range.endRow);
+      if (!bounds || !endBounds) {
         continue;
       }
       // CONTRACT: Glide DataEditorRef.getBounds returns viewport coordinates; subtract the
       // container viewport rect to place labels in this absolute overlay layer.
+      const boundaryLeft = bounds.x - containerBounds.x;
+      const boundaryTop = bounds.y - containerBounds.y;
+      const boundaryRight = endBounds.x + endBounds.width - containerBounds.x;
+      const boundaryBottom = endBounds.y + endBounds.height - containerBounds.y;
+      const boundaryWidth = boundaryRight - boundaryLeft;
+      const boundaryHeight = boundaryBottom - boundaryTop;
       const left = Math.max(4, bounds.x - containerBounds.x + 4);
       const top = Math.max(2, bounds.y - containerBounds.y - 12);
       const maxWidth = Math.max(72, Math.min(190, bounds.width + 88));
       if (
-        left > containerBounds.width ||
-        top > containerBounds.height ||
-        bounds.x + bounds.width < containerBounds.x ||
-        bounds.y + bounds.height < containerBounds.y
+        boundaryLeft > containerBounds.width ||
+        boundaryTop > containerBounds.height ||
+        boundaryRight < 0 ||
+        boundaryBottom < 0 ||
+        boundaryWidth <= 0 ||
+        boundaryHeight <= 0
       ) {
         continue;
       }
-      nextPositions.push({ id: group.id, left, top, maxWidth });
+      nextPositions.push({
+        id: group.id,
+        left,
+        top,
+        maxWidth,
+        boundaryLeft,
+        boundaryTop,
+        boundaryWidth,
+        boundaryHeight,
+      });
     }
     const nextRowResizeHandles: RowResizeHandlePosition[] = [];
     const canvas = container.querySelector<HTMLElement>('[data-testid="data-grid-canvas"]');
@@ -490,58 +513,79 @@ export function MatrixGrid({
           }
           const editing = group.id === editingGroupId;
           return (
-            <div
-              key={group.id}
-              className="matrix-group-label-anchor"
-              data-testid={`matrix-group-outline-${group.id}`}
-              style={{
-                left: position.left,
-                top: position.top,
-                maxWidth: position.maxWidth,
-              }}
-            >
-              {editing ? (
-                <input
-                  className="matrix-group-label-input"
-                  data-testid="matrix-group-label-input"
-                  value={groupLabelDraft}
-                  onChange={(event) => onGroupLabelDraftChange(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
+            <Fragment key={group.id}>
+              <div
+                className="matrix-group-boundary"
+                data-testid={`matrix-group-boundary-${group.id}`}
+                aria-hidden="true"
+                style={{
+                  left: position.boundaryLeft,
+                  top: position.boundaryTop,
+                  width: position.boundaryWidth,
+                  height: position.boundaryHeight,
+                }}
+              >
+                {/* ASSUMPTION: issue-98 dots are static affordances; interactive grid corners are I07. */}
+                {["top-left", "top-right", "bottom-left", "bottom-right"].map((corner) => (
+                  <span
+                    key={corner}
+                    className={`matrix-group-corner-dot matrix-group-corner-dot-${corner}`}
+                    data-testid={`matrix-group-corner-dot-${group.id}-${corner}`}
+                  />
+                ))}
+              </div>
+              <div
+                className="matrix-group-label-anchor"
+                data-testid={`matrix-group-outline-${group.id}`}
+                style={{
+                  left: position.left,
+                  top: position.top,
+                  maxWidth: position.maxWidth,
+                }}
+              >
+                {editing ? (
+                  <input
+                    className="matrix-group-label-input"
+                    data-testid="matrix-group-label-input"
+                    value={groupLabelDraft}
+                    onChange={(event) => onGroupLabelDraftChange(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        onGroupLabelSave();
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        // WHY: Removing the input causes blur; mark it so Escape remains a real cancel.
+                        skipNextGroupLabelBlurSave.current = true;
+                        onGroupLabelCancel();
+                      }
+                    }}
+                    onBlur={() => {
+                      if (skipNextGroupLabelBlurSave.current) {
+                        skipNextGroupLabelBlurSave.current = false;
+                        return;
+                      }
                       onGroupLabelSave();
-                    }
-                    if (event.key === "Escape") {
+                    }}
+                    autoFocus
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="matrix-group-label-button"
+                    data-testid={`matrix-group-label-${group.id}`}
+                    onClick={() => onGroupLabelClick(group, { isDoubleClick: false })}
+                    onDoubleClick={(event) => {
                       event.preventDefault();
-                      // WHY: Removing the input causes blur; mark it so Escape remains a real cancel.
-                      skipNextGroupLabelBlurSave.current = true;
-                      onGroupLabelCancel();
-                    }
-                  }}
-                  onBlur={() => {
-                    if (skipNextGroupLabelBlurSave.current) {
-                      skipNextGroupLabelBlurSave.current = false;
-                      return;
-                    }
-                    onGroupLabelSave();
-                  }}
-                  autoFocus
-                />
-              ) : (
-                <button
-                  type="button"
-                  className="matrix-group-label-button"
-                  data-testid={`matrix-group-label-${group.id}`}
-                  onClick={() => onGroupLabelClick(group, { isDoubleClick: false })}
-                  onDoubleClick={(event) => {
-                    event.preventDefault();
-                    onGroupLabelClick(group, { isDoubleClick: true });
-                  }}
-                >
-                  {group.label}
-                </button>
-              )}
-            </div>
+                      onGroupLabelClick(group, { isDoubleClick: true });
+                    }}
+                  >
+                    {group.label}
+                  </button>
+                )}
+              </div>
+            </Fragment>
           );
         })}
       </div>
