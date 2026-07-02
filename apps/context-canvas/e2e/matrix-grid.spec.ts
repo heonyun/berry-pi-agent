@@ -421,7 +421,7 @@ test.describe("Feature: Matrix inferred target shortcuts", () => {
   });
 });
 
-test.describe("Feature: Side panel and recent ranges (real clicks)", () => {
+test.describe("Feature: Side panel and auto groups (real clicks)", () => {
   test.beforeEach(async ({ page }) => {
     await prepareMatrixGrid(page);
   });
@@ -434,18 +434,51 @@ test.describe("Feature: Side panel and recent ranges (real clicks)", () => {
     await expect(page.getByTestId("matrix-status-bar")).toContainText("Cell A1 updated");
   });
 
-  test("Scenario: Select a saved range from recent list with a normal user click", async ({
+  test("Scenario: Auto group appears, can be renamed, and is explicitly added as context", async ({
     page,
   }) => {
-    await dragMatrixRange(page, "A1", "B1");
-    await expectSelectionSummary(page, "A1:B1", "2×1");
-    await page.getByTestId("matrix-range-name-input").fill("inputs");
-    await page.getByTestId("matrix-name-range").click();
-    await expect(page.getByTestId("recent-range-inputs")).toBeVisible();
-    await clickMatrixCell(page, "C1");
-    await expect(page.getByTestId("matrix-status-selection")).toContainText("C1");
-    await page.getByTestId("recent-range-inputs").click({ timeout: 5000 });
-    await expectSelectionSummary(page, "A1:B1", "2×1");
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+
+    const outline = page.getByTestId(/matrix-group-outline-/).first();
+    await expect(outline).toBeVisible();
+    await expect(page.getByTestId("matrix-group-nav")).toContainText("q1");
+
+    await page.getByTestId(/matrix-group-label-/).first().click();
+    const labelInput = page.getByTestId("matrix-group-label-input");
+    await expect(labelInput).toBeVisible();
+    await labelInput.fill("Research inputs");
+    await labelInput.press("Enter");
+    await expect(page.getByTestId("matrix-group-nav")).toContainText("Research inputs");
+
+    await clickMatrixCell(page, "D4");
+    await page.getByRole("button", { name: "+ Context" }).first().click();
+    await expect(page.getByTestId("context-chip-Research inputs")).toBeVisible();
+    await expect(page.getByTestId("matrix-status-bar")).toContainText(
+      "Context added: Research inputs",
+    );
+  });
+
+  test("Scenario: Escape cancels group label edits", async ({ page }) => {
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+
+    await page.getByTestId(/matrix-group-label-/).first().click();
+    const labelInput = page.getByTestId("matrix-group-label-input");
+    await labelInput.fill("Should not save");
+    await labelInput.press("Escape");
+
+    await expect(page.getByTestId("matrix-group-nav")).toContainText("q1");
+    await expect(page.getByTestId("matrix-group-nav")).not.toContainText("Should not save");
+  });
+
+  test("Scenario: Clicking away saves group label edits", async ({ page }) => {
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+
+    await page.getByTestId(/matrix-group-label-/).first().click();
+    const labelInput = page.getByTestId("matrix-group-label-input");
+    await labelInput.fill("Blur saved label");
+    await clickMatrixCell(page, "D4");
+
+    await expect(page.getByTestId("matrix-group-nav")).toContainText("Blur saved label");
   });
 });
 
@@ -506,16 +539,16 @@ test.describe("Feature: Collapsible side panel rails", () => {
   test("Scenario: Collapse and restore the left navigation panel", async ({ page }) => {
     const expandedWidth = await gridWidth(page);
 
-    await page.getByRole("button", { name: "Collapse recent/history panel" }).click();
+    await page.getByRole("button", { name: "Collapse groups/history panel" }).click();
 
     await expect(page.getByTestId("matrix-left-panel")).toHaveAttribute("data-collapsed", "true");
-    await expect(page.getByTestId("matrix-recent-nav")).toBeHidden();
-    await expect(page.getByRole("button", { name: "Show recent/history panel" })).toBeVisible();
+    await expect(page.getByTestId("matrix-group-nav")).toBeHidden();
+    await expect(page.getByRole("button", { name: "Show groups/history panel" })).toBeVisible();
     await expect.poll(() => gridWidth(page)).toBeGreaterThan(expandedWidth + 100);
 
-    await page.getByRole("button", { name: "Show recent/history panel" }).click();
+    await page.getByRole("button", { name: "Show groups/history panel" }).click();
     await expect(page.getByTestId("matrix-left-panel")).toHaveAttribute("data-collapsed", "false");
-    await expect(page.getByTestId("matrix-recent-nav")).toBeVisible();
+    await expect(page.getByTestId("matrix-group-nav")).toBeVisible();
   });
 
   test("Scenario: Collapse and restore the detail panel without losing selected cell", async ({
@@ -542,7 +575,7 @@ test.describe("Feature: Collapsible side panel rails", () => {
   });
 
   test("Scenario: Panel collapsed state persists across reload", async ({ page }) => {
-    await page.getByRole("button", { name: "Collapse recent/history panel" }).click();
+    await page.getByRole("button", { name: "Collapse groups/history panel" }).click();
     await page.getByRole("button", { name: "Collapse detail panel" }).click();
     await expect(page.getByTestId("matrix-left-panel")).toHaveAttribute("data-collapsed", "true");
     await expect(page.getByTestId("matrix-right-panel")).toHaveAttribute("data-collapsed", "true");
@@ -552,7 +585,7 @@ test.describe("Feature: Collapsible side panel rails", () => {
 
     await expect(page.getByTestId("matrix-left-panel")).toHaveAttribute("data-collapsed", "true");
     await expect(page.getByTestId("matrix-right-panel")).toHaveAttribute("data-collapsed", "true");
-    await expect(page.getByRole("button", { name: "Show recent/history panel" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Show groups/history panel" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Show detail panel" })).toBeVisible();
   });
 });

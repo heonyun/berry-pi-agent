@@ -14,7 +14,6 @@ test.describe("Feature: Context Matrix real user flow", () => {
     await page.addInitScript(() => {
       localStorage.setItem("context-matrix-onboarding-dismissed", "true");
       localStorage.removeItem("context-matrix-history");
-      localStorage.removeItem("context-matrix-recent-ranges");
     });
     await prepareMatrixGrid(page);
   });

@@ -8,6 +8,7 @@ import type {
   SheetTemplate,
 } from "../shared/domain.ts";
 import { cellKey, formatColumnLabel } from "../shared/domain.ts";
+import { detectMatrixGroups } from "../shared/matrix-groups.ts";
 import { filterPatchesToTargetRange } from "../shared/matrix-validation.ts";
 
 // ── Context Matrix commands ───────────────────────────────────────────────
@@ -19,6 +20,8 @@ export type MatrixCommand =
   | { type: "apply_ai_command"; command: AiCommand }
   | { type: "set_named_range"; namedRange: NamedRange }
   | { type: "remove_named_range"; name: string }
+  | { type: "set_group_label"; id: string; label: string }
+  | { type: "dismiss_group"; id: string }
   | { type: "set_column_custom_label"; col: number; label: string }
   | { type: "update_cell_frontmatter"; row: number; col: number; frontmatter: string }
   | { type: "apply_template"; template: SheetTemplate; resizeCols?: number }
@@ -62,11 +65,12 @@ export function applyMatrixCommand(
       };
       const nextCells = new Map(document.sheet.cells);
       nextCells.set(key, updatedCell);
+      const nextDocument = withDetectedGroups({
+        ...document,
+        sheet: { ...document.sheet, cells: nextCells },
+      });
       return {
-        document: {
-          ...document,
-          sheet: { ...document.sheet, cells: nextCells },
-        },
+        document: nextDocument,
         meta: { updatedCells: 1 },
       };
     }
@@ -123,6 +127,51 @@ export function applyMatrixCommand(
       };
     }
 
+    case "set_group_label": {
+      const group = document.groups?.get(command.id);
+      if (!group) {
+        return {
+          document,
+          meta: { updatedCells: 0 },
+        };
+      }
+      const label = command.label.trim();
+      if (!label) {
+        return {
+          document,
+          meta: { updatedCells: 0 },
+        };
+      }
+      const nextGroups = new Map(document.groups ?? []);
+      nextGroups.set(group.id, { ...group, label });
+      return {
+        document: { ...document, groups: nextGroups },
+        meta: {
+          updatedCells: 0,
+          message: `Group label updated: ${label}`,
+        },
+      };
+    }
+
+    case "dismiss_group": {
+      const group = document.groups?.get(command.id);
+      if (!group) {
+        return {
+          document,
+          meta: { updatedCells: 0 },
+        };
+      }
+      const nextGroups = new Map(document.groups ?? []);
+      nextGroups.set(group.id, { ...group, dismissed: true });
+      return {
+        document: { ...document, groups: nextGroups },
+        meta: {
+          updatedCells: 0,
+          message: `Group hidden: ${group.label}`,
+        },
+      };
+    }
+
     case "set_column_custom_label": {
       if (command.col < 0 || command.col >= document.sheet.cols) {
         return {
@@ -166,11 +215,12 @@ export function applyMatrixCommand(
       };
       const nextCells = new Map(document.sheet.cells);
       nextCells.set(key, updatedCell);
+      const nextDocument = withDetectedGroups({
+        ...document,
+        sheet: { ...document.sheet, cells: nextCells },
+      });
       return {
-        document: {
-          ...document,
-          sheet: { ...document.sheet, cells: nextCells },
-        },
+        document: nextDocument,
         meta: { updatedCells: 1 },
       };
     }
@@ -206,11 +256,12 @@ export function applyMatrixCommand(
       const key = cellKey(command.row, command.col);
       const nextCells = new Map(document.sheet.cells);
       nextCells.delete(key);
+      const nextDocument = withDetectedGroups({
+        ...document,
+        sheet: { ...document.sheet, cells: nextCells },
+      });
       return {
-        document: {
-          ...document,
-          sheet: { ...document.sheet, cells: nextCells },
-        },
+        document: nextDocument,
         meta: { updatedCells: 1 },
       };
     }
@@ -250,11 +301,18 @@ function applyPatches(
   }
 
   return {
-    document: {
+    document: withDetectedGroups({
       ...document,
       sheet: { ...document.sheet, cells: nextCells },
-    },
+    }),
     meta: { updatedCells },
+  };
+}
+
+function withDetectedGroups(document: MatrixDocument): MatrixDocument {
+  return {
+    ...document,
+    groups: detectMatrixGroups(document, document.groups),
   };
 }
 

@@ -1,7 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { Cell, CellValue, MatrixDocument, SheetTemplate } from "../../shared/domain.ts";
+import type {
+  Cell,
+  CellValue,
+  MatrixDocument,
+  MatrixGroup,
+  SheetTemplate,
+} from "../../shared/domain.ts";
 import { cellKey } from "../../shared/domain.ts";
+import { detectMatrixGroups } from "../../shared/matrix-groups.ts";
 import { parse } from "../markdown/document.ts";
 import { assertSafeId } from "../markdown/paths.ts";
 import { cellsDir, pathToCellCoord } from "./paths.ts";
@@ -54,6 +61,11 @@ export function loadMatrixBundle(bundleRoot: string): LoadResult {
 
   const template = loadTemplate(bundleRoot, manifest.templateId, warnings);
   const namedRanges = new Map(manifest.namedRanges.map((entry) => [entry.name, entry]));
+  const groups = new Map(
+    (Array.isArray(manifest.groups) ? manifest.groups : [])
+      .filter((entry): entry is MatrixGroup => isValidManifestGroup(entry, manifest.rows, manifest.cols))
+      .map((entry) => [entry.id, entry] as const),
+  );
   const customColumnLabels = new Map(
     (Array.isArray(manifest.customColumnLabels) ? manifest.customColumnLabels : [])
       .filter((entry) => Number.isInteger(entry.col) && typeof entry.label === "string")
@@ -73,9 +85,15 @@ export function loadMatrixBundle(bundleRoot: string): LoadResult {
       cells,
     },
     namedRanges,
+    groups,
     customColumnLabels,
     ...(manifest.templateId ? { templateId: manifest.templateId } : {}),
     ...(template ? { template } : {}),
+  };
+  // CONTRACT: Manifest groups are persisted hints, not authority; cells remain source of truth.
+  const reconciledDocument: MatrixDocument = {
+    ...document,
+    groups: detectMatrixGroups(document, groups),
   };
 
   if (errors.length > 0) {
@@ -84,7 +102,31 @@ export function loadMatrixBundle(bundleRoot: string): LoadResult {
 
   const history = readMatrixHistory(bundleRoot);
 
-  return { document, history, warnings, errors };
+  return { document: reconciledDocument, history, warnings, errors };
+}
+
+function isValidManifestGroup(
+  value: MatrixGroup,
+  rows: number,
+  cols: number,
+): value is MatrixGroup {
+  return (
+    typeof value?.id === "string" &&
+    value.id.length > 0 &&
+    typeof value.label === "string" &&
+    value.label.trim().length > 0 &&
+    value.source === "auto" &&
+    Number.isInteger(value.range?.startRow) &&
+    Number.isInteger(value.range?.startCol) &&
+    Number.isInteger(value.range?.endRow) &&
+    Number.isInteger(value.range?.endCol) &&
+    value.range.startRow >= 0 &&
+    value.range.startCol >= 0 &&
+    value.range.endRow >= value.range.startRow &&
+    value.range.endCol >= value.range.startCol &&
+    value.range.endRow < rows &&
+    value.range.endCol < cols
+  );
 }
 
 function listCellFiles(bundleRoot: string): string[] {

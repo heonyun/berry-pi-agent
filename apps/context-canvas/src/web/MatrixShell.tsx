@@ -30,8 +30,8 @@ export function MatrixShell({
           type="button"
           className="matrix-panel-toggle"
           data-testid="matrix-left-panel-toggle"
-          aria-label={leftCollapsed ? "Show recent/history panel" : "Collapse recent/history panel"}
-          title={leftCollapsed ? "Show recent/history panel" : "Collapse recent/history panel"}
+          aria-label={leftCollapsed ? "Show groups/history panel" : "Collapse groups/history panel"}
+          title={leftCollapsed ? "Show groups/history panel" : "Collapse groups/history panel"}
           onClick={onToggleLeft}
         >
           <span aria-hidden="true">{leftCollapsed ? ">" : "<"}</span>

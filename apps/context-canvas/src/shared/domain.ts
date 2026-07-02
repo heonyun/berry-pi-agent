@@ -343,6 +343,15 @@ export interface NamedRange {
   readonly role?: "context" | "target" | "neutral";
 }
 
+/** Automatically detected semantic group of adjacent populated cells. */
+export interface MatrixGroup {
+  readonly id: string;
+  readonly label: string;
+  readonly range: RangeRefDTO;
+  readonly source: "auto";
+  readonly dismissed?: boolean;
+}
+
 /** Semantic column role for sheet templates (Phase 3). */
 export type ColumnRole =
   | "label"
@@ -373,13 +382,6 @@ export interface CellFrontmatterParsed {
   readonly [key: string]: unknown;
 }
 
-/** UI-only recent range entry (session/localStorage until Phase 4a). */
-export interface RecentRangeEntry {
-  readonly name: string;
-  readonly rangeLabel: string;
-  readonly lastUsedAt: string;
-}
-
 /** Context range snapshot stored with a history entry for re-run pre-fill. */
 export interface MatrixHistoryContextRange {
   readonly label: string;
@@ -406,6 +408,7 @@ export interface MatrixDocument {
   readonly schemaVersion: 4;
   readonly sheet: Sheet;
   readonly namedRanges: ReadonlyMap<string, NamedRange>;
+  readonly groups: ReadonlyMap<string, MatrixGroup>;
   readonly customColumnLabels?: ReadonlyMap<number, string>;
   readonly templateId?: string;
   readonly template?: SheetTemplate;
@@ -443,6 +446,7 @@ export function createEmptyMatrixDocument(options?: { withResearchTemplate?: boo
       cells: new Map(),
     },
     namedRanges: new Map(),
+    groups: new Map(),
     customColumnLabels: new Map(),
     ...(withTemplate
       ? { templateId: RESEARCH_SHEET_TEMPLATE.id, template: RESEARCH_SHEET_TEMPLATE }

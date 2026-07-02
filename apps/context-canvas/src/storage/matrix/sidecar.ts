@@ -17,6 +17,7 @@ export function buildMatrixManifest(
     rows: document.sheet.rows,
     cols: document.sheet.cols,
     namedRanges: [...document.namedRanges.values()],
+    groups: [...(document.groups ?? new Map()).values()],
     customColumnLabels: [...(document.customColumnLabels ?? new Map()).entries()].map(
       ([col, label]) => ({ col, label }),
     ),
