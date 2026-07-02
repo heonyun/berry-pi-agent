@@ -21,6 +21,10 @@ export function buildMatrixManifest(
     customColumnLabels: [...(document.customColumnLabels ?? new Map()).entries()].map(
       ([col, label]) => ({ col, label }),
     ),
+    columnWidths: [...(document.columnWidths ?? new Map()).entries()].map(([col, width]) => ({
+      col,
+      width,
+    })),
     templateId: document.templateId,
   };
 }

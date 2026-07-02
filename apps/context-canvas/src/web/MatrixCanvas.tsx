@@ -35,6 +35,7 @@ import { MatrixLeftNav } from "./MatrixLeftNav.tsx";
 import { MatrixHistoryDetailPane } from "./MatrixHistoryDetailPane.tsx";
 import { MatrixOnboarding } from "./MatrixOnboarding.tsx";
 import { loadMatrixPanelLayout, saveMatrixPanelLayout } from "./matrix-panel-layout.ts";
+import { loadMatrixColumnWidths, saveMatrixColumnWidths } from "./matrix-column-widths.ts";
 import {
   appendMatrixHistory,
   createHistoryEntry,
@@ -71,7 +72,14 @@ function nextChipId(): string {
 }
 
 export function MatrixCanvas(): ReactElement {
-  const [document, setDocument] = useState<MatrixDocument>(() => createEmptyMatrixDocument());
+  const [document, setDocument] = useState<MatrixDocument>(() => {
+    const storedWidths = loadMatrixColumnWidths();
+    const base = createEmptyMatrixDocument();
+    if (storedWidths.size === 0) {
+      return base;
+    }
+    return { ...base, columnWidths: storedWidths };
+  });
   const docRef = useRef(document);
   docRef.current = document;
 
@@ -715,6 +723,15 @@ export function MatrixCanvas(): ReactElement {
     [editingGroupId, handleGroupSelect, handleStartGroupLabelEdit],
   );
 
+  const handleColumnWidthChange = useCallback(
+    (col: number, width: number) => {
+      const result = dispatch({ type: "set_column_width", col, width });
+      saveMatrixColumnWidths(result.document.columnWidths);
+      scheduleMatrixBundleExport(result.document, historyEntries);
+    },
+    [dispatch, historyEntries],
+  );
+
   const handleGroupDismiss = useCallback(
     (group: MatrixGroup) => {
       dispatch({ type: "dismiss_group", id: group.id });
@@ -753,6 +770,7 @@ export function MatrixCanvas(): ReactElement {
               onCellEdited={handleCellEdited}
               onCellsEdited={handleCellsEdited}
               onColumnHeaderClick={handleColumnHeaderClick}
+              onColumnResize={handleColumnWidthChange}
               onGroupLabelClick={handleGroupLabelClick}
               onGroupLabelDraftChange={setGroupLabelDraft}
               onGroupLabelSave={handleSaveGroupLabel}

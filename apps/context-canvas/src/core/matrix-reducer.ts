@@ -8,6 +8,7 @@ import type {
   SheetTemplate,
 } from "../shared/domain.ts";
 import { cellKey, formatColumnLabel } from "../shared/domain.ts";
+import { clampMatrixColumnWidth } from "../shared/matrix-column-width.ts";
 import { detectMatrixGroups } from "../shared/matrix-groups.ts";
 import { filterPatchesToTargetRange } from "../shared/matrix-validation.ts";
 
@@ -23,6 +24,7 @@ export type MatrixCommand =
   | { type: "set_group_label"; id: string; label: string }
   | { type: "dismiss_group"; id: string }
   | { type: "set_column_custom_label"; col: number; label: string }
+  | { type: "set_column_width"; col: number; width: number }
   | { type: "update_cell_frontmatter"; row: number; col: number; frontmatter: string }
   | { type: "apply_template"; template: SheetTemplate; resizeCols?: number }
   | { type: "clear_cell"; row: number; col: number };
@@ -194,6 +196,23 @@ export function applyMatrixCommand(
           message: label
             ? `Column ${coordinate} label updated: ${label}`
             : `Column ${coordinate} label cleared`,
+        },
+      };
+    }
+
+    case "set_column_width": {
+      if (command.col < 0 || command.col >= document.sheet.cols) {
+        return { document, meta: { updatedCells: 0 } };
+      }
+      const width = clampMatrixColumnWidth(command.width);
+      const nextWidths = new Map(document.columnWidths ?? []);
+      nextWidths.set(command.col, width);
+      const coordinate = formatColumnLabel(command.col);
+      return {
+        document: { ...document, columnWidths: nextWidths },
+        meta: {
+          updatedCells: 0,
+          message: `Column ${coordinate} width: ${width}px`,
         },
       };
     }

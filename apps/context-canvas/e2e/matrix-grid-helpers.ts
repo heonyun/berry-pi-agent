@@ -224,6 +224,50 @@ export async function doubleClickColumnHeader(page: Page, colLetter: string): Pr
   await page.mouse.dblclick(x, y);
 }
 
+/** Drag the boundary after a column header to resize that column (#96). */
+export async function resizeMatrixColumn(
+  page: Page,
+  colLetter: string,
+  deltaX: number,
+): Promise<void> {
+  const { col } = parseCellAddress(`${colLetter}1`);
+  const canvas = await gridCanvas(page);
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) {
+    return;
+  }
+  // WHY: Glide attaches the drag handle on the column boundary; drag right to widen the left column.
+  const x = box.x + ROW_MARKER_WIDTH + (col + 1) * COL_WIDTH - 3;
+  const y = box.y + HEADER_HEIGHT / 2;
+  await canvas.focus();
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + deltaX, y, { steps: 6 });
+  await page.mouse.up();
+}
+
+export async function expectStoredColumnWidth(
+  page: Page,
+  col: number,
+  width: number,
+): Promise<void> {
+  const raw = await page.evaluate(() => localStorage.getItem("context-matrix-column-widths"));
+  expect(raw).toContain(`"col":${col}`);
+  expect(raw).toContain(`"width":${width}`);
+}
+
+export async function readStoredColumnWidth(page: Page, col: number): Promise<number> {
+  return page.evaluate((column) => {
+    const raw = localStorage.getItem("context-matrix-column-widths");
+    if (!raw) {
+      return 0;
+    }
+    const parsed = JSON.parse(raw) as Array<{ col: number; width: number }>;
+    return parsed.find((entry) => entry.col === column)?.width ?? 0;
+  }, col);
+}
+
 export async function dragMatrixRange(
   page: Page,
   fromAddress: string,

@@ -73,6 +73,12 @@ export function loadMatrixBundle(bundleRoot: string): LoadResult {
       .map((entry) => [entry.col, entry.label.trim()] as const)
       .filter((entry) => entry[1].length > 0),
   );
+  const columnWidths = new Map(
+    (Array.isArray(manifest.columnWidths) ? manifest.columnWidths : [])
+      .filter((entry) => Number.isInteger(entry.col) && typeof entry.width === "number")
+      .filter((entry) => entry.col >= 0 && entry.col < manifest.cols)
+      .map((entry) => [entry.col, entry.width] as const),
+  );
 
   const document: MatrixDocument = {
     kind: "matrix",
@@ -87,6 +93,7 @@ export function loadMatrixBundle(bundleRoot: string): LoadResult {
     namedRanges,
     groups,
     customColumnLabels,
+    ...(columnWidths.size > 0 ? { columnWidths } : {}),
     ...(manifest.templateId ? { templateId: manifest.templateId } : {}),
     ...(template ? { template } : {}),
   };

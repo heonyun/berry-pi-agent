@@ -415,6 +415,28 @@ describe("applyMatrixCommand", () => {
       expect(blank.meta.updatedCells).toBe(0);
     });
 
+    it("set_column_width persists clamped width for in-bounds columns", () => {
+      const doc = createEmptyMatrixDocument();
+      const result = applyMatrixCommand(doc, { type: "set_column_width", col: 0, width: 180 });
+      expect(result.document.columnWidths?.get(0)).toBe(180);
+      expect(result.meta.message).toContain("180px");
+
+      const clamped = applyMatrixCommand(doc, { type: "set_column_width", col: 1, width: 999 });
+      expect(clamped.document.columnWidths?.get(1)).toBe(500);
+    });
+
+    it("set_column_width ignores out-of-bounds columns", () => {
+      const doc = createEmptyMatrixDocument();
+      const negative = applyMatrixCommand(doc, { type: "set_column_width", col: -1, width: 200 });
+      const pastEnd = applyMatrixCommand(doc, {
+        type: "set_column_width",
+        col: doc.sheet.cols,
+        width: 200,
+      });
+      expect(negative.document).toBe(doc);
+      expect(pastEnd.document).toBe(doc);
+    });
+
     it("dismiss_group marks a known group and ignores unknown groups", () => {
       let doc = createEmptyMatrixDocument({ withResearchTemplate: false });
       doc = applyMatrixCommand(doc, {
