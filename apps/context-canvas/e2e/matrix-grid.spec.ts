@@ -464,6 +464,9 @@ test.describe("Feature: Side panel and auto groups (real clicks)", () => {
 
     const outline = page.getByTestId(/matrix-group-outline-/).first();
     await expect(outline).toBeVisible();
+    await expect(page.getByTestId(/matrix-group-boundary-/).first()).toBeVisible();
+    await expect(page.getByTestId(/matrix-group-corner-dot-/)).toHaveCount(4);
+    await expect(page.getByTestId(/matrix-group-corner-dot-/).first()).toBeVisible();
     await expect(page.getByTestId("matrix-group-nav")).toContainText("q1");
 
     await page.getByTestId(/matrix-group-label-/).first().dblclick();
