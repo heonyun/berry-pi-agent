@@ -19,7 +19,7 @@ keywords:
   - Korean IME
   - matrix-ime
   - Qwen worker
-summary: "Registered Matrix UX #93-#106; merged I01-I04 (#107,#109,#110,#111); next up is I05 #97 row height resize."
+summary: "Registered Matrix UX #93-#106; merged I01-I05 (#107,#109,#110,#111,#113); next up is I06 #98 group corner-dot boundaries."
 updated: 2026-07-02
 author: cursor-orchestrator
 canonical_repo: heonyun/berry-pi-agent
@@ -30,9 +30,9 @@ canonical_repo: heonyun/berry-pi-agent
 ## TL;DR
 
 - Registered **14 Matrix UX issues** (#93–#106) from user request + cell-resize investigation.
-- **PR #107** (issue #93 skeleton): cancel Glide `editOnType` during IME; `ImeTextarea` in detail pane.
-- **CI + DeepSeek PR review: pass** (round 1). CodeRabbit advisory pending.
-- Qwen worker scripts exist locally; `Invoke-QwenWorkerTicket.ps1` still **gitignored** (PATH fix in untracked copy).
+- Merged **I01-I05**: PR #107, #109, #110, #111, #113.
+- Latest: **I05 #97 row height resize** shipped via PR #113; issue #97 closed.
+- Next: **I06 #98 group corner-dot boundaries**.
 
 ## Issue map (I01–I14 → GitHub)
 
@@ -107,11 +107,12 @@ Local index: `doc/working-log/.matrix-ux-issue-ids.json` (untracked).
 | I02 | 94 | #109 | **merged** |
 | I03 | 95 | #110 | **merged** |
 | I04 | 96 | #111 | **merged** |
-| I05–I14 | 97–106 | — | pending |
+| I05 | 97 | #113 | **merged** |
+| I06–I14 | 98–106 | — | pending |
 
 ## Next Actions
 
-1. I05 #97 row height resize.
+1. I06 #98 group corner-dot boundaries.
 2. Manual Windows Korean IME smoke on grid `editOnType` (#93).
 3. Follow-up PR for #108: Glide `provideEditor` + `ImeTextarea` overlay.
 4. Promote Qwen worker scripts to tracked repo if harness promotion approved (`git add -f`).

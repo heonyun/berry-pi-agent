@@ -8,12 +8,12 @@ date: 2026-07-02
 updated: 2026-07-02
 author: Cursor
 canonical_repo: "C:\\Dev\\pi-agent"
-summary: "Matrix UX issues registered; I01-I04 merged; next up is I05 (#97) row height resize."
+summary: "Matrix UX issues registered; I01-I05 merged; next up is I06 (#98) group corner-dot boundaries."
 ---
 
 # Matrix UX #93–#106 — Codex Handoff
 
-**State after Codex resume:** PR #111 squash-merged to `main` at `355a6692`; next issue is #97.
+**State after Codex resume:** PR #113 squash-merged to `main` at `502d2900`; next issue is #98.
 
 **Repo:** `C:\Dev\pi-agent` (`heonyun/berry-pi-agent` fork of `earendil-works/pi`)
 
@@ -30,8 +30,9 @@ summary: "Matrix UX issues registered; I01-I04 merged; next up is I05 (#97) row 
 | I02 #94 Ctrl+Enter (PR #109) | **Merged** |
 | I03 #95 group label dbl-click rename (PR #110) | **Merged** |
 | I04 #96 column width resize (PR #111) | **Merged** — `355a6692` |
-| I05–I14 #97–#106 | Not started |
-| User stop scope | GitHub issue + PR filed; **no merge** this session |
+| I05 #97 row height resize (PR #113) | **Merged** — `502d2900` |
+| I06–I14 #98–#106 | Not started |
+| User stop scope | Continue all issues with per-issue PR loop |
 
 ---
 
@@ -53,7 +54,7 @@ summary: "Matrix UX issues registered; I01-I04 merged; next up is I05 (#97) row 
 | I02 | 94 | Ctrl+Enter shortcut | #109 | merged |
 | I03 | 95 | Group label double-click rename | #110 | merged |
 | I04 | 96 | Column width resize | **#111** | **merged, #96 closed** |
-| I05 | 97 | Row height resize | — | pending (depends #96) |
+| I05 | 97 | Row height resize | **#113** | **merged, #97 closed** |
 | I06–I14 | 98–106 | See triage worklog | — | pending |
 
 Local IDs: `doc/working-log/.matrix-ux-issue-ids.json`
@@ -113,9 +114,52 @@ npm run e2e -- -g "Column width resize"
 npm run build
 ```
 
+## Completed: I05 #97 / PR #113
+
+### What was built
+
+```
+apps/context-canvas/src/shared/matrix-row-height.ts     # default 34, clamp 24-300
+apps/context-canvas/src/web/matrix-row-heights.ts       # localStorage key
+apps/context-canvas/src/core/matrix-reducer.ts          # set_row_height
+apps/context-canvas/src/web/MatrixGrid.tsx              # row marker overlay handles
+apps/context-canvas/src/web/MatrixCanvas.tsx            # dispatch + save + bundle export
+apps/context-canvas/src/storage/matrix/{sidecar,load,types}.ts
+apps/context-canvas/e2e/matrix-grid.spec.ts             # resize + reload test
+```
+
+### Critical invariant
+
+**Persist only on pointer-up resize end.** Drag motion may preview height in local Grid state, but domain/localStorage/bundle export happen once at release.
+
+```tsx
+// MatrixGrid.tsx
+// INVARIANT: Persist only on drag end, matching column resize-end behavior (#96, #97).
+onRowResize(rowResizeDrag.row, height);
+```
+
+### Final status (PR #113)
+
+| Check | Result |
+| --- | --- |
+| `build-check-test` | pass |
+| CodeRabbit | pass |
+| `dispatch` / `review` (DeepSeek workflow) | pass |
+| Merge | `502d2900` |
+
+### Commands verified locally
+
+```powershell
+cd C:\Dev\pi-agent\apps\context-canvas
+npm test -- --run src/shared/matrix-row-height.test.ts src/web/matrix-row-heights.test.ts src/core/matrix-reducer.test.ts src/storage/matrix/projection.test.ts src/server/matrix-bundle.test.ts src/web/export-matrix-bundle.test.ts
+npm run typecheck
+npm run e2e -- -g "Column width resize|Row height resize"
+npm run build
+```
+
 ### Resume here
 
-Start **I05 #97 — row height resize**. Reuse the column-width pattern, especially the resize-end-only persistence invariant.
+Start **I06 #98 — group corner-dot boundaries**.
 
 ---
 
@@ -152,4 +196,5 @@ Also record harness follow-up from PR #111:
 ## Git note
 
 PR #111 merge commit: `355a6692`.  
+PR #113 merge commit: `502d2900`.  
 Do **not** include unrelated `doc/orchestrator/*` local edits in product PRs.
