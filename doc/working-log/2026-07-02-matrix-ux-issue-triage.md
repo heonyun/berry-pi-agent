@@ -19,7 +19,7 @@ keywords:
   - Korean IME
   - matrix-ime
   - Qwen worker
-summary: "Registered Matrix UX #93-#106; merged I01-I06 (#107,#109,#110,#111,#113,#114); next up is I07 #99 corner-dot cell grid."
+summary: "Registered Matrix UX #93-#106; merged I01-I05 (#107,#109,#110,#111,#113); next up is I06 #98 group corner-dot boundaries."
 updated: 2026-07-02
 author: cursor-orchestrator
 canonical_repo: heonyun/berry-pi-agent
@@ -30,9 +30,9 @@ canonical_repo: heonyun/berry-pi-agent
 ## TL;DR
 
 - Registered **14 Matrix UX issues** (#93–#106) from user request + cell-resize investigation.
-- Merged **I01-I06**: PR #107, #109, #110, #111, #113, #114.
-- Latest: **I06 #98 group corner-dot boundaries** shipped via PR #114; issue #98 closed.
-- Next: **I07 #99 full corner-dot cell grid**.
+- Merged **I01-I05**: PR #107, #109, #110, #111, #113.
+- Latest: **I05 #97 row height resize** shipped via PR #113; issue #97 closed.
+- Next: **I06 #98 group corner-dot boundaries**.
 
 ## Issue map (I01–I14 → GitHub)
 
@@ -108,12 +108,11 @@ Local index: `doc/working-log/.matrix-ux-issue-ids.json` (untracked).
 | I03 | 95 | #110 | **merged** |
 | I04 | 96 | #111 | **merged** |
 | I05 | 97 | #113 | **merged** |
-| I06 | 98 | #114 | **merged** |
-| I07–I14 | 99–106 | — | pending |
+| I06–I14 | 98–106 | — | pending |
 
 ## Next Actions
 
-1. I07 #99 corner-dot cell grid.
+1. I06 #98 group corner-dot boundaries.
 2. Manual Windows Korean IME smoke on grid `editOnType` (#93).
 3. Follow-up PR for #108: Glide `provideEditor` + `ImeTextarea` overlay.
 4. Promote Qwen worker scripts to tracked repo if harness promotion approved (`git add -f`).
