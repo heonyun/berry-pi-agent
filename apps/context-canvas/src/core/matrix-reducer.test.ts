@@ -335,5 +335,27 @@ describe("applyMatrixCommand", () => {
       expect(doc.template?.name).toBe("Research");
       expect(doc.template?.columns.length).toBeGreaterThan(0);
     });
+
+    it("set_column_custom_label stores and clears user-visible column labels", () => {
+      const doc = createEmptyMatrixDocument();
+
+      const setResult = applyMatrixCommand(doc, {
+        type: "set_column_custom_label",
+        col: 1,
+        label: "Customer",
+      });
+
+      expect(setResult.document.customColumnLabels?.get(1)).toBe("Customer");
+      expect(setResult.meta.message).toContain("Column B label updated");
+
+      const clearResult = applyMatrixCommand(setResult.document, {
+        type: "set_column_custom_label",
+        col: 1,
+        label: "   ",
+      });
+
+      expect(clearResult.document.customColumnLabels?.has(1)).toBe(false);
+      expect(clearResult.meta.message).toContain("Column B label cleared");
+    });
   });
 });

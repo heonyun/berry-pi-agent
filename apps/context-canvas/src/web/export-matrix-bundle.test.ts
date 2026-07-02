@@ -17,10 +17,15 @@ describe("export-matrix-bundle", () => {
     const document = createEmptyMatrixDocument({ withResearchTemplate: false });
     const cells = new Map(document.sheet.cells);
     cells.set(cellKey(0, 0), { value: "A1", body: "body", frontmatter: "", provenance: "user" });
-    const withCell = { ...document, sheet: { ...document.sheet, cells } };
+    const withCell = {
+      ...document,
+      sheet: { ...document.sheet, cells },
+      customColumnLabels: new Map([[1, "Customer"]]),
+    };
 
     const wire = matrixDocumentForWire(withCell) as {
       sheet: { cells: Record<string, unknown> };
+      customColumnLabels: Record<string, string>;
     };
     expect(wire.sheet.cells["0,0"]).toEqual({
       value: "A1",
@@ -28,6 +33,7 @@ describe("export-matrix-bundle", () => {
       frontmatter: "",
       provenance: "user",
     });
+    expect(wire.customColumnLabels).toEqual({ "1": "Customer" });
   });
 
   it("posts document and history to matrix bundle export", async () => {

@@ -14,6 +14,7 @@ import {
   typeDirectlyInGrid,
   clickRowMarker,
   clickColumnHeader,
+  doubleClickColumnHeader,
 } from "./matrix-grid-helpers.ts";
 
 async function selectRangeByKeyboard(page: Page, anchor: string, keys: readonly string[]): Promise<void> {
@@ -461,5 +462,32 @@ test.describe("Feature: Row and column header selection", () => {
   test("Scenario: Click a column header to select the whole column", async ({ page }) => {
     await clickColumnHeader(page, "B");
     await expectSelectionSummary(page, "B1:B20", "1×20");
+  });
+
+  test("Scenario: Rename a column header without changing coordinate selection", async ({
+    page,
+  }) => {
+    await doubleClickColumnHeader(page, "B");
+    const labelInput = page.getByTestId("matrix-column-label-input");
+    await expect(labelInput).toBeVisible();
+    await labelInput.fill("Customer");
+    await page.getByTestId("matrix-column-label-save").click();
+
+    await expect(page.getByTestId("matrix-status-bar")).toContainText(
+      "Column B label updated: Customer",
+    );
+    await expect(page.getByTestId("matrix-column-label-start")).toBeVisible();
+    await expectSelectionSummary(page, "B1:B20", "1×20");
+  });
+
+  test("Scenario: Selecting another cell closes the active label editor", async ({ page }) => {
+    await doubleClickColumnHeader(page, "B");
+    await expect(page.getByTestId("matrix-column-label-input")).toBeVisible();
+
+    await clickMatrixCell(page, "C1");
+
+    await expect(page.getByTestId("matrix-column-label-input")).toBeHidden();
+    await expect(page.getByTestId("matrix-column-label-editor")).toBeHidden();
+    await expectActiveSelection(page, "C1");
   });
 });

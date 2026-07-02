@@ -16,6 +16,7 @@ export function matrixDocumentForWire(document: MatrixDocument): unknown {
       cells: Object.fromEntries(document.sheet.cells),
     },
     namedRanges: Object.fromEntries(document.namedRanges),
+    customColumnLabels: Object.fromEntries(document.customColumnLabels ?? []),
   };
 }
 

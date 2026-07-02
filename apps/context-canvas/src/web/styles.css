@@ -923,6 +923,53 @@ button.active {
   flex-direction: column;
 }
 
+.matrix-column-label-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.matrix-column-label-coordinate {
+  min-width: 72px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.matrix-column-label-input {
+  width: min(260px, 40vw);
+  min-width: 120px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font: inherit;
+  background: white;
+}
+
+.matrix-primary-button,
+.matrix-secondary-button {
+  min-height: 32px;
+  border-radius: 6px;
+  padding: 0 12px;
+  font-weight: 700;
+}
+
+.matrix-primary-button {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: white;
+}
+
+.matrix-secondary-button {
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--text);
+}
+
 .matrix-onboarding {
   position: absolute;
   inset: 12px;

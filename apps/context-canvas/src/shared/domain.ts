@@ -406,6 +406,7 @@ export interface MatrixDocument {
   readonly schemaVersion: 4;
   readonly sheet: Sheet;
   readonly namedRanges: ReadonlyMap<string, NamedRange>;
+  readonly customColumnLabels?: ReadonlyMap<number, string>;
   readonly templateId?: string;
   readonly template?: SheetTemplate;
 }
@@ -442,16 +443,22 @@ export function createEmptyMatrixDocument(options?: { withResearchTemplate?: boo
       cells: new Map(),
     },
     namedRanges: new Map(),
+    customColumnLabels: new Map(),
     ...(withTemplate
       ? { templateId: RESEARCH_SHEET_TEMPLATE.id, template: RESEARCH_SHEET_TEMPLATE }
       : {}),
   };
 }
 
-/** Resolve semantic header for a column from the active template, else Excel-style label. */
+/** Resolve user-visible column header; semantic template headers do not override coordinates. */
 export function getColumnHeader(document: MatrixDocument, col: number): string {
-  const templateCol = document.template?.columns.find((c) => c.col === col);
-  return templateCol?.header ?? formatColumnLabel(col);
+  const coordinate = formatColumnLabel(col);
+  const customLabel = document.customColumnLabels?.get(col)?.trim();
+  return customLabel ? `${coordinate} · ${customLabel}` : coordinate;
+}
+
+export function getColumnCustomLabel(document: MatrixDocument, col: number): string {
+  return document.customColumnLabels?.get(col) ?? "";
 }
 
 export function rangesEqual(a: RangeRefDTO, b: RangeRefDTO): boolean {

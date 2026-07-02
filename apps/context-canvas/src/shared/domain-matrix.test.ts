@@ -8,20 +8,30 @@ import {
 } from "./domain.ts";
 
 describe("getColumnHeader", () => {
-  it("returns template header when column has a role", () => {
+  it("returns Excel column labels by default even when semantic template columns exist", () => {
     const doc = createEmptyMatrixDocument();
-    expect(getColumnHeader(doc, 1)).toBe("Question");
-    expect(getColumnHeader(doc, 2)).toBe("Key Answer");
+    expect(getColumnHeader(doc, 0)).toBe("A");
+    expect(getColumnHeader(doc, 1)).toBe("B");
+    expect(getColumnHeader(doc, 2)).toBe("C");
   });
 
-  it("falls back to Excel column label for unmapped columns", () => {
+  it("formats multi-letter Excel column labels", () => {
     const doc = createEmptyMatrixDocument();
-    expect(getColumnHeader(doc, 10)).toBe("K");
+    expect(getColumnHeader(doc, 25)).toBe("Z");
+    expect(getColumnHeader(doc, 26)).toBe("AA");
   });
 
   it("uses Excel label when document has no template", () => {
     const doc = createEmptyMatrixDocument({ withResearchTemplate: false });
     expect(getColumnHeader(doc, 1)).toBe("B");
+  });
+
+  it("appends a custom label without replacing coordinate identity", () => {
+    const doc = {
+      ...createEmptyMatrixDocument(),
+      customColumnLabels: new Map([[1, "Customer"]]),
+    };
+    expect(getColumnHeader(doc, 1)).toBe("B · Customer");
   });
 });
 

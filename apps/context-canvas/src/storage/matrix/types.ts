@@ -11,6 +11,7 @@ export interface MatrixBundleManifest {
   readonly rows: number;
   readonly cols: number;
   readonly namedRanges: NamedRange[];
+  readonly customColumnLabels?: Array<{ readonly col: number; readonly label: string }>;
   readonly templateId?: string;
 }
 

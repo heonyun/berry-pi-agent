@@ -6,6 +6,7 @@ import {
   type EditableGridCell,
   type EditListItem,
   type GridColumn,
+  type HeaderClickedEventArgs,
   type GridSelection,
   type Item,
 } from "@glideapps/glide-data-grid";
@@ -37,6 +38,10 @@ export interface MatrixGridProps {
   readonly onCellClick: (row: number, col: number) => void;
   readonly onCellEdited: (row: number, col: number, body: string) => void;
   readonly onCellsEdited: (edits: readonly MatrixCellEdit[]) => void;
+  readonly onColumnHeaderClick?: (
+    col: number,
+    options: { readonly isDoubleClick: boolean },
+  ) => void;
   readonly onSelectionChange: (selection: MatrixGridSelectionState | null) => void;
 }
 
@@ -56,6 +61,7 @@ export function MatrixGrid({
   onCellClick,
   onCellEdited,
   onCellsEdited,
+  onColumnHeaderClick = () => {},
   onSelectionChange,
 }: MatrixGridProps): ReactElement {
   const config = useMemo(() => getMatrixGridConfig(document), [document]);
@@ -155,6 +161,16 @@ export function MatrixGrid({
     [config.cols, config.rows, onCellsEdited],
   );
 
+  const handleHeaderClicked = useCallback(
+    (col: number, event: HeaderClickedEventArgs) => {
+      if (col < 0 || col >= config.cols) {
+        return;
+      }
+      onColumnHeaderClick(col, { isDoubleClick: event.isDoubleClick === true });
+    },
+    [config.cols, onColumnHeaderClick],
+  );
+
   const keybindings = useMemo(
     () => ({
       // Glide default activateCell is Space|Enter|shift+Enter; add F2 for spreadsheet parity (#73).
@@ -174,6 +190,7 @@ export function MatrixGrid({
         theme={theme}
         gridSelection={gridSelection}
         onCellClicked={handleCellClicked}
+        onHeaderClicked={handleHeaderClicked}
         onCellEdited={handleCellEdited}
         onCellsEdited={handleCellsEdited}
         onDelete={(deletedSelection) => deletedSelection}

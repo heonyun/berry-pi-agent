@@ -51,6 +51,7 @@ function sampleMatrixDocument(): MatrixDocument {
       },
     ],
   ]);
+  const customColumnLabels = new Map([[1, "Customer"]]);
 
   return {
     kind: "matrix",
@@ -63,6 +64,7 @@ function sampleMatrixDocument(): MatrixDocument {
       cells,
     },
     namedRanges,
+    customColumnLabels,
     templateId: RESEARCH_SHEET_TEMPLATE.id,
     template: RESEARCH_SHEET_TEMPLATE,
   };
@@ -95,6 +97,11 @@ describe("projectMatrixToBundle", () => {
     expect(result.pathsWritten).toContain("templates/research-default.json");
     expect(fs.existsSync(rootIndexPath(bundleRoot))).toBe(true);
     expect(fs.existsSync(sheetIndexPath(bundleRoot, MATRIX_SHEET_ID))).toBe(true);
+
+    const manifestJson = JSON.parse(
+      fs.readFileSync(path.join(bundleRoot, MATRIX_SIDECAR), "utf8"),
+    );
+    expect(manifestJson.customColumnLabels).toEqual([{ col: 1, label: "Customer" }]);
 
     const templateJson = JSON.parse(
       fs.readFileSync(path.join(bundleRoot, "templates", `${RESEARCH_SHEET_TEMPLATE.id}.json`), "utf8"),
@@ -142,6 +149,24 @@ describe("loadMatrixBundle", () => {
       range: { startRow: 0, startCol: 4, endRow: 4, endCol: 4 },
       role: "target",
     });
+  });
+
+  it("ignores invalid custom column label manifest entries", () => {
+    const bundleRoot = makeTempDir();
+    projectMatrixToBundle(sampleMatrixDocument(), bundleRoot);
+    const sidecarPath = path.join(bundleRoot, MATRIX_SIDECAR);
+    const manifest = JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
+    manifest.customColumnLabels = [
+      { col: 1, label: "Customer" },
+      { col: -1, label: "Negative" },
+      { col: manifest.cols, label: "Out of range" },
+      { col: 2, label: "   " },
+      { col: 3, label: 123 },
+    ];
+    fs.writeFileSync(sidecarPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    const loaded = loadMatrixBundle(bundleRoot);
+    expect(loaded.document?.customColumnLabels).toEqual(new Map([[1, "Customer"]]));
   });
 
   it("reports forward-slash bundle-relative paths from projection", () => {

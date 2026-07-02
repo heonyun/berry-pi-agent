@@ -26,6 +26,22 @@ function mapFromWire<K extends string, V>(value: ReadonlyMap<K, V> | Record<stri
   return new Map(Object.entries(value) as [K, V][]);
 }
 
+function numericMapFromWire<V>(
+  value: ReadonlyMap<number, V> | Record<string, V> | null | undefined,
+): Map<number, V> {
+  if (value == null) {
+    return new Map();
+  }
+  if (value instanceof Map) {
+    return new Map([...value.entries()].filter(([key]) => Number.isInteger(key) && key >= 0));
+  }
+  return new Map(
+    Object.entries(value)
+      .map(([key, entry]) => [Number.parseInt(key, 10), entry] as const)
+      .filter(([key]) => Number.isInteger(key) && key >= 0),
+  );
+}
+
 function normalizeMatrixDocumentWire(document: MatrixDocument): MatrixDocument {
   if (!document?.sheet) {
     throw new Error("Matrix bundle export requires a document with a sheet");
@@ -38,6 +54,7 @@ function normalizeMatrixDocumentWire(document: MatrixDocument): MatrixDocument {
       cells: mapFromWire(cells),
     },
     namedRanges: mapFromWire(document.namedRanges),
+    customColumnLabels: numericMapFromWire(document.customColumnLabels),
   };
 }
 
