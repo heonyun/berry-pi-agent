@@ -460,7 +460,7 @@ test.describe("Feature: Side panel and auto groups (real clicks)", () => {
     await expect(outline).toBeVisible();
     await expect(page.getByTestId("matrix-group-nav")).toContainText("q1");
 
-    await page.getByTestId(/matrix-group-label-/).first().click();
+    await page.getByTestId(/matrix-group-label-/).first().dblclick();
     const labelInput = page.getByTestId("matrix-group-label-input");
     await expect(labelInput).toBeVisible();
     await labelInput.fill("Research inputs");
@@ -475,10 +475,18 @@ test.describe("Feature: Side panel and auto groups (real clicks)", () => {
     );
   });
 
-  test("Scenario: Escape cancels group label edits", async ({ page }) => {
+  test("Scenario: Single click on group label selects without opening editor", async ({ page }) => {
     await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
 
     await page.getByTestId(/matrix-group-label-/).first().click();
+    await expect(page.getByTestId("matrix-group-label-input")).not.toBeVisible();
+    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Selected group/i);
+  });
+
+  test("Scenario: Escape cancels group label edits", async ({ page }) => {
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+
+    await page.getByTestId(/matrix-group-label-/).first().dblclick();
     const labelInput = page.getByTestId("matrix-group-label-input");
     await labelInput.fill("Should not save");
     await labelInput.press("Escape");
@@ -490,7 +498,7 @@ test.describe("Feature: Side panel and auto groups (real clicks)", () => {
   test("Scenario: Clicking away saves group label edits", async ({ page }) => {
     await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
 
-    await page.getByTestId(/matrix-group-label-/).first().click();
+    await page.getByTestId(/matrix-group-label-/).first().dblclick();
     const labelInput = page.getByTestId("matrix-group-label-input");
     await labelInput.fill("Blur saved label");
     await clickMatrixCell(page, "D4");

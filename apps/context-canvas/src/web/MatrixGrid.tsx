@@ -57,8 +57,11 @@ export interface MatrixGridProps {
     col: number,
     options: { readonly isDoubleClick: boolean },
   ) => void;
+  readonly onGroupLabelClick?: (
+    group: MatrixGroup,
+    options: { readonly isDoubleClick: boolean },
+  ) => void;
   readonly onGroupLabelDraftChange: (label: string) => void;
-  readonly onGroupLabelEditStart: (group: MatrixGroup) => void;
   readonly onGroupLabelSave: () => void;
   readonly onGroupLabelCancel: () => void;
   readonly onSelectionChange: (selection: MatrixGridSelectionState | null) => void;
@@ -91,8 +94,8 @@ export function MatrixGrid({
   onCellEdited,
   onCellsEdited,
   onColumnHeaderClick = () => {},
+  onGroupLabelClick = () => {},
   onGroupLabelDraftChange,
-  onGroupLabelEditStart,
   onGroupLabelSave,
   onGroupLabelCancel,
   onSelectionChange,
@@ -380,7 +383,11 @@ export function MatrixGrid({
                   type="button"
                   className="matrix-group-label-button"
                   data-testid={`matrix-group-label-${group.id}`}
-                  onClick={() => onGroupLabelEditStart(group)}
+                  onClick={() => onGroupLabelClick(group, { isDoubleClick: false })}
+                  onDoubleClick={(event) => {
+                    event.preventDefault();
+                    onGroupLabelClick(group, { isDoubleClick: true });
+                  }}
                 >
                   {group.label}
                 </button>
