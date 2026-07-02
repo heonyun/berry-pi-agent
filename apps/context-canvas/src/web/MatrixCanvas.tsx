@@ -699,6 +699,22 @@ export function MatrixCanvas(): ReactElement {
     [syncDetailFromActiveCell],
   );
 
+  // WHY: column headers use double-click to rename; single click selects only (#95).
+  const handleGroupLabelClick = useCallback(
+    (group: MatrixGroup, options: { readonly isDoubleClick: boolean }) => {
+      if (options.isDoubleClick) {
+        handleStartGroupLabelEdit(group);
+        return;
+      }
+      if (editingGroupId !== null) {
+        setEditingGroupId(null);
+        setGroupLabelDraft("");
+      }
+      handleGroupSelect(group);
+    },
+    [editingGroupId, handleGroupSelect, handleStartGroupLabelEdit],
+  );
+
   const handleGroupDismiss = useCallback(
     (group: MatrixGroup) => {
       dispatch({ type: "dismiss_group", id: group.id });
@@ -737,8 +753,8 @@ export function MatrixCanvas(): ReactElement {
               onCellEdited={handleCellEdited}
               onCellsEdited={handleCellsEdited}
               onColumnHeaderClick={handleColumnHeaderClick}
+              onGroupLabelClick={handleGroupLabelClick}
               onGroupLabelDraftChange={setGroupLabelDraft}
-              onGroupLabelEditStart={handleStartGroupLabelEdit}
               onGroupLabelSave={handleSaveGroupLabel}
               onGroupLabelCancel={() => {
                 setEditingGroupId(null);
