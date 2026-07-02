@@ -21,8 +21,10 @@ Add `npm run lint` for product-facing behavior, broad refactors, or lint-sensiti
 ## Worklogs
 
 - **Obsidian DailyNote** is the primary worklog (`DailyNote/YYYY-MM-DD.md` in vault `heon24`). Follow vault `업무일지 기록 규칙.md`.
-- **Repo detail**: `doc/working-log/YYYY-MM-DD-topic.md` — tracked in git; see `doc/working-log/README.md` for naming, frontmatter, and local `git/info/exclude` policy.
-- Agents: load `worklog-writer` skill and `AGENTS.md` worklog route before writing either layer.
+- **Public repo policy**: do not commit internal worklogs, handoff notes, raw review artifacts, or harness-evaluation notes to this public repository.
+- **Local detail**: keep detailed engineering records in Obsidian or local-only ignored paths such as `doc/working-log/`, `doc/handoff/`, `.orchestrator/`, `qwen-runs/`, and `cursor-runs/`.
+- **GitHub-facing summary**: keep only concise PR descriptions, review replies, and verification summaries needed for public collaboration.
+- Agents: load `worklog-writer` skill and `AGENTS.md` worklog route before writing either layer, then keep detailed records local unless the user explicitly approves publishing a sanitized document.
 
 ## Cross-Platform Path Tests
 

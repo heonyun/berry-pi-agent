@@ -95,7 +95,7 @@ One sentence outcome.
 | harness_flow | plan |
 | task_class | standard |
 | next_action | Open PR with skeleton |
-| drill_down | doc/working-log/YYYY-MM-DD-topic.md |
+| drill_down | local-only Obsidian or ignored `doc/working-log/YYYY-MM-DD-topic.md` path; do not publish internal worklogs to the public repo |
 
 ## Repro / expected vs actual
 (steps or symptoms)
