@@ -36,6 +36,7 @@ import { MatrixHistoryDetailPane } from "./MatrixHistoryDetailPane.tsx";
 import { MatrixOnboarding } from "./MatrixOnboarding.tsx";
 import { loadMatrixPanelLayout, saveMatrixPanelLayout } from "./matrix-panel-layout.ts";
 import { loadMatrixColumnWidths, saveMatrixColumnWidths } from "./matrix-column-widths.ts";
+import { loadMatrixRowHeights, saveMatrixRowHeights } from "./matrix-row-heights.ts";
 import {
   appendMatrixHistory,
   createHistoryEntry,
@@ -74,11 +75,16 @@ function nextChipId(): string {
 export function MatrixCanvas(): ReactElement {
   const [document, setDocument] = useState<MatrixDocument>(() => {
     const storedWidths = loadMatrixColumnWidths();
+    const storedHeights = loadMatrixRowHeights();
     const base = createEmptyMatrixDocument();
-    if (storedWidths.size === 0) {
+    if (storedWidths.size === 0 && storedHeights.size === 0) {
       return base;
     }
-    return { ...base, columnWidths: storedWidths };
+    return {
+      ...base,
+      ...(storedWidths.size > 0 ? { columnWidths: storedWidths } : {}),
+      ...(storedHeights.size > 0 ? { rowHeights: storedHeights } : {}),
+    };
   });
   const docRef = useRef(document);
   docRef.current = document;
@@ -732,6 +738,15 @@ export function MatrixCanvas(): ReactElement {
     [dispatch, historyEntries],
   );
 
+  const handleRowHeightChange = useCallback(
+    (row: number, height: number) => {
+      const result = dispatch({ type: "set_row_height", row, height });
+      saveMatrixRowHeights(result.document.rowHeights);
+      scheduleMatrixBundleExport(result.document, historyEntries);
+    },
+    [dispatch, historyEntries],
+  );
+
   const handleGroupDismiss = useCallback(
     (group: MatrixGroup) => {
       dispatch({ type: "dismiss_group", id: group.id });
@@ -771,6 +786,7 @@ export function MatrixCanvas(): ReactElement {
               onCellsEdited={handleCellsEdited}
               onColumnHeaderClick={handleColumnHeaderClick}
               onColumnResize={handleColumnWidthChange}
+              onRowResize={handleRowHeightChange}
               onGroupLabelClick={handleGroupLabelClick}
               onGroupLabelDraftChange={setGroupLabelDraft}
               onGroupLabelSave={handleSaveGroupLabel}

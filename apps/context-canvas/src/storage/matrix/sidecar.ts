@@ -25,6 +25,10 @@ export function buildMatrixManifest(
       col,
       width,
     })),
+    rowHeights: [...(document.rowHeights ?? new Map()).entries()].map(([row, height]) => ({
+      row,
+      height,
+    })),
     templateId: document.templateId,
   };
 }

@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type ReactElement,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { flushSync } from "react-dom";
 import {
@@ -25,6 +26,7 @@ import { shouldCancelMatrixEditOnTypeForIme } from "../shared/matrix-ime.ts";
 import "@glideapps/glide-data-grid/dist/index.css";
 import { getColumnHeader, type MatrixDocument, type MatrixGroup } from "../shared/domain.ts";
 import { getMatrixColumnWidth } from "../shared/matrix-column-width.ts";
+import { clampMatrixRowHeight, getMatrixRowHeight } from "../shared/matrix-row-height.ts";
 import {
   getCellContent,
   getMatrixGridConfig,
@@ -59,6 +61,7 @@ export interface MatrixGridProps {
     options: { readonly isDoubleClick: boolean },
   ) => void;
   readonly onColumnResize?: (col: number, width: number) => void;
+  readonly onRowResize?: (row: number, height: number) => void;
   readonly onGroupLabelClick?: (
     group: MatrixGroup,
     options: { readonly isDoubleClick: boolean },
@@ -75,6 +78,27 @@ interface GroupLabelPosition {
   readonly top: number;
   readonly maxWidth: number;
 }
+
+interface RowResizeHandlePosition {
+  readonly row: number;
+  readonly top: number;
+}
+
+interface RowResizeDrag {
+  readonly row: number;
+  readonly startY: number;
+  readonly startHeight: number;
+  readonly currentHeight: number;
+}
+
+interface MatrixVisibleRows {
+  readonly y: number;
+  readonly height: number;
+  readonly ty: number;
+}
+
+const ROW_RESIZE_HANDLE_WIDTH = 32;
+const MATRIX_HEADER_HEIGHT = 36;
 
 function matrixSelectionToGridSelection(selection: MatrixGridSelectionState | null): GridSelection {
   if (!selection) {
@@ -97,6 +121,7 @@ export function MatrixGrid({
   onCellsEdited,
   onColumnHeaderClick = () => {},
   onColumnResize = () => {},
+  onRowResize = () => {},
   onGroupLabelClick = () => {},
   onGroupLabelDraftChange,
   onGroupLabelSave,
@@ -108,6 +133,11 @@ export function MatrixGrid({
   const config = useMemo(() => getMatrixGridConfig(document), [document]);
   const theme = useMemo(() => getMatrixGridTheme(), []);
   const [groupLabelPositions, setGroupLabelPositions] = useState<readonly GroupLabelPosition[]>([]);
+  const [rowResizeHandlePositions, setRowResizeHandlePositions] = useState<
+    readonly RowResizeHandlePosition[]
+  >([]);
+  const [rowResizeDrag, setRowResizeDrag] = useState<RowResizeDrag | null>(null);
+  const visibleRowsRef = useRef<MatrixVisibleRows>({ y: 0, height: config.rows, ty: 0 });
   const skipNextGroupLabelBlurSave = useRef(false);
 
   const columns = useMemo(
@@ -128,6 +158,14 @@ export function MatrixGrid({
       onColumnResize(colIndex, newWidth);
     },
     [config.cols, onColumnResize],
+  );
+
+  const rowHeight = useCallback(
+    (row: number) =>
+      rowResizeDrag?.row === row
+        ? rowResizeDrag.currentHeight
+        : getMatrixRowHeight(document, row),
+    [document, rowResizeDrag],
   );
 
   const cellContent = useMemo(() => getCellContent(document), [document]);
@@ -152,6 +190,7 @@ export function MatrixGrid({
     const grid = gridRef.current;
     if (!container || !grid) {
       setGroupLabelPositions([]);
+      setRowResizeHandlePositions([]);
       return;
     }
     const containerBounds = container.getBoundingClientRect();
@@ -176,8 +215,86 @@ export function MatrixGrid({
       }
       nextPositions.push({ id: group.id, left, top, maxWidth });
     }
+    const nextRowResizeHandles: RowResizeHandlePosition[] = [];
+    const canvas = container.querySelector<HTMLElement>('[data-testid="data-grid-canvas"]');
+    const canvasBounds = canvas?.getBoundingClientRect();
+    if (canvasBounds) {
+      const visibleRows = visibleRowsRef.current;
+      const startRow = Math.max(0, Math.floor(visibleRows.y));
+      const endRow = Math.min(config.rows, Math.ceil(visibleRows.y + visibleRows.height) + 1);
+      let cursorTop = canvasBounds.y - containerBounds.y + MATRIX_HEADER_HEIGHT + visibleRows.ty;
+      // WHY: Glide has no row-resize event; marker handles follow the visible region's rowHeight math.
+      for (let row = startRow; row < endRow; row += 1) {
+        cursorTop += rowHeight(row);
+        const top = cursorTop - 3;
+        if (!Number.isFinite(top)) {
+          break;
+        }
+        if (top < 0 || top > containerBounds.height) {
+          if (top > containerBounds.height) {
+            break;
+          }
+          continue;
+        }
+        nextRowResizeHandles.push({ row, top });
+      }
+    }
     setGroupLabelPositions(nextPositions);
-  }, [groups]);
+    setRowResizeHandlePositions(nextRowResizeHandles);
+  }, [config.rows, groups, rowHeight]);
+
+  const handleRowResizePointerDown = useCallback(
+    (row: number, event: ReactPointerEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const startHeight = getMatrixRowHeight(document, row);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setRowResizeDrag({
+        row,
+        startY: event.clientY,
+        startHeight,
+        currentHeight: startHeight,
+      });
+    },
+    [document],
+  );
+
+  useEffect(() => {
+    if (!rowResizeDrag) {
+      return undefined;
+    }
+    const nextHeight = (clientY: number) =>
+      clampMatrixRowHeight(rowResizeDrag.startHeight + clientY - rowResizeDrag.startY);
+    const handlePointerMove = (event: PointerEvent) => {
+      event.preventDefault();
+      const currentHeight = nextHeight(event.clientY);
+      setRowResizeDrag((current) =>
+        current ? { ...current, currentHeight } : current,
+      );
+    };
+    const handlePointerUp = (event: PointerEvent) => {
+      event.preventDefault();
+      const height = nextHeight(event.clientY);
+      setRowResizeDrag(null);
+      // INVARIANT: Persist only on drag end, matching column resize-end behavior (#96, #97).
+      onRowResize(rowResizeDrag.row, height);
+      updateGroupLabelPositions();
+    };
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp, { once: true });
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [onRowResize, rowResizeDrag, updateGroupLabelPositions]);
+
+  const handleVisibleRegionChanged = useCallback<NonNullable<DataEditorProps["onVisibleRegionChanged"]>>(
+    (range, _tx, ty) => {
+      visibleRowsRef.current = { y: range.y, height: range.height, ty };
+      updateGroupLabelPositions();
+    },
+    [updateGroupLabelPositions],
+  );
 
   const [gridSelection, setGridSelection] = useState<GridSelection>(() =>
     matrixSelectionToGridSelection(selection),
@@ -320,6 +437,7 @@ export function MatrixGrid({
         rows={config.rows}
         highlightRegions={groupHighlights}
         rowMarkers={{ kind: "clickable-number", width: 32 }}
+        rowHeight={rowHeight}
         theme={theme}
         gridSelection={gridSelection}
         onCellClicked={handleCellClicked}
@@ -328,7 +446,7 @@ export function MatrixGrid({
         onColumnResizeEnd={handleColumnResize}
         onCellEdited={handleCellEdited}
         onCellsEdited={handleCellsEdited}
-        onVisibleRegionChanged={updateGroupLabelPositions}
+        onVisibleRegionChanged={handleVisibleRegionChanged}
         onDelete={(deletedSelection) => deletedSelection}
         onPaste={true}
         onGridSelectionChange={handleGridSelectionChange}
@@ -348,6 +466,22 @@ export function MatrixGrid({
         height="100%"
         width="100%"
       />
+      <div className="matrix-row-resize-layer" aria-hidden={false}>
+        {rowResizeHandlePositions.map((position) => (
+          <button
+            key={position.row}
+            type="button"
+            className="matrix-row-resize-handle"
+            data-testid={`matrix-row-resize-${position.row}`}
+            aria-label={`Resize row ${position.row + 1}`}
+            style={{
+              top: position.top,
+              width: ROW_RESIZE_HANDLE_WIDTH,
+            }}
+            onPointerDown={(event) => handleRowResizePointerDown(position.row, event)}
+          />
+        ))}
+      </div>
       <div className="matrix-group-label-layer" aria-hidden={false}>
         {groups.map((group) => {
           const position = groupLabelPositions.find((entry) => entry.id === group.id);

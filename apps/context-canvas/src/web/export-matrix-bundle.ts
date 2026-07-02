@@ -19,6 +19,7 @@ export function matrixDocumentForWire(document: MatrixDocument): unknown {
     groups: Object.fromEntries(document.groups ?? []),
     customColumnLabels: Object.fromEntries(document.customColumnLabels ?? []),
     columnWidths: Object.fromEntries(document.columnWidths ?? []),
+    rowHeights: Object.fromEntries(document.rowHeights ?? []),
   };
 }
 

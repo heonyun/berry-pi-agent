@@ -15,8 +15,11 @@ import {
   clickRowMarker,
   clickColumnHeader,
   doubleClickColumnHeader,
+  resizeMatrixRow,
   resizeMatrixColumn,
   expectStoredColumnWidth,
+  expectStoredRowHeight,
+  readStoredRowHeight,
   readStoredColumnWidth,
 } from "./matrix-grid-helpers.ts";
 
@@ -627,5 +630,18 @@ test.describe("Feature: Collapsible side panel rails", () => {
     await page.reload();
     await expect(page.getByTestId("matrix-grid")).toBeVisible();
     expect(await readStoredColumnWidth(page, 0)).toBe(width);
+  });
+
+  test("Scenario: Row height resize persists across reload", async ({ page }) => {
+    await resizeMatrixRow(page, 1, 40);
+
+    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Row 1 height: [6-9]\dpx/);
+    const height = await readStoredRowHeight(page, 0);
+    expect(height).toBeGreaterThan(60);
+    await expectStoredRowHeight(page, 0, height);
+
+    await page.reload();
+    await expect(page.getByTestId("matrix-grid")).toBeVisible();
+    expect(await readStoredRowHeight(page, 0)).toBe(height);
   });
 });
