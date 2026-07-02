@@ -196,11 +196,12 @@ describe("loadMatrixBundle", () => {
       { col: -1, width: 100 },
       { col: manifest.cols, width: 100 },
       { col: 1, width: "wide" },
+      { col: 3, width: -10 },
     ];
     fs.writeFileSync(sidecarPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
     const loaded = loadMatrixBundle(bundleRoot);
-    expect(loaded.document?.columnWidths).toEqual(new Map([[0, 180], [2, 95]]));
+    expect(loaded.document?.columnWidths).toEqual(new Map([[0, 180], [2, 95], [3, 50]]));
   });
 
   it("ignores invalid custom column label manifest entries", () => {

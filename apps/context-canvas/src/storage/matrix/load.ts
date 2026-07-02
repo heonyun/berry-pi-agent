@@ -8,6 +8,7 @@ import type {
   SheetTemplate,
 } from "../../shared/domain.ts";
 import { cellKey } from "../../shared/domain.ts";
+import { clampMatrixColumnWidth } from "../../shared/matrix-column-width.ts";
 import { detectMatrixGroups } from "../../shared/matrix-groups.ts";
 import { parse } from "../markdown/document.ts";
 import { assertSafeId } from "../markdown/paths.ts";
@@ -77,7 +78,7 @@ export function loadMatrixBundle(bundleRoot: string): LoadResult {
     (Array.isArray(manifest.columnWidths) ? manifest.columnWidths : [])
       .filter((entry) => Number.isInteger(entry.col) && typeof entry.width === "number")
       .filter((entry) => entry.col >= 0 && entry.col < manifest.cols)
-      .map((entry) => [entry.col, entry.width] as const),
+      .map((entry) => [entry.col, clampMatrixColumnWidth(entry.width)] as const),
   );
 
   const document: MatrixDocument = {

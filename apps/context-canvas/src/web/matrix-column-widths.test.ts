@@ -22,4 +22,27 @@ describe("matrix-column-widths storage", () => {
     expect(loadMatrixColumnWidths().size).toBe(0);
     expect(localStorage.getItem(MATRIX_COLUMN_WIDTHS_STORAGE_KEY)).toBeNull();
   });
+
+  it("returns an empty map for malformed storage content", () => {
+    localStorage.setItem(MATRIX_COLUMN_WIDTHS_STORAGE_KEY, "not json");
+    expect(loadMatrixColumnWidths().size).toBe(0);
+
+    localStorage.setItem(MATRIX_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify({ col: 0, width: 120 }));
+    expect(loadMatrixColumnWidths().size).toBe(0);
+  });
+
+  it("ignores invalid storage entries while clamping valid widths", () => {
+    localStorage.setItem(
+      MATRIX_COLUMN_WIDTHS_STORAGE_KEY,
+      JSON.stringify([
+        null,
+        "wide",
+        { col: 1.5, width: 120 },
+        { col: 2, width: "120" },
+        { col: 3, width: 900 },
+      ]),
+    );
+
+    expect(loadMatrixColumnWidths()).toEqual(new Map([[3, 500]]));
+  });
 });

@@ -252,9 +252,8 @@ export async function expectStoredColumnWidth(
   col: number,
   width: number,
 ): Promise<void> {
-  const raw = await page.evaluate(() => localStorage.getItem("context-matrix-column-widths"));
-  expect(raw).toContain(`"col":${col}`);
-  expect(raw).toContain(`"width":${width}`);
+  const storedWidth = await readStoredColumnWidth(page, col);
+  expect(storedWidth).toBe(width);
 }
 
 export async function readStoredColumnWidth(page: Page, col: number): Promise<number> {
