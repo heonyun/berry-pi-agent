@@ -37,6 +37,7 @@ describe("matrix-column-widths storage", () => {
       JSON.stringify([
         null,
         "wide",
+        { col: -1, width: 120 },
         { col: 1.5, width: 120 },
         { col: 2, width: "120" },
         { col: 3, width: 900 },

@@ -19,6 +19,7 @@ export function loadMatrixColumnWidths(): ReadonlyMap<number, number> {
         typeof entry === "object" &&
         entry !== null &&
         Number.isInteger((entry as { col?: number }).col) &&
+        Number((entry as { col?: number }).col) >= 0 &&
         typeof (entry as { width?: number }).width === "number"
       ) {
         const col = (entry as { col: number }).col;
