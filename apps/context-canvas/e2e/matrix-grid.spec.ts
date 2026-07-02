@@ -15,6 +15,9 @@ import {
   clickRowMarker,
   clickColumnHeader,
   doubleClickColumnHeader,
+  resizeMatrixColumn,
+  expectStoredColumnWidth,
+  readStoredColumnWidth,
 } from "./matrix-grid-helpers.ts";
 
 async function selectRangeByKeyboard(page: Page, anchor: string, keys: readonly string[]): Promise<void> {
@@ -612,5 +615,17 @@ test.describe("Feature: Collapsible side panel rails", () => {
     await expect(page.getByTestId("matrix-right-panel")).toHaveAttribute("data-collapsed", "true");
     await expect(page.getByRole("button", { name: "Show groups/history panel" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Show detail panel" })).toBeVisible();
+  });
+
+  test("Scenario: Column width resize persists across reload", async ({ page }) => {
+    await resizeMatrixColumn(page, "A", 60);
+
+    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Column A width: 1[5-9]\dpx/);
+    const width = await readStoredColumnWidth(page, 0);
+    expect(width).toBeGreaterThan(150);
+
+    await page.reload();
+    await expect(page.getByTestId("matrix-grid")).toBeVisible();
+    expect(await readStoredColumnWidth(page, 0)).toBe(width);
   });
 });

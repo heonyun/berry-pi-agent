@@ -24,6 +24,7 @@ import {
 import { shouldCancelMatrixEditOnTypeForIme } from "../shared/matrix-ime.ts";
 import "@glideapps/glide-data-grid/dist/index.css";
 import { getColumnHeader, type MatrixDocument, type MatrixGroup } from "../shared/domain.ts";
+import { getMatrixColumnWidth } from "../shared/matrix-column-width.ts";
 import {
   getCellContent,
   getMatrixGridConfig,
@@ -57,6 +58,7 @@ export interface MatrixGridProps {
     col: number,
     options: { readonly isDoubleClick: boolean },
   ) => void;
+  readonly onColumnResize?: (col: number, width: number) => void;
   readonly onGroupLabelClick?: (
     group: MatrixGroup,
     options: { readonly isDoubleClick: boolean },
@@ -94,6 +96,7 @@ export function MatrixGrid({
   onCellEdited,
   onCellsEdited,
   onColumnHeaderClick = () => {},
+  onColumnResize = () => {},
   onGroupLabelClick = () => {},
   onGroupLabelDraftChange,
   onGroupLabelSave,
@@ -112,9 +115,19 @@ export function MatrixGrid({
       Array.from({ length: config.cols }, (_, i) => ({
         id: String(i),
         title: getColumnHeader(document, i),
-        width: 120,
+        width: getMatrixColumnWidth(document, i),
       })) as readonly GridColumn[],
     [config.cols, document],
+  );
+
+  const handleColumnResize = useCallback(
+    (_column: GridColumn, newWidth: number, colIndex: number) => {
+      if (colIndex < 0 || colIndex >= config.cols) {
+        return;
+      }
+      onColumnResize(colIndex, newWidth);
+    },
+    [config.cols, onColumnResize],
   );
 
   const cellContent = useMemo(() => getCellContent(document), [document]);
@@ -311,6 +324,8 @@ export function MatrixGrid({
         gridSelection={gridSelection}
         onCellClicked={handleCellClicked}
         onHeaderClicked={handleHeaderClicked}
+        // WHY: persist only on resize end; onColumnResize interim values can report min width (#96).
+        onColumnResizeEnd={handleColumnResize}
         onCellEdited={handleCellEdited}
         onCellsEdited={handleCellsEdited}
         onVisibleRegionChanged={updateGroupLabelPositions}

@@ -22,6 +22,7 @@ function sampleMatrixDocument() {
     ...document,
     sheet: { ...document.sheet, cells },
     customColumnLabels: new Map([[1, "Customer"]]),
+    columnWidths: new Map([[0, 180], [2, 95]]),
   };
 }
 
@@ -127,6 +128,34 @@ describe("handleMatrixBundleExport", () => {
       expect(result.pathsWritten.length).toBeGreaterThan(0);
       const loadResult = handleMatrixBundleLoad(config, tempRoot);
       expect(loadResult.document?.customColumnLabels?.get(1)).toBe("Customer");
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts wire-format column widths as a plain object", () => {
+    const tempRoot = mkdtempSync(path.join(tmpdir(), "context-matrix-bundle-"));
+    const config = resolveContextCanvasServerConfig({
+      CONTEXT_CANVAS_ALLOW_UNAUTHENTICATED: "1",
+      CONTEXT_CANVAS_BUNDLE_ROOT: tempRoot,
+    });
+    const document = sampleMatrixDocument();
+    const wireDocument = {
+      ...document,
+      sheet: {
+        ...document.sheet,
+        cells: Object.fromEntries(document.sheet.cells),
+      },
+      namedRanges: Object.fromEntries(document.namedRanges),
+      customColumnLabels: Object.fromEntries(document.customColumnLabels ?? []),
+      columnWidths: Object.fromEntries(document.columnWidths ?? []),
+    } as unknown as typeof document;
+
+    try {
+      const result = handleMatrixBundleExport({ document: wireDocument }, config, tempRoot);
+      expect(result.errors).toEqual([]);
+      const loadResult = handleMatrixBundleLoad(config, tempRoot);
+      expect(loadResult.document?.columnWidths).toEqual(new Map([[0, 180], [2, 95]]));
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }

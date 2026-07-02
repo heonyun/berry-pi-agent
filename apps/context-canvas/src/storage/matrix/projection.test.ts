@@ -52,6 +52,7 @@ function sampleMatrixDocument(): MatrixDocument {
     ],
   ]);
   const customColumnLabels = new Map([[1, "Customer"]]);
+  const columnWidths = new Map([[0, 180], [2, 95]]);
   const groups = new Map([
     [
       "auto:A1:B1",
@@ -77,6 +78,7 @@ function sampleMatrixDocument(): MatrixDocument {
     namedRanges,
     groups,
     customColumnLabels,
+    columnWidths,
     templateId: RESEARCH_SHEET_TEMPLATE.id,
     template: RESEARCH_SHEET_TEMPLATE,
   };
@@ -114,6 +116,10 @@ describe("projectMatrixToBundle", () => {
       fs.readFileSync(path.join(bundleRoot, MATRIX_SIDECAR), "utf8"),
     );
     expect(manifestJson.customColumnLabels).toEqual([{ col: 1, label: "Customer" }]);
+    expect(manifestJson.columnWidths).toEqual([
+      { col: 0, width: 180 },
+      { col: 2, width: 95 },
+    ]);
     expect(manifestJson.groups).toEqual([...document.groups.values()]);
 
     const templateJson = JSON.parse(
@@ -178,6 +184,24 @@ describe("loadMatrixBundle", () => {
       range: { startRow: 0, startCol: 4, endRow: 4, endCol: 4 },
       role: "target",
     });
+  });
+
+  it("ignores invalid column width manifest entries", () => {
+    const bundleRoot = makeTempDir();
+    projectMatrixToBundle(sampleMatrixDocument(), bundleRoot);
+    const sidecarPath = path.join(bundleRoot, MATRIX_SIDECAR);
+    const manifest = JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
+    manifest.columnWidths = [
+      ...manifest.columnWidths,
+      { col: -1, width: 100 },
+      { col: manifest.cols, width: 100 },
+      { col: 1, width: "wide" },
+      { col: 3, width: -10 },
+    ];
+    fs.writeFileSync(sidecarPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    const loaded = loadMatrixBundle(bundleRoot);
+    expect(loaded.document?.columnWidths).toEqual(new Map([[0, 180], [2, 95], [3, 50]]));
   });
 
   it("ignores invalid custom column label manifest entries", () => {

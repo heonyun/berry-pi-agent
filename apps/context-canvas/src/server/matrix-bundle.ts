@@ -47,6 +47,7 @@ function normalizeMatrixDocumentWire(document: MatrixDocument): MatrixDocument {
     throw new Error("Matrix bundle export requires a document with a sheet");
   }
   const { cells, ...sheetRest } = document.sheet;
+  // CONTRACT: Browser wire uses JSON objects for numeric Maps; sidecar projection requires Map instances. RELATED: issue-96
   return {
     ...document,
     sheet: {
@@ -56,6 +57,7 @@ function normalizeMatrixDocumentWire(document: MatrixDocument): MatrixDocument {
     namedRanges: mapFromWire(document.namedRanges),
     groups: mapFromWire(document.groups),
     customColumnLabels: numericMapFromWire(document.customColumnLabels),
+    columnWidths: numericMapFromWire(document.columnWidths),
   };
 }
 
