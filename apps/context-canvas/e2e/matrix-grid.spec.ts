@@ -491,3 +491,68 @@ test.describe("Feature: Row and column header selection", () => {
     await expectActiveSelection(page, "C1");
   });
 });
+
+async function gridWidth(page: Page): Promise<number> {
+  const box = await page.getByTestId("matrix-grid").boundingBox();
+  expect(box).not.toBeNull();
+  return box?.width ?? 0;
+}
+
+test.describe("Feature: Collapsible side panel rails", () => {
+  test.beforeEach(async ({ page }) => {
+    await prepareMatrixGrid(page);
+  });
+
+  test("Scenario: Collapse and restore the left navigation panel", async ({ page }) => {
+    const expandedWidth = await gridWidth(page);
+
+    await page.getByRole("button", { name: "Collapse recent/history panel" }).click();
+
+    await expect(page.getByTestId("matrix-left-panel")).toHaveAttribute("data-collapsed", "true");
+    await expect(page.getByTestId("matrix-recent-nav")).toBeHidden();
+    await expect(page.getByRole("button", { name: "Show recent/history panel" })).toBeVisible();
+    await expect.poll(() => gridWidth(page)).toBeGreaterThan(expandedWidth + 100);
+
+    await page.getByRole("button", { name: "Show recent/history panel" }).click();
+    await expect(page.getByTestId("matrix-left-panel")).toHaveAttribute("data-collapsed", "false");
+    await expect(page.getByTestId("matrix-recent-nav")).toBeVisible();
+  });
+
+  test("Scenario: Collapse and restore the detail panel without losing selected cell", async ({
+    page,
+  }) => {
+    await clickMatrixCell(page, "C1");
+    await expect(page.getByTestId("matrix-detail-pane")).toContainText("Cell C1");
+    const expandedWidth = await gridWidth(page);
+
+    await page.getByRole("button", { name: "Collapse detail panel" }).click();
+
+    await expect(page.getByTestId("matrix-right-panel")).toHaveAttribute("data-collapsed", "true");
+    await expect(page.getByTestId("matrix-detail-pane")).toBeHidden();
+    await expect(page.getByRole("button", { name: "Show detail panel" })).toBeVisible();
+    await expect.poll(() => gridWidth(page)).toBeGreaterThan(expandedWidth + 180);
+
+    await page.getByRole("button", { name: "Show detail panel" }).click();
+    await expect(page.getByTestId("matrix-right-panel")).toHaveAttribute(
+      "data-collapsed",
+      "false",
+    );
+    await expect(page.getByTestId("matrix-detail-pane")).toBeVisible();
+    await expect(page.getByTestId("matrix-detail-pane")).toContainText("Cell C1");
+  });
+
+  test("Scenario: Panel collapsed state persists across reload", async ({ page }) => {
+    await page.getByRole("button", { name: "Collapse recent/history panel" }).click();
+    await page.getByRole("button", { name: "Collapse detail panel" }).click();
+    await expect(page.getByTestId("matrix-left-panel")).toHaveAttribute("data-collapsed", "true");
+    await expect(page.getByTestId("matrix-right-panel")).toHaveAttribute("data-collapsed", "true");
+
+    await page.reload();
+    await expect(page.getByTestId("matrix-grid")).toBeVisible();
+
+    await expect(page.getByTestId("matrix-left-panel")).toHaveAttribute("data-collapsed", "true");
+    await expect(page.getByTestId("matrix-right-panel")).toHaveAttribute("data-collapsed", "true");
+    await expect(page.getByRole("button", { name: "Show recent/history panel" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Show detail panel" })).toBeVisible();
+  });
+});

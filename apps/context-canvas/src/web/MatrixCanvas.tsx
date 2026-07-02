@@ -33,6 +33,7 @@ import { MatrixDetailPane, type DetailTab, type DetailCellState } from "./Matrix
 import { MatrixLeftNav } from "./MatrixLeftNav.tsx";
 import { MatrixHistoryDetailPane } from "./MatrixHistoryDetailPane.tsx";
 import { MatrixOnboarding } from "./MatrixOnboarding.tsx";
+import { loadMatrixPanelLayout, saveMatrixPanelLayout } from "./matrix-panel-layout.ts";
 import { loadRecentRanges, recordRecentRange, saveRecentRanges } from "./matrix-recent-ranges.ts";
 import {
   appendMatrixHistory,
@@ -104,6 +105,7 @@ export function MatrixCanvas(): ReactElement {
   const [status, setStatus] = useState("Ready");
   const [editingColumn, setEditingColumn] = useState<number | null>(null);
   const [columnLabelDraft, setColumnLabelDraft] = useState("");
+  const [panelLayout, setPanelLayout] = useState(() => loadMatrixPanelLayout());
 
   const [recentRanges, setRecentRanges] = useState<RecentRangeEntry[]>(() => loadRecentRanges());
   const [historyEntries, setHistoryEntries] = useState<MatrixHistoryEntry[]>(() => loadMatrixHistory());
@@ -229,6 +231,22 @@ export function MatrixCanvas(): ReactElement {
 
   const touchRecentRange = useCallback((name: string, rangeLabel: string) => {
     setRecentRanges((entries) => recordRecentRange(entries, { name, rangeLabel }));
+  }, []);
+
+  const toggleLeftPanel = useCallback(() => {
+    setPanelLayout((current) => {
+      const next = { ...current, leftCollapsed: !current.leftCollapsed };
+      saveMatrixPanelLayout(next);
+      return next;
+    });
+  }, []);
+
+  const toggleRightPanel = useCallback(() => {
+    setPanelLayout((current) => {
+      const next = { ...current, rightCollapsed: !current.rightCollapsed };
+      saveMatrixPanelLayout(next);
+      return next;
+    });
   }, []);
 
   const handleAddContext = useCallback(() => {
@@ -655,6 +673,10 @@ export function MatrixCanvas(): ReactElement {
 
   return (
     <MatrixShell
+      leftCollapsed={panelLayout.leftCollapsed}
+      rightCollapsed={panelLayout.rightCollapsed}
+      onToggleLeft={toggleLeftPanel}
+      onToggleRight={toggleRightPanel}
       leftNav={
         <MatrixLeftNav
           recentEntries={recentRanges}
