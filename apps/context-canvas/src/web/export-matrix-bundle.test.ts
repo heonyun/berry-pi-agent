@@ -21,11 +21,13 @@ describe("export-matrix-bundle", () => {
       ...document,
       sheet: { ...document.sheet, cells },
       customColumnLabels: new Map([[1, "Customer"]]),
+      columnWidths: new Map([[0, 180]]),
     };
 
     const wire = matrixDocumentForWire(withCell) as {
       sheet: { cells: Record<string, unknown> };
       customColumnLabels: Record<string, string>;
+      columnWidths: Record<string, number>;
     };
     expect(wire.sheet.cells["0,0"]).toEqual({
       value: "A1",
@@ -34,6 +36,7 @@ describe("export-matrix-bundle", () => {
       provenance: "user",
     });
     expect(wire.customColumnLabels).toEqual({ "1": "Customer" });
+    expect(wire.columnWidths).toEqual({ "0": 180 });
   });
 
   it("serializes legacy documents without groups", () => {
