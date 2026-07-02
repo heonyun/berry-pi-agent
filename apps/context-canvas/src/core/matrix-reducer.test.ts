@@ -357,5 +357,85 @@ describe("applyMatrixCommand", () => {
       expect(clearResult.document.customColumnLabels?.has(1)).toBe(false);
       expect(clearResult.meta.message).toContain("Column B label cleared");
     });
+
+    it("recomputes auto groups after edits and lets users rename them", () => {
+      let doc = createEmptyMatrixDocument({ withResearchTemplate: false });
+      doc = applyMatrixCommand(doc, {
+        type: "update_cell_body",
+        row: 0,
+        col: 0,
+        body: "Question",
+      }).document;
+      doc = applyMatrixCommand(doc, {
+        type: "update_cell_body",
+        row: 0,
+        col: 1,
+        body: "Answer",
+      }).document;
+
+      const group = [...doc.groups.values()][0];
+      expect(group?.label).toBe("Question");
+      expect(group?.range).toEqual({ startRow: 0, startCol: 0, endRow: 0, endCol: 1 });
+
+      const renamed = applyMatrixCommand(doc, {
+        type: "set_group_label",
+        id: group!.id,
+        label: "Research pair",
+      });
+
+      expect(renamed.document.groups.get(group!.id)?.label).toBe("Research pair");
+      expect(renamed.meta.message).toContain("Research pair");
+    });
+
+    it("ignores unknown or blank group label commands without changing the document", () => {
+      let doc = createEmptyMatrixDocument({ withResearchTemplate: false });
+      doc = applyMatrixCommand(doc, {
+        type: "apply_patches",
+        patches: [
+          { row: 0, col: 0, value: null, body: "Question" },
+          { row: 0, col: 1, value: null, body: "Answer" },
+        ],
+      }).document;
+      const group = [...doc.groups.values()][0]!;
+
+      const unknown = applyMatrixCommand(doc, {
+        type: "set_group_label",
+        id: "missing",
+        label: "Label",
+      });
+      const blank = applyMatrixCommand(doc, {
+        type: "set_group_label",
+        id: group.id,
+        label: "   ",
+      });
+
+      expect(unknown.document).toBe(doc);
+      expect(unknown.meta.updatedCells).toBe(0);
+      expect(blank.document).toBe(doc);
+      expect(blank.meta.updatedCells).toBe(0);
+    });
+
+    it("dismiss_group marks a known group and ignores unknown groups", () => {
+      let doc = createEmptyMatrixDocument({ withResearchTemplate: false });
+      doc = applyMatrixCommand(doc, {
+        type: "apply_patches",
+        patches: [
+          { row: 0, col: 0, value: null, body: "Question" },
+          { row: 0, col: 1, value: null, body: "Answer" },
+        ],
+      }).document;
+      const group = [...doc.groups.values()][0]!;
+
+      const dismissed = applyMatrixCommand(doc, { type: "dismiss_group", id: group.id });
+      const unknown = applyMatrixCommand(doc, { type: "dismiss_group", id: "missing" });
+
+      expect(dismissed.document.groups.get(group.id)).toMatchObject({
+        ...group,
+        dismissed: true,
+      });
+      expect(dismissed.meta.updatedCells).toBe(0);
+      expect(unknown.document).toBe(doc);
+      expect(unknown.meta.updatedCells).toBe(0);
+    });
   });
 });

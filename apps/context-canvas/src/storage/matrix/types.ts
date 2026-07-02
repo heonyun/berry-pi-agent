@@ -1,4 +1,10 @@
-import type { CellValue, MatrixDocument, MatrixHistoryEntry, NamedRange } from "../../shared/domain.ts";
+import type {
+  CellValue,
+  MatrixDocument,
+  MatrixGroup,
+  MatrixHistoryEntry,
+  NamedRange,
+} from "../../shared/domain.ts";
 
 /** On-disk bundle layout manifest (Phase 4a data contract). */
 export interface MatrixBundleManifest {
@@ -11,6 +17,7 @@ export interface MatrixBundleManifest {
   readonly rows: number;
   readonly cols: number;
   readonly namedRanges: NamedRange[];
+  readonly groups?: MatrixGroup[];
   readonly customColumnLabels?: Array<{ readonly col: number; readonly label: string }>;
   readonly templateId?: string;
 }

@@ -789,7 +789,7 @@ button.active {
 }
 
 .matrix-left-panel.collapsed::after {
-  content: "Recent / History";
+  content: "Groups / History";
 }
 
 .matrix-right-panel.collapsed::after {
@@ -839,7 +839,8 @@ button.active {
   line-height: 1.4;
 }
 
-.matrix-recent-list {
+.matrix-recent-list,
+.matrix-group-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -848,7 +849,8 @@ button.active {
   gap: 4px;
 }
 
-.matrix-recent-item {
+.matrix-recent-item,
+.matrix-group-item {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -861,20 +863,47 @@ button.active {
   text-align: left;
 }
 
-.matrix-recent-item:hover {
+.matrix-recent-item:hover,
+.matrix-group-item:hover,
+.matrix-group-item.active {
   background: var(--accent);
   color: white;
   border-color: var(--accent);
 }
 
-.matrix-recent-name {
+.matrix-recent-name,
+.matrix-group-name {
   font-size: 12px;
   font-weight: 600;
 }
 
-.matrix-recent-label {
+.matrix-recent-label,
+.matrix-group-label {
   font-size: 11px;
   opacity: 0.85;
+}
+
+.matrix-group-actions {
+  display: flex;
+  gap: 4px;
+  margin: 4px 0 8px;
+}
+
+.matrix-group-action {
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.matrix-group-action:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .matrix-history-list {
@@ -1180,6 +1209,48 @@ button.active {
   border-radius: 6px;
   margin: 8px;
   background: var(--panel);
+}
+
+.matrix-group-label-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 6px;
+}
+
+.matrix-group-label-anchor {
+  position: absolute;
+  pointer-events: none;
+}
+
+.matrix-group-label-button,
+.matrix-group-label-input {
+  max-width: 100%;
+  min-height: 22px;
+  border: 1px solid color-mix(in srgb, var(--accent) 80%, var(--border));
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: auto;
+}
+
+.matrix-group-label-button {
+  padding: 0 8px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matrix-group-label-input {
+  width: 100%;
+  padding: 0 7px;
+  font: inherit;
 }
 
 .matrix-composer {

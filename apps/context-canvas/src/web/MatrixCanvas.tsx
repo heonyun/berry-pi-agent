@@ -9,12 +9,13 @@ import {
   getColumnCustomLabel,
   rangesEqual,
   type Cell,
+  type MatrixGroup,
   type MatrixDocument,
   type MatrixHistoryEntry,
   type RangeRefDTO,
-  type RecentRangeEntry,
   type WritePatch,
 } from "../shared/domain.ts";
+import { visibleMatrixGroups } from "../shared/matrix-groups.ts";
 import { applyMatrixCommand, type MatrixCommand } from "../core/matrix-reducer.ts";
 import {
   compileMatrixRangeContext,
@@ -34,7 +35,6 @@ import { MatrixLeftNav } from "./MatrixLeftNav.tsx";
 import { MatrixHistoryDetailPane } from "./MatrixHistoryDetailPane.tsx";
 import { MatrixOnboarding } from "./MatrixOnboarding.tsx";
 import { loadMatrixPanelLayout, saveMatrixPanelLayout } from "./matrix-panel-layout.ts";
-import { loadRecentRanges, recordRecentRange, saveRecentRanges } from "./matrix-recent-ranges.ts";
 import {
   appendMatrixHistory,
   createHistoryEntry,
@@ -105,15 +105,14 @@ export function MatrixCanvas(): ReactElement {
   const [status, setStatus] = useState("Ready");
   const [editingColumn, setEditingColumn] = useState<number | null>(null);
   const [columnLabelDraft, setColumnLabelDraft] = useState("");
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [groupLabelDraft, setGroupLabelDraft] = useState("");
   const [panelLayout, setPanelLayout] = useState(() => loadMatrixPanelLayout());
 
-  const [recentRanges, setRecentRanges] = useState<RecentRangeEntry[]>(() => loadRecentRanges());
   const [historyEntries, setHistoryEntries] = useState<MatrixHistoryEntry[]>(() => loadMatrixHistory());
   const [selectedHistory, setSelectedHistory] = useState<MatrixHistoryEntry | null>(null);
 
-  useEffect(() => {
-    saveRecentRanges(recentRanges);
-  }, [recentRanges]);
+  const groups = useMemo(() => visibleMatrixGroups(document), [document]);
 
   useEffect(() => {
     saveMatrixHistory(historyEntries);
@@ -190,12 +189,29 @@ export function MatrixCanvas(): ReactElement {
     return isWholeColumn ? selectionRange.startCol : null;
   }, [document.sheet.rows, selectionRange]);
 
+  const selectedGroupId = useMemo(() => {
+    if (!selectionRange) {
+      return null;
+    }
+    const group = groups.find((entry) => rangesEqual(entry.range, selectionRange));
+    return group?.id ?? null;
+  }, [groups, selectionRange]);
+
   useEffect(() => {
     if (editingColumn !== null && selectedColumnIndex !== editingColumn) {
       setEditingColumn(null);
       setColumnLabelDraft("");
     }
   }, [editingColumn, selectedColumnIndex]);
+
+  useEffect(() => {
+    if (editingGroupId !== null && !groups.some((group) => group.id === editingGroupId)) {
+      // RISK: Auto group IDs can disappear after cell edits; keeping the editor open would
+      // save into a no-op reducer path and make the label input feel stuck.
+      setEditingGroupId(null);
+      setGroupLabelDraft("");
+    }
+  }, [editingGroupId, groups]);
 
   const hasCellContent = useMemo(() => document.sheet.cells.size > 0, [document]);
 
@@ -229,10 +245,6 @@ export function MatrixCanvas(): ReactElement {
     return { ...base, body, frontmatter };
   }, [detailCell, detailFrontmatter, document]);
 
-  const touchRecentRange = useCallback((name: string, rangeLabel: string) => {
-    setRecentRanges((entries) => recordRecentRange(entries, { name, rangeLabel }));
-  }, []);
-
   const toggleLeftPanel = useCallback(() => {
     setPanelLayout((current) => {
       const next = { ...current, leftCollapsed: !current.leftCollapsed };
@@ -263,9 +275,24 @@ export function MatrixCanvas(): ReactElement {
       ...chips,
       { id: nextChipId(), label: selectionLabel, range: selectionRange },
     ]);
-    touchRecentRange(selectionLabel.replace(/^@/, ""), selectionLabel);
     setStatus(`Context added: ${selectionLabel}`);
-  }, [contextChips, selectionLabel, selectionRange, touchRecentRange]);
+  }, [contextChips, selectionLabel, selectionRange]);
+
+  const addContextForGroup = useCallback(
+    (group: MatrixGroup) => {
+      const duplicate = contextChips.some((chip) => rangesEqual(chip.range, group.range));
+      if (duplicate) {
+        setStatus("Context group already added");
+        return;
+      }
+      setContextChips((chips) => [
+        ...chips,
+        { id: nextChipId(), label: group.label, range: group.range },
+      ]);
+      setStatus(`Context added: ${group.label}`);
+    },
+    [contextChips],
+  );
 
   const handleRemoveContext = useCallback((chipId: string) => {
     setContextChips((chips) => chips.filter((chip) => chip.id !== chipId));
@@ -290,9 +317,8 @@ export function MatrixCanvas(): ReactElement {
       return;
     }
     setTargetRange(selectionRange);
-    touchRecentRange(`target:${selectionLabel.replace(/^@/, "")}`, selectionLabel);
     setStatus(`Target set: ${selectionLabel}`);
-  }, [selectionLabel, selectionRange, touchRecentRange]);
+  }, [selectionLabel, selectionRange]);
 
   const handleStartColumnLabelEdit = useCallback(
     (col: number) => {
@@ -330,6 +356,25 @@ export function MatrixCanvas(): ReactElement {
     setColumnLabelDraft("");
   }, [columnLabelDraft, dispatch, editingColumn]);
 
+  const handleStartGroupLabelEdit = useCallback((group: MatrixGroup) => {
+    setEditingGroupId(group.id);
+    setGroupLabelDraft(group.label);
+    setStatus(`Editing group label: ${group.label}`);
+  }, []);
+
+  const handleSaveGroupLabel = useCallback(() => {
+    if (!editingGroupId) {
+      return;
+    }
+    dispatch({
+      type: "set_group_label",
+      id: editingGroupId,
+      label: groupLabelDraft,
+    });
+    setEditingGroupId(null);
+    setGroupLabelDraft("");
+  }, [dispatch, editingGroupId, groupLabelDraft]);
+
   const handleClearColumnLabel = useCallback(() => {
     if (editingColumn === null) {
       return;
@@ -357,9 +402,8 @@ export function MatrixCanvas(): ReactElement {
       type: "set_named_range",
       namedRange: { name, range: selectionRange },
     });
-    touchRecentRange(name, `@${name}`);
     setRangeNameInput("");
-  }, [dispatch, rangeNameInput, selectionLabel, selectionRange, touchRecentRange]);
+  }, [dispatch, rangeNameInput, selectionLabel, selectionRange]);
 
   const runWithTarget = useCallback(
     async (runTargetRange: RangeRefDTO, runContextChips: readonly ContextChip[]) => {
@@ -400,7 +444,6 @@ export function MatrixCanvas(): ReactElement {
           runTargetRange,
         );
         const result = dispatch({ type: "apply_ai_command", command: boundCommand });
-        touchRecentRange(`run:${runTargetLabel.replace(/^@/, "")}`, runTargetLabel);
 
         const historyEntry = createHistoryEntry({
           intent: prompt.trim(),
@@ -430,7 +473,7 @@ export function MatrixCanvas(): ReactElement {
         setIsRunning(false);
       }
     },
-    [dispatch, historyEntries, prompt, touchRecentRange],
+    [dispatch, historyEntries, prompt],
   );
 
   const handleRun = useCallback(async () => {
@@ -498,11 +541,9 @@ export function MatrixCanvas(): ReactElement {
       const nextContext = contextChipsWithSelection(contextChips);
       if (nextContext.added) {
         setContextChips([...nextContext.chips]);
-        touchRecentRange(selectionLabel.replace(/^@/, ""), selectionLabel);
       }
       const inferredLabel = rangeLabelForSelection(docRef.current, inferred.targetRange);
       setTargetRange(inferred.targetRange);
-      touchRecentRange(`target:${inferredLabel.replace(/^@/, "")}`, inferredLabel);
       void runWithTarget(inferred.targetRange, nextContext.chips);
     },
     [
@@ -514,7 +555,6 @@ export function MatrixCanvas(): ReactElement {
       selectionLabel,
       selectionRange,
       targetRange,
-      touchRecentRange,
     ],
   );
   const handleMatrixShortcutRunRef = useRef(handleMatrixShortcutRun);
@@ -616,13 +656,11 @@ export function MatrixCanvas(): ReactElement {
         ...chips,
         { id: nextChipId(), label: selectionLabel, range: selectionRange },
       ]);
-      touchRecentRange(selectionLabel.replace(/^@/, ""), selectionLabel);
     }
     setTargetRange(selectionRange);
-    touchRecentRange(`target:${selectionLabel.replace(/^@/, "")}`, selectionLabel);
     setPrompt("Summarize the selected context into this target cell.");
     setStatus(`AI ready for ${selectionLabel} — review and Run`);
-  }, [contextChips, selectionLabel, selectionRange, touchRecentRange]);
+  }, [contextChips, selectionLabel, selectionRange]);
 
   const handleHistorySelect = useCallback((entry: MatrixHistoryEntry) => {
     setSelectedHistory(entry);
@@ -648,27 +686,28 @@ export function MatrixCanvas(): ReactElement {
     setStatus("Composer pre-filled from history — review and Run");
   }, []);
 
-  const handleRecentSelect = useCallback(
-    (entry: RecentRangeEntry) => {
-      const named = document.namedRanges.get(entry.name);
-      if (named) {
-        const nextSelection: MatrixGridSelectionState = {
-          startRow: named.range.startRow,
-          startCol: named.range.startCol,
-          endRow: named.range.endRow,
-          endCol: named.range.endCol,
-          activeRow: named.range.startRow,
-          activeCol: named.range.startCol,
-        };
-        setSelection(nextSelection);
-        syncDetailFromActiveCell(nextSelection.activeRow, nextSelection.activeCol);
-        setStatus(`Selected recent range: ${entry.rangeLabel}`);
-        touchRecentRange(entry.name, entry.rangeLabel);
-        return;
-      }
-      setStatus(`Recent range "${entry.name}" — select matching cells on grid`);
+  const handleGroupSelect = useCallback(
+    (group: MatrixGroup) => {
+      const nextSelection: MatrixGridSelectionState = {
+        startRow: group.range.startRow,
+        startCol: group.range.startCol,
+        endRow: group.range.endRow,
+        endCol: group.range.endCol,
+        activeRow: group.range.startRow,
+        activeCol: group.range.startCol,
+      };
+      setSelection(nextSelection);
+      syncDetailFromActiveCell(nextSelection.activeRow, nextSelection.activeCol);
+      setStatus(`Selected group: ${group.label}`);
     },
-    [document.namedRanges, syncDetailFromActiveCell, touchRecentRange],
+    [syncDetailFromActiveCell],
+  );
+
+  const handleGroupDismiss = useCallback(
+    (group: MatrixGroup) => {
+      dispatch({ type: "dismiss_group", id: group.id });
+    },
+    [dispatch],
   );
 
   return (
@@ -679,10 +718,13 @@ export function MatrixCanvas(): ReactElement {
       onToggleRight={toggleRightPanel}
       leftNav={
         <MatrixLeftNav
-          recentEntries={recentRanges}
+          groups={groups}
           historyEntries={historyEntries}
+          selectedGroupId={selectedGroupId}
           selectedHistoryId={selectedHistory?.id ?? null}
-          onRecentSelect={handleRecentSelect}
+          onGroupSelect={handleGroupSelect}
+          onGroupAddContext={addContextForGroup}
+          onGroupDismiss={handleGroupDismiss}
           onHistorySelect={handleHistorySelect}
         />
       }
@@ -691,11 +733,21 @@ export function MatrixCanvas(): ReactElement {
           <div className="matrix-grid-wrap">
             <MatrixGrid
               document={document}
+              groups={groups}
               selection={selection}
+              editingGroupId={editingGroupId}
+              groupLabelDraft={groupLabelDraft}
               onCellClick={handleCellClick}
               onCellEdited={handleCellEdited}
               onCellsEdited={handleCellsEdited}
               onColumnHeaderClick={handleColumnHeaderClick}
+              onGroupLabelDraftChange={setGroupLabelDraft}
+              onGroupLabelEditStart={handleStartGroupLabelEdit}
+              onGroupLabelSave={handleSaveGroupLabel}
+              onGroupLabelCancel={() => {
+                setEditingGroupId(null);
+                setGroupLabelDraft("");
+              }}
               onSelectionChange={handleSelectionChange}
             />
             <MatrixOnboarding />

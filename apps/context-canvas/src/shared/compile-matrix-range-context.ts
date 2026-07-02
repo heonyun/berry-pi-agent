@@ -2,6 +2,7 @@ import {
   cellKey,
   formatColumnLabel,
   formatRangeLabel,
+  rangesEqual,
   type MatrixDocument,
   type RangeRefDTO,
 } from "./domain.ts";
@@ -46,14 +47,32 @@ function extractRangeCellLines(document: MatrixDocument, range: RangeRefDTO): st
   return lines;
 }
 
-function renderContextBlock(label: string, range: RangeRefDTO, lines: string[]): string {
+function groupLabelForRange(document: MatrixDocument, range: RangeRefDTO): string | undefined {
+  // WHY: Auto groups should not silently expand prompt context; metadata is emitted only
+  // when the user explicitly adds the exact group range as context.
+  for (const group of (document.groups ?? new Map()).values()) {
+    if (!group.dismissed && rangesEqual(group.range, range)) {
+      return group.label;
+    }
+  }
+  return undefined;
+}
+
+function renderContextBlock(
+  label: string,
+  range: RangeRefDTO,
+  lines: string[],
+  groupLabel?: string,
+): string {
   const rangeLabel = formatRangeLabel(
     range.startCol,
     range.startRow,
     range.endCol,
     range.endRow,
   );
-  const header = `## ${label} (${rangeLabel})`;
+  const header = groupLabel
+    ? `## ${label} (${rangeLabel})\n  group: ${groupLabel}`
+    : `## ${label} (${rangeLabel})`;
   if (lines.length === 0) {
     return `${header}\n  (empty range)`;
   }
@@ -78,7 +97,12 @@ export function compileMatrixRangeContext(
   userPrompt: string,
 ): CompiledRangeContext {
   const blocks = contextRanges.map((entry) =>
-    renderContextBlock(entry.label, entry.range, extractRangeCellLines(document, entry.range)),
+    renderContextBlock(
+      entry.label,
+      entry.range,
+      extractRangeCellLines(document, entry.range),
+      groupLabelForRange(document, entry.range),
+    ),
   );
 
   const targetRangeLabel = formatRangeLabel(

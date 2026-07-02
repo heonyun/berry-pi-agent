@@ -33,10 +33,10 @@ function sampleMatrixDocument(): MatrixDocument {
       },
     ],
     [
-      cellKey(1, 2),
+      cellKey(0, 1),
       {
         value: null,
-        body: "C2 content",
+        body: "B1 content",
         frontmatter: "",
       },
     ],
@@ -52,6 +52,17 @@ function sampleMatrixDocument(): MatrixDocument {
     ],
   ]);
   const customColumnLabels = new Map([[1, "Customer"]]);
+  const groups = new Map([
+    [
+      "auto:A1:B1",
+      {
+        id: "auto:A1:B1",
+        label: "Sample group",
+        range: { startRow: 0, startCol: 0, endRow: 0, endCol: 1 },
+        source: "auto" as const,
+      },
+    ],
+  ]);
 
   return {
     kind: "matrix",
@@ -64,6 +75,7 @@ function sampleMatrixDocument(): MatrixDocument {
       cells,
     },
     namedRanges,
+    groups,
     customColumnLabels,
     templateId: RESEARCH_SHEET_TEMPLATE.id,
     template: RESEARCH_SHEET_TEMPLATE,
@@ -92,7 +104,7 @@ describe("projectMatrixToBundle", () => {
 
     expect(result.errors).toEqual([]);
     expect(result.pathsWritten).toContain("cells/0-0.md");
-    expect(result.pathsWritten).toContain("cells/1-2.md");
+    expect(result.pathsWritten).toContain("cells/0-1.md");
     expect(result.pathsWritten).toContain(MATRIX_SIDECAR);
     expect(result.pathsWritten).toContain("templates/research-default.json");
     expect(fs.existsSync(rootIndexPath(bundleRoot))).toBe(true);
@@ -102,6 +114,7 @@ describe("projectMatrixToBundle", () => {
       fs.readFileSync(path.join(bundleRoot, MATRIX_SIDECAR), "utf8"),
     );
     expect(manifestJson.customColumnLabels).toEqual([{ col: 1, label: "Customer" }]);
+    expect(manifestJson.groups).toEqual([...document.groups.values()]);
 
     const templateJson = JSON.parse(
       fs.readFileSync(path.join(bundleRoot, "templates", `${RESEARCH_SHEET_TEMPLATE.id}.json`), "utf8"),
@@ -116,6 +129,22 @@ describe("projectMatrixToBundle", () => {
     expect(cellMarkdown.frontmatter.provenance).toBe("user");
     expect(cellMarkdown.frontmatter.frontmatter_yaml).toBe("status: draft");
     expect(cellMarkdown.body.trimEnd()).toBe("Cell A1 body");
+  });
+
+  it("writes matrix sidecar for legacy documents without groups", () => {
+    const bundleRoot = makeTempDir();
+    const document = {
+      ...sampleMatrixDocument(),
+      groups: undefined,
+    } as unknown as MatrixDocument;
+
+    const result = projectMatrixToBundle(document, bundleRoot);
+
+    expect(result.errors).toEqual([]);
+    const manifestJson = JSON.parse(
+      fs.readFileSync(path.join(bundleRoot, MATRIX_SIDECAR), "utf8"),
+    );
+    expect(manifestJson.groups).toEqual([]);
   });
 
   it("omits cell files for empty sparse map entries", () => {
@@ -167,6 +196,38 @@ describe("loadMatrixBundle", () => {
 
     const loaded = loadMatrixBundle(bundleRoot);
     expect(loaded.document?.customColumnLabels).toEqual(new Map([[1, "Customer"]]));
+  });
+
+  it("ignores invalid group manifest entries", () => {
+    const bundleRoot = makeTempDir();
+    projectMatrixToBundle(sampleMatrixDocument(), bundleRoot);
+    const sidecarPath = path.join(bundleRoot, MATRIX_SIDECAR);
+    const manifest = JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
+    manifest.groups = [
+      ...manifest.groups,
+      { id: "", label: "Bad", source: "auto", range: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 } },
+      { id: "bad", label: "Bad", source: "auto", range: { startRow: -1, startCol: 0, endRow: 0, endCol: 0 } },
+    ];
+    fs.writeFileSync(sidecarPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    const loaded = loadMatrixBundle(bundleRoot);
+
+    expect(loaded.document?.groups.size).toBe(1);
+    expect(loaded.document?.groups.get("auto:A1:B1")?.label).toBe("Sample group");
+  });
+
+  it("detects groups when loading a legacy manifest without groups", () => {
+    const bundleRoot = makeTempDir();
+    projectMatrixToBundle(sampleMatrixDocument(), bundleRoot);
+    const sidecarPath = path.join(bundleRoot, MATRIX_SIDECAR);
+    const manifest = JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
+    delete manifest.groups;
+    fs.writeFileSync(sidecarPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    const loaded = loadMatrixBundle(bundleRoot);
+
+    expect(loaded.document?.groups.size).toBe(1);
+    expect(loaded.document?.groups.get("auto:A1:B1")?.label).toBe("Cell A1 body");
   });
 
   it("reports forward-slash bundle-relative paths from projection", () => {

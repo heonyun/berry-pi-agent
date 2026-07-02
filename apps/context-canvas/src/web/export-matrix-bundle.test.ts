@@ -36,6 +36,16 @@ describe("export-matrix-bundle", () => {
     expect(wire.customColumnLabels).toEqual({ "1": "Customer" });
   });
 
+  it("serializes legacy documents without groups", () => {
+    const document = createEmptyMatrixDocument({ withResearchTemplate: false });
+    const wire = matrixDocumentForWire({
+      ...document,
+      groups: undefined,
+    } as unknown as typeof document) as { groups: Record<string, unknown> };
+
+    expect(wire.groups).toEqual({});
+  });
+
   it("posts document and history to matrix bundle export", async () => {
     const document = createEmptyMatrixDocument({ withResearchTemplate: false });
     const history = [
