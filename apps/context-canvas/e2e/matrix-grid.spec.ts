@@ -356,15 +356,32 @@ test.describe("Feature: Matrix inferred target shortcuts", () => {
     await expect(page.getByTestId("target-range-chip")).toContainText("E1");
   });
 
-  test("Scenario: Shortcuts do not run while detail textarea has focus", async ({ page }) => {
+  test("Scenario: Ctrl+Enter runs while detail markdown textarea has focus", async ({ page }) => {
     const requests = await mockMatrixRun(page);
-    await clickMatrixCell(page, "A1");
-    await page.getByTestId("matrix-composer-input").fill("ignored shortcut");
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+    await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
+    await page.getByTestId("matrix-composer-input").fill("from detail pane");
     await page.getByTestId("side-panel-textarea").focus();
-
     await page.keyboard.press("Control+Enter");
 
-    await expect(page.getByTestId("matrix-status-bar")).not.toContainText(/Run applied/i);
+    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Run applied/i, {
+      timeout: 60000,
+    });
+    expect(requests).toHaveLength(1);
+  });
+
+  test("Scenario: Ctrl+Enter shows status while glide cell overlay is open", async ({ page }) => {
+    const requests = await mockMatrixRun(page);
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+    await focusMatrixCell(page, "A1");
+    await page.keyboard.press("F2");
+    const overlayInput = page.locator(".gdg-input");
+    await overlayInput.waitFor({ state: "visible" });
+    await page.getByTestId("matrix-composer-input").fill("blocked while editing");
+    await overlayInput.focus();
+    await page.keyboard.press("Control+Enter");
+
+    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Finish cell edit/i);
     expect(requests).toHaveLength(0);
   });
 
