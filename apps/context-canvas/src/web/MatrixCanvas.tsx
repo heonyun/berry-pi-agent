@@ -44,6 +44,11 @@ import {
   truncatePreview,
 } from "./matrix-history.ts";
 import { scheduleMatrixBundleExport } from "./export-matrix-bundle.ts";
+import {
+  matrixShortcutBlockedStatus,
+  matrixShortcutDirection,
+  shouldHandleMatrixShortcut,
+} from "../shared/matrix-shortcut.ts";
 
 function selectionToRangeRef(selection: MatrixGridSelectionState): RangeRefDTO {
   return {
@@ -63,26 +68,6 @@ function rangeLabelForSelection(document: MatrixDocument, range: RangeRefDTO): s
 
 function nextChipId(): string {
   return `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function matrixShortcutDirection(event: KeyboardEvent): MatrixTargetDirection | null {
-  if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey) || event.altKey) {
-    return null;
-  }
-  return event.shiftKey ? "right" : "below";
-}
-
-function shouldHandleMatrixShortcut(target: EventTarget | null): boolean {
-  if (!(target instanceof Element)) {
-    return false;
-  }
-  if (target.closest('[data-testid="matrix-composer-input"]')) {
-    return true;
-  }
-  if (target.closest(".gdg-input, textarea, input, button, [contenteditable]:not([contenteditable='false'])")) {
-    return false;
-  }
-  return Boolean(target.closest('[data-testid="matrix-grid"]'));
 }
 
 export function MatrixCanvas(): ReactElement {
@@ -559,6 +544,8 @@ export function MatrixCanvas(): ReactElement {
   );
   const handleMatrixShortcutRunRef = useRef(handleMatrixShortcutRun);
   handleMatrixShortcutRunRef.current = handleMatrixShortcutRun;
+  const setStatusRef = useRef(setStatus);
+  setStatusRef.current = setStatus;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -569,11 +556,20 @@ export function MatrixCanvas(): ReactElement {
         return;
       }
       const direction = matrixShortcutDirection(event);
-      if (!direction || !shouldHandleMatrixShortcut(event.target)) {
+      if (!direction) {
         return;
       }
-      event.preventDefault();
-      handleMatrixShortcutRunRef.current(direction);
+      if (shouldHandleMatrixShortcut(event.target)) {
+        event.preventDefault();
+        handleMatrixShortcutRunRef.current(direction);
+        return;
+      }
+      // WHY: silent no-op confused manual testers; surface preconditions (#94).
+      const blockedStatus = matrixShortcutBlockedStatus(event.target);
+      if (blockedStatus) {
+        event.preventDefault();
+        setStatusRef.current(blockedStatus);
+      }
     };
     window.document.addEventListener("keydown", onKeyDown, { capture: true });
     return () => window.document.removeEventListener("keydown", onKeyDown, { capture: true });
