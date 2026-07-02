@@ -51,6 +51,7 @@ function sampleMatrixDocument(): MatrixDocument {
       },
     ],
   ]);
+  const customColumnLabels = new Map([[1, "Customer"]]);
 
   return {
     kind: "matrix",
@@ -63,6 +64,7 @@ function sampleMatrixDocument(): MatrixDocument {
       cells,
     },
     namedRanges,
+    customColumnLabels,
     templateId: RESEARCH_SHEET_TEMPLATE.id,
     template: RESEARCH_SHEET_TEMPLATE,
   };
@@ -95,6 +97,11 @@ describe("projectMatrixToBundle", () => {
     expect(result.pathsWritten).toContain("templates/research-default.json");
     expect(fs.existsSync(rootIndexPath(bundleRoot))).toBe(true);
     expect(fs.existsSync(sheetIndexPath(bundleRoot, MATRIX_SHEET_ID))).toBe(true);
+
+    const manifestJson = JSON.parse(
+      fs.readFileSync(path.join(bundleRoot, MATRIX_SIDECAR), "utf8"),
+    );
+    expect(manifestJson.customColumnLabels).toEqual([{ col: 1, label: "Customer" }]);
 
     const templateJson = JSON.parse(
       fs.readFileSync(path.join(bundleRoot, "templates", `${RESEARCH_SHEET_TEMPLATE.id}.json`), "utf8"),

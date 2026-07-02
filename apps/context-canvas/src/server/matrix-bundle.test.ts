@@ -21,6 +21,7 @@ function sampleMatrixDocument() {
   return {
     ...document,
     sheet: { ...document.sheet, cells },
+    customColumnLabels: new Map([[1, "Customer"]]),
   };
 }
 
@@ -110,19 +111,22 @@ describe("handleMatrixBundleExport", () => {
       CONTEXT_CANVAS_BUNDLE_ROOT: tempRoot,
     });
     const document = sampleMatrixDocument();
-    const wireDocument = {
-      ...document,
-      sheet: {
-        ...document.sheet,
-        cells: Object.fromEntries(document.sheet.cells),
-      },
-      namedRanges: Object.fromEntries(document.namedRanges),
-    } as unknown as typeof document;
+      const wireDocument = {
+        ...document,
+        sheet: {
+          ...document.sheet,
+          cells: Object.fromEntries(document.sheet.cells),
+        },
+        namedRanges: Object.fromEntries(document.namedRanges),
+        customColumnLabels: Object.fromEntries(document.customColumnLabels ?? []),
+      } as unknown as typeof document;
 
     try {
       const result = handleMatrixBundleExport({ document: wireDocument }, config, tempRoot);
       expect(result.errors).toEqual([]);
       expect(result.pathsWritten.length).toBeGreaterThan(0);
+      const loadResult = handleMatrixBundleLoad(config, tempRoot);
+      expect(loadResult.document?.customColumnLabels?.get(1)).toBe("Customer");
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }

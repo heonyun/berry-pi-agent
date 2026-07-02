@@ -7,7 +7,7 @@ import type {
   RangeRefDTO,
   SheetTemplate,
 } from "../shared/domain.ts";
-import { cellKey } from "../shared/domain.ts";
+import { cellKey, formatColumnLabel } from "../shared/domain.ts";
 import { filterPatchesToTargetRange } from "../shared/matrix-validation.ts";
 
 // ── Context Matrix commands ───────────────────────────────────────────────
@@ -19,6 +19,7 @@ export type MatrixCommand =
   | { type: "apply_ai_command"; command: AiCommand }
   | { type: "set_named_range"; namedRange: NamedRange }
   | { type: "remove_named_range"; name: string }
+  | { type: "set_column_custom_label"; col: number; label: string }
   | { type: "update_cell_frontmatter"; row: number; col: number; frontmatter: string }
   | { type: "apply_template"; template: SheetTemplate; resizeCols?: number }
   | { type: "clear_cell"; row: number; col: number };
@@ -122,6 +123,32 @@ export function applyMatrixCommand(
       };
     }
 
+    case "set_column_custom_label": {
+      if (command.col < 0 || command.col >= document.sheet.cols) {
+        return {
+          document,
+          meta: { updatedCells: 0 },
+        };
+      }
+      const nextLabels = new Map(document.customColumnLabels ?? []);
+      const label = command.label.trim();
+      if (label) {
+        nextLabels.set(command.col, label);
+      } else {
+        nextLabels.delete(command.col);
+      }
+      const coordinate = formatColumnLabel(command.col);
+      return {
+        document: { ...document, customColumnLabels: nextLabels },
+        meta: {
+          updatedCells: 0,
+          message: label
+            ? `Column ${coordinate} label updated: ${label}`
+            : `Column ${coordinate} label cleared`,
+        },
+      };
+    }
+
     case "update_cell_frontmatter": {
       if (!isCellInBounds(document, command.row, command.col)) {
         return {
@@ -159,6 +186,7 @@ export function applyMatrixCommand(
           schemaVersion: 4,
           templateId: command.template.id,
           template: command.template,
+          customColumnLabels: new Map(document.customColumnLabels ?? []),
           sheet: { ...document.sheet, cols: nextCols },
         },
         meta: {

@@ -6,6 +6,7 @@ import {
   formatColumnLabel,
   formatRangeLabel,
   formatSelectionSummary,
+  getColumnCustomLabel,
   rangesEqual,
   type Cell,
   type MatrixDocument,
@@ -101,6 +102,8 @@ export function MatrixCanvas(): ReactElement {
   const [rangeNameInput, setRangeNameInput] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [status, setStatus] = useState("Ready");
+  const [editingColumn, setEditingColumn] = useState<number | null>(null);
+  const [columnLabelDraft, setColumnLabelDraft] = useState("");
 
   const [recentRanges, setRecentRanges] = useState<RecentRangeEntry[]>(() => loadRecentRanges());
   const [historyEntries, setHistoryEntries] = useState<MatrixHistoryEntry[]>(() => loadMatrixHistory());
@@ -173,6 +176,17 @@ export function MatrixCanvas(): ReactElement {
     const height = selectionRange.endRow - selectionRange.startRow + 1;
     return width * height > 1;
   }, [selectionRange]);
+
+  const selectedColumnIndex = useMemo(() => {
+    if (!selectionRange) {
+      return null;
+    }
+    const isWholeColumn =
+      selectionRange.startRow === 0 &&
+      selectionRange.endRow === document.sheet.rows - 1 &&
+      selectionRange.startCol === selectionRange.endCol;
+    return isWholeColumn ? selectionRange.startCol : null;
+  }, [document.sheet.rows, selectionRange]);
 
   const hasCellContent = useMemo(() => document.sheet.cells.size > 0, [document]);
 
@@ -254,6 +268,50 @@ export function MatrixCanvas(): ReactElement {
     touchRecentRange(`target:${selectionLabel.replace(/^@/, "")}`, selectionLabel);
     setStatus(`Target set: ${selectionLabel}`);
   }, [selectionLabel, selectionRange, touchRecentRange]);
+
+  const handleStartColumnLabelEdit = useCallback(
+    (col: number) => {
+      setEditingColumn(col);
+      setColumnLabelDraft(getColumnCustomLabel(docRef.current, col));
+      setStatus(`Editing column ${formatColumnLabel(col)} label`);
+    },
+    [],
+  );
+
+  const handleColumnHeaderClick = useCallback(
+    (col: number, options: { readonly isDoubleClick: boolean }) => {
+      if (options.isDoubleClick) {
+        handleStartColumnLabelEdit(col);
+      }
+    },
+    [handleStartColumnLabelEdit],
+  );
+
+  const handleSaveColumnLabel = useCallback(() => {
+    if (editingColumn === null) {
+      return;
+    }
+    dispatch({
+      type: "set_column_custom_label",
+      col: editingColumn,
+      label: columnLabelDraft,
+    });
+    setEditingColumn(null);
+    setColumnLabelDraft("");
+  }, [columnLabelDraft, dispatch, editingColumn]);
+
+  const handleClearColumnLabel = useCallback(() => {
+    if (editingColumn === null) {
+      return;
+    }
+    dispatch({
+      type: "set_column_custom_label",
+      col: editingColumn,
+      label: "",
+    });
+    setEditingColumn(null);
+    setColumnLabelDraft("");
+  }, [dispatch, editingColumn]);
 
   const handleSaveNamedRange = useCallback(() => {
     if (!selectionRange || !selectionLabel) {
@@ -603,10 +661,69 @@ export function MatrixCanvas(): ReactElement {
               onCellClick={handleCellClick}
               onCellEdited={handleCellEdited}
               onCellsEdited={handleCellsEdited}
+              onColumnHeaderClick={handleColumnHeaderClick}
               onSelectionChange={handleSelectionChange}
             />
             <MatrixOnboarding />
           </div>
+
+          {(editingColumn !== null || selectedColumnIndex !== null) && (
+            <div className="matrix-column-label-editor" data-testid="matrix-column-label-editor">
+              <span className="matrix-column-label-coordinate">
+                Column {formatColumnLabel(editingColumn ?? selectedColumnIndex ?? 0)}
+              </span>
+              {editingColumn === null ? (
+                <button
+                  type="button"
+                  className="matrix-secondary-button"
+                  data-testid="matrix-column-label-start"
+                  onClick={() =>
+                    selectedColumnIndex !== null && handleStartColumnLabelEdit(selectedColumnIndex)
+                  }
+                >
+                  Rename
+                </button>
+              ) : (
+                <>
+                  <input
+                    className="matrix-column-label-input"
+                    data-testid="matrix-column-label-input"
+                    value={columnLabelDraft}
+                    placeholder="Column label"
+                    onChange={(event) => setColumnLabelDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleSaveColumnLabel();
+                      }
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        setEditingColumn(null);
+                        setColumnLabelDraft("");
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    className="matrix-primary-button"
+                    data-testid="matrix-column-label-save"
+                    onClick={handleSaveColumnLabel}
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    className="matrix-secondary-button"
+                    data-testid="matrix-column-label-clear"
+                    onClick={handleClearColumnLabel}
+                  >
+                    Clear
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           <MatrixComposer
             contextChips={contextChips}

@@ -205,8 +205,23 @@ export async function clickColumnHeader(page: Page, colLetter: string): Promise<
   }
   const x = box.x + ROW_MARKER_WIDTH + col * COL_WIDTH + COL_WIDTH / 2;
   const y = box.y + HEADER_HEIGHT / 2;
-  await page.mouse.click(x, y);
   await canvas.focus();
+  await page.mouse.click(x, y);
+  await expect(page.getByTestId("matrix-status-selection")).toContainText(`${colLetter.toUpperCase()}1`);
+}
+
+export async function doubleClickColumnHeader(page: Page, colLetter: string): Promise<void> {
+  const { col } = parseCellAddress(`${colLetter}1`);
+  const canvas = await gridCanvas(page);
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) {
+    return;
+  }
+  const x = box.x + ROW_MARKER_WIDTH + col * COL_WIDTH + COL_WIDTH / 2;
+  const y = box.y + HEADER_HEIGHT / 2;
+  await canvas.focus();
+  await page.mouse.dblclick(x, y);
 }
 
 export async function dragMatrixRange(
