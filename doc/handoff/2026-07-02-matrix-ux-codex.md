@@ -8,12 +8,12 @@ date: 2026-07-02
 updated: 2026-07-02
 author: Cursor
 canonical_repo: "C:\\Dev\\pi-agent"
-summary: "Matrix UX issues registered; I01-I05 merged; next up is I06 (#98) group corner-dot boundaries."
+summary: "Matrix UX issues registered; I01-I06 merged; next up is I07 (#99) full corner-dot cell grid."
 ---
 
 # Matrix UX #93–#106 — Codex Handoff
 
-**State after Codex resume:** PR #113 squash-merged to `main` at `502d2900`; next issue is #98.
+**State after Codex resume:** PR #114 squash-merged to `main` at `0e206ca8`; next issue is #99.
 
 **Repo:** `C:\Dev\pi-agent` (`heonyun/berry-pi-agent` fork of `earendil-works/pi`)
 
@@ -31,7 +31,8 @@ summary: "Matrix UX issues registered; I01-I05 merged; next up is I06 (#98) grou
 | I03 #95 group label dbl-click rename (PR #110) | **Merged** |
 | I04 #96 column width resize (PR #111) | **Merged** — `355a6692` |
 | I05 #97 row height resize (PR #113) | **Merged** — `502d2900` |
-| I06–I14 #98–#106 | Not started |
+| I06 #98 group corner-dot boundaries (PR #114) | **Merged** — `0e206ca8` |
+| I07–I14 #99–#106 | Not started |
 | User stop scope | Continue all issues with per-issue PR loop |
 
 ---
@@ -55,7 +56,8 @@ summary: "Matrix UX issues registered; I01-I05 merged; next up is I06 (#98) grou
 | I03 | 95 | Group label double-click rename | #110 | merged |
 | I04 | 96 | Column width resize | **#111** | **merged, #96 closed** |
 | I05 | 97 | Row height resize | **#113** | **merged, #97 closed** |
-| I06–I14 | 98–106 | See triage worklog | — | pending |
+| I06 | 98 | Group corner-dot boundaries | **#114** | **merged, #98 closed** |
+| I07–I14 | 99–106 | See triage worklog | — | pending |
 
 Local IDs: `doc/working-log/.matrix-ux-issue-ids.json`
 
@@ -157,9 +159,47 @@ npm run e2e -- -g "Column width resize|Row height resize"
 npm run build
 ```
 
+## Completed: I06 #98 / PR #114
+
+### What was built
+
+```
+apps/context-canvas/src/web/MatrixGrid.tsx              # group boundary overlay + corner dots
+apps/context-canvas/src/web/styles.css                  # soft boundary and dot styling
+apps/context-canvas/e2e/matrix-grid.spec.ts             # visible boundary/dot coverage
+```
+
+### Critical invariant
+
+**Corner dots are static visual affordances only.** Do not attach selection, drag, or resize behavior to #98 dots; I07 #99 owns the full cell-grid corner-dot interaction.
+
+```tsx
+{/* ASSUMPTION: issue-98 dots are static affordances; interactive grid corners are I07. */}
+```
+
+### Final status (PR #114)
+
+| Check | Result |
+| --- | --- |
+| `build-check-test` | pass |
+| CodeRabbit | success |
+| `dispatch` / `review` (DeepSeek workflow) | pass |
+| Merge | `0e206ca8` |
+
+### Commands verified locally
+
+```powershell
+cd C:\Dev\pi-agent\apps\context-canvas
+npm run e2e -- -g "Auto group appears|Single click on group label|Escape cancels group label edits|Clicking away saves group label edits"
+npm run typecheck
+npm run build
+cd C:\Dev\pi-agent
+npm run test --workspace=@berry-pi/context-canvas
+```
+
 ### Resume here
 
-Start **I06 #98 — group corner-dot boundaries**.
+Start **I07 #99 — full corner-dot cell grid**.
 
 ---
 
@@ -197,4 +237,5 @@ Also record harness follow-up from PR #111:
 
 PR #111 merge commit: `355a6692`.  
 PR #113 merge commit: `502d2900`.  
+PR #114 merge commit: `0e206ca8`.  
 Do **not** include unrelated `doc/orchestrator/*` local edits in product PRs.
