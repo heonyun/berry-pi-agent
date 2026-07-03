@@ -410,7 +410,7 @@ export interface MatrixHistorySnapshot {
     readonly id: string;
     readonly label: string;
     readonly range: RangeRefDTO;
-    readonly source: string;
+    readonly source: MatrixGroup["source"];
     readonly labelOffset?: Vec2;
     readonly dismissed?: boolean;
   }[];

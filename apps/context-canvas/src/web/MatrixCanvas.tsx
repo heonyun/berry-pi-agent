@@ -43,6 +43,7 @@ import {
 import { loadMatrixRowHeights, saveMatrixRowHeights } from "./matrix-row-heights.ts";
 import {
   appendMatrixHistory,
+  createMatrixHistorySnapshot,
   createHistoryEntry,
   loadMatrixHistory,
   saveMatrixHistory,
@@ -532,6 +533,7 @@ export function MatrixCanvas(): ReactElement {
           patchesApplied: result.meta.updatedCells,
           compiledContextPreview: truncatePreview(compiled.contextText),
           patchesSummary: summarizePatches(boundCommand),
+          snapshot: createMatrixHistorySnapshot(result.document),
         });
         const nextHistory = appendMatrixHistory(historyEntries, historyEntry);
         setHistoryEntries(nextHistory);
