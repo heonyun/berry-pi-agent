@@ -132,6 +132,14 @@ export function MatrixCanvas(): ReactElement {
     return result;
   }, []);
 
+  const groupOffsetRestoreKey = useMemo(
+    () =>
+      groups
+        .map((group) => `${group.id}:${group.labelOffset?.x ?? ""}:${group.labelOffset?.y ?? ""}`)
+        .join("|"),
+    [groups],
+  );
+
   useEffect(() => {
     for (const group of groups) {
       const storedOffset = storedGroupLabelOffsetsRef.current.get(group.id);
@@ -142,7 +150,7 @@ export function MatrixCanvas(): ReactElement {
         dispatch({ type: "set_group_label_offset", id: group.id, offset: storedOffset });
       }
     }
-  }, [dispatch, groups]);
+  }, [dispatch, groupOffsetRestoreKey]);
 
   const syncDetailFromActiveCell = useCallback((row: number, col: number) => {
     setSelectedHistory(null);

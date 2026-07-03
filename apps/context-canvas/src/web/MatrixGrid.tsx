@@ -396,6 +396,9 @@ export function MatrixGrid({
         return;
       }
       suppressNextGroupLabelClick.current = true;
+      window.setTimeout(() => {
+        suppressNextGroupLabelClick.current = false;
+      }, 0);
       event.preventDefault();
       event.stopPropagation();
       // INVARIANT: Persist group label offset only after drag end; click and double-click semantics stay intact.

@@ -256,6 +256,13 @@ describe("loadMatrixBundle", () => {
       ...manifest.groups,
       { id: "", label: "Bad", source: "auto", range: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 } },
       { id: "bad", label: "Bad", source: "auto", range: { startRow: -1, startCol: 0, endRow: 0, endCol: 0 } },
+      {
+        id: "null-offset",
+        label: "Bad",
+        source: "auto",
+        range: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        labelOffset: null,
+      },
     ];
     fs.writeFileSync(sidecarPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 

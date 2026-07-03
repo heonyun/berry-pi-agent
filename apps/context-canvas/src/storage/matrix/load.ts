@@ -146,13 +146,20 @@ function isValidManifestGroup(
   );
 }
 
-function isValidGroupLabelOffset(offset: MatrixGroup["labelOffset"]): boolean {
+function isValidGroupLabelOffset(offset: unknown): offset is MatrixGroup["labelOffset"] {
+  if (offset === undefined) {
+    return true;
+  }
+  // CONTRACT: Bundle input is parsed JSON, so invalid optional offsets must fail closed.
+  if (offset === null || typeof offset !== "object") {
+    return false;
+  }
+  const candidate = offset as { readonly x?: unknown; readonly y?: unknown };
   return (
-    offset === undefined ||
-    (typeof offset.x === "number" &&
-      Number.isFinite(offset.x) &&
-      typeof offset.y === "number" &&
-      Number.isFinite(offset.y))
+    typeof candidate.x === "number" &&
+    Number.isFinite(candidate.x) &&
+    typeof candidate.y === "number" &&
+    Number.isFinite(candidate.y)
   );
 }
 
