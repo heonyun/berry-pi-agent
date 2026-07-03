@@ -171,16 +171,19 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const finishedRef = useRef(false);
+  const hasFocusedRef = useRef(false);
+  const initialValueRef = useRef(value.data);
 
   useEffect(() => {
     const textarea = textareaRef.current;
-    if (!textarea || value.readonly === true) {
+    if (!textarea || value.readonly === true || hasFocusedRef.current) {
       return;
     }
-    const length = value.data.length;
+    hasFocusedRef.current = true;
+    const length = initialValueRef.current.length;
     textarea.focus();
     textarea.setSelectionRange(isHighlighted ? 0 : length, length);
-  }, [isHighlighted, value.data.length, value.readonly]);
+  }, [isHighlighted, value.readonly]);
 
   useLayoutEffect(() => {
     applyValidatedSelection(textareaRef.current, validatedSelection);
@@ -222,13 +225,18 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
 
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.nativeEvent.isComposing) {
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
         finishEditing(undefined);
         return;
       }
       if (event.key === "Enter" && !event.shiftKey) {
         event.preventDefault();
+        event.stopPropagation();
         finishEditing(updateValue(event.currentTarget.value));
       }
     },

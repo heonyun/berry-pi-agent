@@ -3,7 +3,6 @@ import {
   forwardRef,
   useCallback,
   useEffect,
-  useImperativeHandle,
   useRef,
   useState,
   type ChangeEvent,
@@ -52,9 +51,6 @@ export const ImeTextarea = memo(forwardRef<HTMLTextAreaElement, ImeTextareaProps
   const draftRef = useRef(value);
   const focusedRef = useRef(false);
   const blurDuringCompositionRef = useRef(false);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-
-  useImperativeHandle(forwardedRef, () => textareaRef.current as HTMLTextAreaElement, []);
 
   useEffect(() => {
     draftRef.current = draft;
@@ -142,7 +138,7 @@ export const ImeTextarea = memo(forwardRef<HTMLTextAreaElement, ImeTextareaProps
   return (
     <textarea
       {...rest}
-      ref={textareaRef}
+      ref={forwardedRef}
       value={draft}
       onChange={handleChange}
       onFocus={handleFocus}

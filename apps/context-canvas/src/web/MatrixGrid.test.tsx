@@ -155,4 +155,82 @@ describe("MatrixGrid IME overlay editor", () => {
     expect(onFinishedEditing).toHaveBeenCalledTimes(1);
     expect(onFinishedEditing).toHaveBeenCalledWith(undefined);
   });
+
+  it("confirms the text editor on Enter outside IME composition", () => {
+    renderMatrixGrid();
+
+    const TextEditor = getTextEditor(
+      dataEditorState.props?.provideEditor?.({
+        kind: GridCellKind.Text,
+        data: "draft",
+        displayData: "draft",
+        allowOverlay: true,
+        location: [0, 0],
+      }) as ProvideEditorCallbackResult<TextCell>,
+    );
+    const onFinishedEditing = vi.fn();
+
+    render(
+      <TextEditor
+        isHighlighted={false}
+        onChange={vi.fn()}
+        onFinishedEditing={onFinishedEditing}
+        value={{
+          kind: GridCellKind.Text,
+          data: "draft",
+          displayData: "draft",
+          allowOverlay: true,
+        }}
+        target={{ x: 0, y: 0, width: 100, height: 32 }}
+        forceEditMode={false}
+        theme={{} as never}
+      />,
+    );
+
+    const editor = screen.getByLabelText("Matrix cell editor");
+    fireEvent.change(editor, { target: { value: "confirmed" } });
+    fireEvent.keyDown(editor, { key: "Enter" });
+
+    expect(onFinishedEditing).toHaveBeenCalledTimes(1);
+    expect(onFinishedEditing).toHaveBeenCalledWith(
+      expect.objectContaining({ data: "confirmed", displayData: "confirmed" }),
+    );
+  });
+
+  it("does not confirm the text editor when Enter is part of IME composition", () => {
+    renderMatrixGrid();
+
+    const TextEditor = getTextEditor(
+      dataEditorState.props?.provideEditor?.({
+        kind: GridCellKind.Text,
+        data: "",
+        displayData: "",
+        allowOverlay: true,
+        location: [0, 0],
+      }) as ProvideEditorCallbackResult<TextCell>,
+    );
+    const onFinishedEditing = vi.fn();
+
+    render(
+      <TextEditor
+        isHighlighted={false}
+        onChange={vi.fn()}
+        onFinishedEditing={onFinishedEditing}
+        value={{
+          kind: GridCellKind.Text,
+          data: "",
+          displayData: "",
+          allowOverlay: true,
+        }}
+        target={{ x: 0, y: 0, width: 100, height: 32 }}
+        forceEditMode={false}
+        theme={{} as never}
+      />,
+    );
+
+    const editor = screen.getByLabelText("Matrix cell editor");
+    fireEvent.keyDown(editor, { key: "Enter", isComposing: true });
+
+    expect(onFinishedEditing).not.toHaveBeenCalled();
+  });
 });
