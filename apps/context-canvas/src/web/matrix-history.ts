@@ -1,4 +1,6 @@
 import {
+  cellKey,
+  createEmptyMatrixDocument,
   formatColumnLabel,
   MATRIX_SNAPSHOT_MAX_BYTES,
   type AiCommand,
@@ -75,6 +77,30 @@ export function createMatrixHistorySnapshot(document: MatrixDocument): MatrixHis
     ...snapshot,
     serializedBytes,
     truncated: false,
+  };
+}
+
+export function createMatrixDocumentFromHistorySnapshot(
+  snapshot: MatrixHistorySnapshot,
+  baseDocument: MatrixDocument = createEmptyMatrixDocument({ withResearchTemplate: false }),
+): MatrixDocument {
+  // CONTRACT: history snapshots restore persisted sheet content; view-only document state stays with baseDocument.
+  const cells = new Map(
+    snapshot.cells.map((entry) => [cellKey(entry.row, entry.col), entry.cell] as const),
+  );
+  const groups = new Map(snapshot.groups.map((group) => [group.id, group] as const));
+
+  return {
+    ...baseDocument,
+    sheet: {
+      ...baseDocument.sheet,
+      id: snapshot.sheet.id,
+      name: snapshot.sheet.name,
+      rows: snapshot.sheet.rows,
+      cols: snapshot.sheet.cols,
+      cells,
+    },
+    groups,
   };
 }
 

@@ -43,6 +43,7 @@ import {
 import { loadMatrixRowHeights, saveMatrixRowHeights } from "./matrix-row-heights.ts";
 import {
   appendMatrixHistory,
+  createMatrixDocumentFromHistorySnapshot,
   createMatrixHistorySnapshot,
   createHistoryEntry,
   loadMatrixHistory,
@@ -80,6 +81,24 @@ function nextChipId(): string {
 interface ReferenceEditState {
   readonly row: number;
   readonly col: number;
+}
+
+interface RestoreSourceState {
+  readonly document: MatrixDocument;
+  readonly selection: MatrixGridSelectionState | null;
+  readonly contextChips: readonly ContextChip[];
+  readonly targetRange: RangeRefDTO | null;
+}
+
+function rangeRefToSelection(range: RangeRefDTO): MatrixGridSelectionState {
+  return {
+    startRow: range.startRow,
+    startCol: range.startCol,
+    endRow: range.endRow,
+    endCol: range.endCol,
+    activeRow: range.startRow,
+    activeCol: range.startCol,
+  };
 }
 
 export function MatrixCanvas(): ReactElement {
@@ -121,6 +140,8 @@ export function MatrixCanvas(): ReactElement {
 
   const [historyEntries, setHistoryEntries] = useState<MatrixHistoryEntry[]>(() => loadMatrixHistory());
   const [selectedHistory, setSelectedHistory] = useState<MatrixHistoryEntry | null>(null);
+  const [restoredHistoryId, setRestoredHistoryId] = useState<string | null>(null);
+  const restoreSourceRef = useRef<RestoreSourceState | null>(null);
   const storedGroupLabelOffsetsRef = useRef(loadMatrixGroupLabelOffsets());
 
   const groups = useMemo(() => visibleMatrixGroups(document), [document]);
@@ -128,6 +149,30 @@ export function MatrixCanvas(): ReactElement {
   useEffect(() => {
     saveMatrixHistory(historyEntries);
   }, [historyEntries]);
+
+  const restoreCurrentDocumentFromPreview = useCallback(
+    (options: { readonly closeHistory?: boolean; readonly status?: string } = {}) => {
+      const source = restoreSourceRef.current;
+      if (!source) {
+        return false;
+      }
+      restoreSourceRef.current = null;
+      docRef.current = source.document;
+      setDocument(source.document);
+      setSelection(source.selection);
+      setContextChips([...source.contextChips]);
+      setTargetRange(source.targetRange);
+      setRestoredHistoryId(null);
+      if (options.closeHistory !== false) {
+        setSelectedHistory(null);
+      }
+      if (options.status) {
+        setStatus(options.status);
+      }
+      return true;
+    },
+    [],
+  );
 
   const dispatch = useCallback((command: MatrixCommand) => {
     const result = applyMatrixCommand(docRef.current, command);
@@ -159,17 +204,21 @@ export function MatrixCanvas(): ReactElement {
     }
   }, [dispatch, groupOffsetRestoreKey]);
 
-  const syncDetailFromActiveCell = useCallback((row: number, col: number) => {
-    setSelectedHistory(null);
-    const key = cellKey(row, col);
-    const domainCell = docRef.current.sheet.cells.get(key);
-    setDetailCell({
-      row,
-      col,
-      body: domainCell?.body ?? "",
-    });
-    setDetailFrontmatter(domainCell?.frontmatter ?? "");
-  }, []);
+  const syncDetailFromActiveCell = useCallback(
+    (row: number, col: number) => {
+      restoreCurrentDocumentFromPreview();
+      setSelectedHistory(null);
+      const key = cellKey(row, col);
+      const domainCell = docRef.current.sheet.cells.get(key);
+      setDetailCell({
+        row,
+        col,
+        body: domainCell?.body ?? "",
+      });
+      setDetailFrontmatter(domainCell?.frontmatter ?? "");
+    },
+    [restoreCurrentDocumentFromPreview],
+  );
 
   const insertReferenceToken = useCallback(
     (token: string) => {
@@ -766,30 +815,77 @@ export function MatrixCanvas(): ReactElement {
     setStatus(`AI ready for ${selectionLabel} — review and Run`);
   }, [contextChips, selectionLabel, selectionRange]);
 
-  const handleHistorySelect = useCallback((entry: MatrixHistoryEntry) => {
-    setSelectedHistory(entry);
-    setDetailCell(null);
-    setDetailFrontmatter("");
-  }, []);
+  const handleHistorySelect = useCallback(
+    (entry: MatrixHistoryEntry) => {
+      setSelectedHistory(entry);
+      setDetailCell(null);
+      setDetailFrontmatter("");
+
+      if (!entry.snapshot || entry.snapshot.truncated) {
+        // INVARIANT: a non-restorable entry must not leave the grid showing a previous preview.
+        restoreCurrentDocumentFromPreview({ closeHistory: false });
+        setStatus(
+          !entry.snapshot
+            ? "History entry has no document snapshot"
+            : "History snapshot is truncated and cannot restore full cells",
+        );
+        return;
+      }
+
+      if (!restoreSourceRef.current) {
+        restoreSourceRef.current = {
+          document: docRef.current,
+          selection,
+          contextChips,
+          targetRange,
+        };
+      }
+
+      const restoredDocument = createMatrixDocumentFromHistorySnapshot(entry.snapshot, docRef.current);
+      docRef.current = restoredDocument;
+      setDocument(restoredDocument);
+      if (entry.targetRange) {
+        setSelection(rangeRefToSelection(entry.targetRange));
+      }
+      setRestoredHistoryId(entry.id);
+      setStatus(`Restored history snapshot: ${entry.targetRangeLabel}`);
+    },
+    [contextChips, restoreCurrentDocumentFromPreview, selection, targetRange],
+  );
 
   const handleHistoryClose = useCallback(() => {
     setSelectedHistory(null);
   }, []);
 
-  const handleHistoryRerun = useCallback((entry: MatrixHistoryEntry) => {
-    setPrompt(entry.intent);
-    setContextChips(
-      entry.contextRanges.map((range) => ({
-        id: nextChipId(),
-        label: range.label,
-        range: range.range,
-        groupId: range.groupId,
-      })),
-    );
-    setTargetRange(entry.targetRange);
-    setSelectedHistory(null);
-    setStatus("Composer pre-filled from history — review and Run");
-  }, []);
+  const handleReturnToCurrentDocument = useCallback(() => {
+    if (
+      !restoreCurrentDocumentFromPreview({
+        status: "Returned to current document",
+      })
+    ) {
+      setSelectedHistory(null);
+      setRestoredHistoryId(null);
+    }
+  }, [restoreCurrentDocumentFromPreview]);
+
+  const handleHistoryRerun = useCallback(
+    (entry: MatrixHistoryEntry) => {
+      restoreCurrentDocumentFromPreview();
+      setPrompt(entry.intent);
+      setContextChips(
+        entry.contextRanges.map((range) => ({
+          id: nextChipId(),
+          label: range.label,
+          range: range.range,
+          groupId: range.groupId,
+        })),
+      );
+      setTargetRange(entry.targetRange);
+      setSelectedHistory(null);
+      setStatus("Composer pre-filled from history — review and Run");
+    },
+    [restoreCurrentDocumentFromPreview],
+  );
 
   const handleGroupSelect = useCallback(
     (group: MatrixGroup) => {
@@ -1012,8 +1108,10 @@ export function MatrixCanvas(): ReactElement {
         selectedHistory ? (
           <MatrixHistoryDetailPane
             entry={selectedHistory}
-            onClose={handleHistoryClose}
+            isRestored={restoredHistoryId !== null}
+            onClose={restoredHistoryId !== null ? handleReturnToCurrentDocument : handleHistoryClose}
             onRerun={handleHistoryRerun}
+            onReturnToCurrent={handleReturnToCurrentDocument}
           />
         ) : (
           <MatrixDetailPane

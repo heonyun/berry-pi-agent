@@ -4,14 +4,18 @@ import { formatCellCount, formatHistoryTimestamp } from "./matrix-history.ts";
 
 export interface MatrixHistoryDetailPaneProps {
   readonly entry: MatrixHistoryEntry;
+  readonly isRestored?: boolean;
   readonly onClose: () => void;
   readonly onRerun: (entry: MatrixHistoryEntry) => void;
+  readonly onReturnToCurrent?: () => void;
 }
 
 export function MatrixHistoryDetailPane({
   entry,
+  isRestored = false,
   onClose,
   onRerun,
+  onReturnToCurrent,
 }: MatrixHistoryDetailPaneProps): ReactElement {
   return (
     <aside className="matrix-detail-pane matrix-history-detail" data-testid="matrix-history-detail">
@@ -69,6 +73,16 @@ export function MatrixHistoryDetailPane({
       </dl>
 
       <div className="matrix-history-detail-actions">
+        {isRestored && onReturnToCurrent && (
+          <button
+            type="button"
+            className="matrix-history-return nodrag nopan"
+            data-testid="history-return-current"
+            onClick={onReturnToCurrent}
+          >
+            Return to current document
+          </button>
+        )}
         <button
           type="button"
           className="matrix-history-rerun nodrag nopan"

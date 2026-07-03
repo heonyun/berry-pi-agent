@@ -5,12 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
 import {
   cellKey,
+  MATRIX_SNAPSHOT_MAX_BYTES,
   type MatrixDocument,
   type MatrixGroup,
   type MatrixHistorySnapshot,
 } from "../shared/domain.ts";
 import type { MatrixGridSelectionState } from "./MatrixGrid.tsx";
-import { loadMatrixHistory } from "./matrix-history.ts";
+import { createHistoryEntry, loadMatrixHistory, saveMatrixHistory } from "./matrix-history.ts";
 import { MatrixCanvas } from "./MatrixCanvas.tsx";
 
 vi.mock("./run-matrix.ts", () => ({
@@ -255,5 +256,131 @@ describe("MatrixCanvas AI run history snapshot", () => {
     if (!writtenCell) throw new Error("Expected AI-written cell in snapshot");
     expect(writtenCell.cell.body).toBe("Hello, World!");
     expect(snapshot.serializedBytes).toBeGreaterThan(0);
+  });
+});
+
+describe("MatrixCanvas history snapshot restore", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  function createRestorableHistoryEntry(options: { readonly truncated?: boolean } = {}) {
+    return createHistoryEntry({
+      intent: options.truncated ? "Truncated saved run" : "Restore saved run",
+      contextRanges: [
+        {
+          label: "B1:C2",
+          range: { startRow: 0, startCol: 1, endRow: 1, endCol: 2 },
+          groupId: "history-group",
+        },
+      ],
+      targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+      targetRangeLabel: "A1",
+      patchesApplied: 1,
+      snapshot: {
+        schemaVersion: 1,
+        sheet: {
+          id: "history-sheet",
+          name: "History Sheet",
+          rows: 20,
+          cols: 50,
+        },
+        cells: options.truncated
+          ? []
+          : [
+              {
+                row: 0,
+                col: 0,
+                cell: {
+                  value: "restored",
+                  body: "Restored A1",
+                  frontmatter: "",
+                  provenance: "ai",
+                },
+              },
+            ],
+        groups: options.truncated
+          ? []
+          : [
+              {
+                id: "history-group",
+                label: "Restored Group",
+                range: { startRow: 0, startCol: 1, endRow: 1, endCol: 2 },
+                source: "auto",
+              },
+            ],
+        maxSerializedBytes: MATRIX_SNAPSHOT_MAX_BYTES,
+        serializedBytes: 256,
+        truncated: options.truncated ?? false,
+      },
+    });
+  }
+
+  function saveRestorableHistory(): void {
+    saveMatrixHistory([createRestorableHistoryEntry()]);
+  }
+
+  it("restores cells and groups when a snapshot history entry is selected", () => {
+    saveRestorableHistory();
+    render(<MatrixCanvas />);
+
+    expect(screen.getByTestId("cell-a1").textContent).toBe("");
+
+    fireEvent.click(screen.getByTestId(/^history-entry-/));
+
+    expect(screen.getByTestId("cell-a1").textContent).toBe("Restored A1");
+    expect(screen.getByText("group label Restored Group")).toBeTruthy();
+    expect(screen.getByTestId("matrix-status-selection").textContent).toContain("A1");
+    expect(screen.getByText("Restored history snapshot: A1")).toBeTruthy();
+  });
+
+  it("returns from a restored snapshot to the current document", () => {
+    saveRestorableHistory();
+    render(<MatrixCanvas />);
+
+    fireEvent.click(screen.getByText("edit text"));
+    expect(screen.getByTestId("cell-a1").textContent).toBe("hello");
+
+    fireEvent.click(screen.getByTestId(/^history-entry-/));
+    expect(screen.getByTestId("cell-a1").textContent).toBe("Restored A1");
+
+    fireEvent.click(screen.getByTestId("history-return-current"));
+
+    expect(screen.getByTestId("cell-a1").textContent).toBe("hello");
+    expect(screen.getByText("Returned to current document")).toBeTruthy();
+  });
+
+  it("returns to the current document before showing a truncated history entry", () => {
+    saveMatrixHistory([createRestorableHistoryEntry(), createRestorableHistoryEntry({ truncated: true })]);
+    render(<MatrixCanvas />);
+
+    fireEvent.click(screen.getByText("edit text"));
+    fireEvent.click(screen.getAllByTestId(/^history-entry-/)[0]);
+    expect(screen.getByTestId("cell-a1").textContent).toBe("Restored A1");
+
+    fireEvent.click(screen.getAllByTestId(/^history-entry-/)[1]);
+
+    expect(screen.getByTestId("cell-a1").textContent).toBe("hello");
+    expect(screen.getByText("History snapshot is truncated and cannot restore full cells")).toBeTruthy();
+    expect(screen.queryByTestId("history-return-current")).toBeNull();
+  });
+
+  it("returns to the current document when a cell is selected from a restored snapshot", () => {
+    saveRestorableHistory();
+    render(<MatrixCanvas />);
+
+    fireEvent.click(screen.getByText("edit text"));
+    fireEvent.click(screen.getByTestId(/^history-entry-/));
+    expect(screen.getByTestId("cell-a1").textContent).toBe("Restored A1");
+
+    fireEvent.click(screen.getByText("replay A1"));
+
+    expect(screen.getByTestId("cell-a1").textContent).toBe("hello");
+    expect(screen.queryByTestId("history-return-current")).toBeNull();
   });
 });

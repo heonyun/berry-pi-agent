@@ -1028,6 +1028,17 @@ button.active {
   cursor: pointer;
 }
 
+.matrix-history-return {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .matrix-center {
   flex: 1;
   display: flex;
