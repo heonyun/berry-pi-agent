@@ -776,7 +776,13 @@ export function MatrixCanvas(): ReactElement {
     (group: MatrixGroup, offset: { readonly x: number; readonly y: number }) => {
       const result = dispatch({ type: "set_group_label_offset", id: group.id, offset });
       saveMatrixGroupLabelOffsets(result.document.groups);
-      storedGroupLabelOffsetsRef.current = loadMatrixGroupLabelOffsets();
+      storedGroupLabelOffsetsRef.current = new Map(
+        [...result.document.groups.entries()]
+          .filter((entry): entry is [string, MatrixGroup & { readonly labelOffset: NonNullable<MatrixGroup["labelOffset"]> }] =>
+            Boolean(entry[1].labelOffset),
+          )
+          .map(([id, storedGroup]) => [id, storedGroup.labelOffset]),
+      );
       scheduleMatrixBundleExport(result.document, historyEntries);
     },
     [dispatch, historyEntries],

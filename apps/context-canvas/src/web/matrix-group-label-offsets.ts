@@ -1,3 +1,5 @@
+import type { MatrixGroup, Vec2 } from "../shared/domain.ts";
+
 export const MATRIX_GROUP_LABEL_OFFSETS_STORAGE_KEY = "context-matrix-group-label-offsets";
 
 export interface MatrixGroupLabelOffsetEntry {
@@ -6,7 +8,7 @@ export interface MatrixGroupLabelOffsetEntry {
   readonly y: number;
 }
 
-export function loadMatrixGroupLabelOffsets(): ReadonlyMap<string, { readonly x: number; readonly y: number }> {
+export function loadMatrixGroupLabelOffsets(): ReadonlyMap<string, Vec2> {
   if (typeof window === "undefined") {
     return new Map();
   }
@@ -38,7 +40,7 @@ export function loadMatrixGroupLabelOffsets(): ReadonlyMap<string, { readonly x:
 }
 
 export function saveMatrixGroupLabelOffsets(
-  groups: ReadonlyMap<string, { readonly labelOffset?: { readonly x: number; readonly y: number } }> | undefined,
+  groups: ReadonlyMap<string, MatrixGroup> | undefined,
 ): void {
   if (typeof window === "undefined") {
     return;
@@ -53,8 +55,16 @@ export function saveMatrixGroupLabelOffsets(
       y: group.labelOffset.y,
     }));
   if (entries.length === 0) {
-    window.localStorage.removeItem(MATRIX_GROUP_LABEL_OFFSETS_STORAGE_KEY);
+    try {
+      window.localStorage.removeItem(MATRIX_GROUP_LABEL_OFFSETS_STORAGE_KEY);
+    } catch {
+      // RISK: Storage can be unavailable; bundle export must still proceed.
+    }
     return;
   }
-  window.localStorage.setItem(MATRIX_GROUP_LABEL_OFFSETS_STORAGE_KEY, JSON.stringify(entries));
+  try {
+    window.localStorage.setItem(MATRIX_GROUP_LABEL_OFFSETS_STORAGE_KEY, JSON.stringify(entries));
+  } catch {
+    // RISK: Storage can be unavailable; bundle export must still proceed.
+  }
 }

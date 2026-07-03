@@ -253,13 +253,15 @@ export function MatrixGrid({
       const boundaryBottom = endBounds.y + endBounds.height - containerBounds.y;
       const boundaryWidth = boundaryRight - boundaryLeft;
       const boundaryHeight = boundaryBottom - boundaryTop;
+      const maxWidth = Math.max(72, Math.min(190, bounds.width + 88));
       const previewOffset =
         groupLabelDrag?.group.id === group.id ? groupLabelDrag.currentOffset : group.labelOffset;
       const offsetX = previewOffset?.x ?? 0;
       const offsetY = previewOffset?.y ?? 0;
-      const left = Math.max(4, bounds.x - containerBounds.x + 4 + offsetX);
-      const top = Math.max(2, bounds.y - containerBounds.y - 12 + offsetY);
-      const maxWidth = Math.max(72, Math.min(190, bounds.width + 88));
+      const maxLeft = Math.max(4, containerBounds.width - maxWidth - 4);
+      const maxTop = Math.max(2, containerBounds.height - 24);
+      const left = Math.max(4, Math.min(maxLeft, bounds.x - containerBounds.x + 4 + offsetX));
+      const top = Math.max(2, Math.min(maxTop, bounds.y - containerBounds.y - 12 + offsetY));
       if (
         boundaryLeft > containerBounds.width ||
         boundaryTop > containerBounds.height ||
