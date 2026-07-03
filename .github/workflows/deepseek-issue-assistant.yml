@@ -1,6 +1,6 @@
 # Planning / idea review on issues via DeepSeek API.
 # Secret: DEEPSEEK_V4 (API key). Variable: DEEPSEEK_V4 (model name).
-# DEEPSEEK_REASONING_EFFORT default high (thinking enabled; set off to disable).
+# DEEPSEEK_REASONING_EFFORT default max (thinking enabled; set off to disable).
 
 name: DeepSeek Issue Assistant
 
@@ -137,6 +137,7 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_V4 }}
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_V4 || 'deepseek-v4-flash' }}
+          DEEPSEEK_REASONING_EFFORT: max
           GH_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ needs.dispatch.outputs.issue_number }}
           MODE: ${{ needs.dispatch.outputs.mode }}

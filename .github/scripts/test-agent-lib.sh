@@ -224,6 +224,18 @@ EOF
   assert_contains "${usage_line}" "reasoning=42" "deepseek usage reasoning_tokens"
 
   payload_fixture="$(mktemp)"
+  agent_deepseek_write_payload "${payload_fixture}" "deepseek-v4-flash" "sys" "user" "0.2"
+  default_payload="$(cat "${payload_fixture}")"
+  assert_contains "${default_payload}" '"type": "enabled"' "deepseek payload thinking enabled by default"
+  assert_contains "${default_payload}" '"reasoning_effort": "max"' "deepseek payload reasoning_effort max by default"
+  if [[ "${default_payload}" == *temperature* ]]; then
+    fail_count=$((fail_count + 1))
+    echo "FAIL: default thinking-enabled payload must omit temperature" >&2
+  else
+    pass_count=$((pass_count + 1))
+    echo "PASS: default thinking-enabled payload omits temperature"
+  fi
+
   DEEPSEEK_REASONING_EFFORT=high agent_deepseek_write_payload "${payload_fixture}" "deepseek-v4-flash" "sys" "user" "0.2"
   high_payload="$(cat "${payload_fixture}")"
   assert_contains "${high_payload}" '"type": "enabled"' "deepseek payload thinking enabled"
