@@ -713,12 +713,14 @@ button.active {
 }
 
 .matrix-left-panel {
+  --matrix-panel-peek-width: 200px;
   flex-basis: 200px;
   width: 200px;
   border-right: 1px solid var(--border);
 }
 
 .matrix-right-panel {
+  --matrix-panel-peek-width: 320px;
   flex-basis: 320px;
   width: 320px;
   border-left: 1px solid var(--border);
@@ -727,6 +729,11 @@ button.active {
 .matrix-panel-shell.collapsed {
   flex-basis: 40px;
   width: 40px;
+}
+
+.matrix-panel-shell.collapsed.peeked {
+  flex-basis: var(--matrix-panel-peek-width);
+  width: var(--matrix-panel-peek-width);
 }
 
 .matrix-panel-content {
@@ -741,6 +748,12 @@ button.active {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
+}
+
+.matrix-panel-shell.collapsed.peeked .matrix-panel-content {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .matrix-panel-toggle {
@@ -786,6 +799,10 @@ button.active {
   letter-spacing: 0.8px;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+.matrix-panel-shell.collapsed.peeked::after {
+  content: none;
 }
 
 .matrix-left-panel.collapsed::after {
