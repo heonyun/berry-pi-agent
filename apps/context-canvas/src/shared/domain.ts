@@ -349,6 +349,7 @@ export interface MatrixGroup {
   readonly label: string;
   readonly range: RangeRefDTO;
   readonly source: "auto";
+  readonly labelOffset?: Vec2;
   readonly dismissed?: boolean;
 }
 

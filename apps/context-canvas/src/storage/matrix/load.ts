@@ -66,6 +66,7 @@ export function loadMatrixBundle(bundleRoot: string): LoadResult {
   const groups = new Map(
     (Array.isArray(manifest.groups) ? manifest.groups : [])
       .filter((entry): entry is MatrixGroup => isValidManifestGroup(entry, manifest.rows, manifest.cols))
+      .map((entry) => normalizeManifestGroup(entry))
       .map((entry) => [entry.id, entry] as const),
   );
   const customColumnLabels = new Map(
@@ -142,6 +143,31 @@ function isValidManifestGroup(
     value.range.endCol >= value.range.startCol &&
     value.range.endRow < rows &&
     value.range.endCol < cols
+  );
+}
+
+function normalizeManifestGroup(group: MatrixGroup): MatrixGroup {
+  if (isValidGroupLabelOffset(group.labelOffset)) {
+    return group;
+  }
+  const { labelOffset: _labelOffset, ...groupWithoutOffset } = group;
+  return groupWithoutOffset;
+}
+
+function isValidGroupLabelOffset(offset: unknown): offset is NonNullable<MatrixGroup["labelOffset"]> | undefined {
+  if (offset === undefined) {
+    return true;
+  }
+  // CONTRACT: Bundle input is parsed JSON, so invalid optional offsets must fail closed.
+  if (offset === null || typeof offset !== "object") {
+    return false;
+  }
+  const candidate = offset as { readonly x?: unknown; readonly y?: unknown };
+  return (
+    typeof candidate.x === "number" &&
+    Number.isFinite(candidate.x) &&
+    typeof candidate.y === "number" &&
+    Number.isFinite(candidate.y)
   );
 }
 

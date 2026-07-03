@@ -62,6 +62,7 @@ function sampleMatrixDocument(): MatrixDocument {
         label: "Sample group",
         range: { startRow: 0, startCol: 0, endRow: 0, endCol: 1 },
         source: "auto" as const,
+        labelOffset: { x: 18, y: -10 },
       },
     ],
   ]);
@@ -251,6 +252,7 @@ describe("loadMatrixBundle", () => {
     projectMatrixToBundle(sampleMatrixDocument(), bundleRoot);
     const sidecarPath = path.join(bundleRoot, MATRIX_SIDECAR);
     const manifest = JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
+    manifest.groups[0].labelOffset = null;
     manifest.groups = [
       ...manifest.groups,
       { id: "", label: "Bad", source: "auto", range: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 } },
@@ -262,6 +264,7 @@ describe("loadMatrixBundle", () => {
 
     expect(loaded.document?.groups.size).toBe(1);
     expect(loaded.document?.groups.get("auto:A1:B1")?.label).toBe("Sample group");
+    expect(loaded.document?.groups.get("auto:A1:B1")?.labelOffset).toBeUndefined();
   });
 
   it("detects groups when loading a legacy manifest without groups", () => {

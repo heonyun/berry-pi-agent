@@ -288,6 +288,55 @@ export async function resizeMatrixRow(
   await page.mouse.up();
 }
 
+export async function dragFirstGroupLabel(
+  page: Page,
+  delta: { readonly x: number; readonly y: number },
+): Promise<{
+  readonly before: { readonly x: number; readonly y: number };
+  readonly after: { readonly x: number; readonly y: number };
+  readonly afterRelative: { readonly x: number; readonly y: number };
+}> {
+  const label = page.getByTestId(/matrix-group-label-/).first();
+  await expect(label).toBeVisible();
+  const beforeBox = await label.boundingBox();
+  expect(beforeBox).not.toBeNull();
+  if (!beforeBox) {
+    throw new Error("Group label has no bounding box");
+  }
+  const startX = beforeBox.x + beforeBox.width / 2;
+  const startY = beforeBox.y + beforeBox.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + delta.x, startY + delta.y, { steps: 6 });
+  await page.mouse.up();
+  const afterBox = await label.boundingBox();
+  expect(afterBox).not.toBeNull();
+  if (!afterBox) {
+    throw new Error("Group label has no bounding box after drag");
+  }
+  const afterRelative = await firstGroupLabelPositionInGrid(page);
+  return {
+    before: { x: beforeBox.x, y: beforeBox.y },
+    after: { x: afterBox.x, y: afterBox.y },
+    afterRelative,
+  };
+}
+
+export async function firstGroupLabelPositionInGrid(page: Page): Promise<{ readonly x: number; readonly y: number }> {
+  const label = page.getByTestId(/matrix-group-label-/).first();
+  const grid = page.getByTestId("matrix-grid");
+  const [labelBox, gridBox] = await Promise.all([label.boundingBox(), grid.boundingBox()]);
+  expect(labelBox).not.toBeNull();
+  expect(gridBox).not.toBeNull();
+  if (!labelBox || !gridBox) {
+    throw new Error("Group label or grid has no bounding box");
+  }
+  return {
+    x: labelBox.x - gridBox.x,
+    y: labelBox.y - gridBox.y,
+  };
+}
+
 export async function expectStoredRowHeight(
   page: Page,
   row: number,

@@ -387,6 +387,36 @@ describe("applyMatrixCommand", () => {
       expect(renamed.meta.message).toContain("Research pair");
     });
 
+    it("stores group label offsets and preserves them across auto group recompute", () => {
+      let doc = createEmptyMatrixDocument({ withResearchTemplate: false });
+      doc = applyMatrixCommand(doc, {
+        type: "apply_patches",
+        patches: [
+          { row: 0, col: 0, value: null, body: "Question" },
+          { row: 0, col: 1, value: null, body: "Answer" },
+        ],
+      }).document;
+      const group = [...doc.groups.values()][0]!;
+
+      const moved = applyMatrixCommand(doc, {
+        type: "set_group_label_offset",
+        id: group.id,
+        offset: { x: 18.4, y: -9.6 },
+      });
+
+      expect(moved.document.groups.get(group.id)?.labelOffset).toEqual({ x: 18, y: -10 });
+      expect(moved.meta.message).toContain("Group label moved");
+
+      const recomputed = applyMatrixCommand(moved.document, {
+        type: "update_cell_body",
+        row: 1,
+        col: 1,
+        body: "More context",
+      });
+
+      expect([...recomputed.document.groups.values()][0]?.labelOffset).toEqual({ x: 18, y: -10 });
+    });
+
     it("ignores unknown or blank group label commands without changing the document", () => {
       let doc = createEmptyMatrixDocument({ withResearchTemplate: false });
       doc = applyMatrixCommand(doc, {
