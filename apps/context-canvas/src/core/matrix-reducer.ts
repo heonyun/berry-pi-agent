@@ -148,7 +148,7 @@ export function applyMatrixCommand(
         };
       }
       const hasCollision = [...(document.groups ?? new Map()).values()].some(
-        (candidate) => candidate.id !== group.id && candidate.label.trim() === label,
+        (candidate) => candidate.id !== group.id && !candidate.dismissed && candidate.label.trim() === label,
       );
       if (hasCollision) {
         return {

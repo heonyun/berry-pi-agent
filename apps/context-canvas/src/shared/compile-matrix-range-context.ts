@@ -69,9 +69,10 @@ function findGroupByLabel(document: MatrixDocument, label: string): MatrixGroup 
 }
 
 function resolveContextRange(document: MatrixDocument, entry: MatrixContextRange): MatrixContextRange {
-  const group = entry.groupId
-    ? (document.groups ?? new Map()).get(entry.groupId)
-    : findGroupByLabel(document, entry.label);
+  let group = entry.groupId ? (document.groups ?? new Map()).get(entry.groupId) : undefined;
+  if (!group) {
+    group = findGroupByLabel(document, entry.label);
+  }
   if (!group || group.dismissed) {
     return entry;
   }

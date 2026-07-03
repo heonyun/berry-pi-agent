@@ -475,6 +475,40 @@ describe("applyMatrixCommand", () => {
       expect(result.meta.message).toBe("Group label already exists: Research inputs");
     });
 
+    it("allows active groups to reuse dismissed group labels", () => {
+      let doc = createEmptyMatrixDocument({ withResearchTemplate: false });
+      doc = applyMatrixCommand(doc, {
+        type: "apply_patches",
+        patches: [
+          { row: 0, col: 0, value: null, body: "Left A" },
+          { row: 0, col: 1, value: null, body: "Left B" },
+          { row: 0, col: 4, value: null, body: "Right A" },
+          { row: 0, col: 5, value: null, body: "Right B" },
+        ],
+      }).document;
+      const groups = [...doc.groups.values()];
+      const left = groups.find((group) => group.range.startCol === 0)!;
+      const right = groups.find((group) => group.range.startCol === 4)!;
+      doc = applyMatrixCommand(doc, {
+        type: "set_group_label",
+        id: left.id,
+        label: "Archived",
+      }).document;
+      doc = {
+        ...doc,
+        groups: new Map(doc.groups).set(left.id, { ...doc.groups.get(left.id)!, dismissed: true }),
+      };
+
+      const result = applyMatrixCommand(doc, {
+        type: "set_group_label",
+        id: right.id,
+        label: "Archived",
+      });
+
+      expect(result.document.groups.get(right.id)?.label).toBe("Archived");
+      expect(result.meta.message).toBe("Group label updated: Archived");
+    });
+
     it("set_column_width persists clamped width for in-bounds columns", () => {
       const doc = createEmptyMatrixDocument();
       const result = applyMatrixCommand(doc, { type: "set_column_width", col: 0, width: 180 });
