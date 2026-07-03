@@ -137,6 +137,8 @@ export function MatrixCanvas(): ReactElement {
   const [groupLabelDraft, setGroupLabelDraft] = useState("");
   const [referenceEdit, setReferenceEdit] = useState<ReferenceEditState | null>(null);
   const [panelLayout, setPanelLayout] = useState(() => loadMatrixPanelLayout());
+  const [leftPanelPeeked, setLeftPanelPeeked] = useState(false);
+  const [rightPanelPeeked, setRightPanelPeeked] = useState(false);
 
   const [historyEntries, setHistoryEntries] = useState<MatrixHistoryEntry[]>(() => loadMatrixHistory());
   const [selectedHistory, setSelectedHistory] = useState<MatrixHistoryEntry | null>(null);
@@ -370,6 +372,7 @@ export function MatrixCanvas(): ReactElement {
   }, [detailCell, detailFrontmatter, document]);
 
   const toggleLeftPanel = useCallback(() => {
+    setLeftPanelPeeked(false);
     setPanelLayout((current) => {
       const next = { ...current, leftCollapsed: !current.leftCollapsed };
       saveMatrixPanelLayout(next);
@@ -378,6 +381,7 @@ export function MatrixCanvas(): ReactElement {
   }, []);
 
   const toggleRightPanel = useCallback(() => {
+    setRightPanelPeeked(false);
     setPanelLayout((current) => {
       const next = { ...current, rightCollapsed: !current.rightCollapsed };
       saveMatrixPanelLayout(next);
@@ -968,8 +972,12 @@ export function MatrixCanvas(): ReactElement {
     <MatrixShell
       leftCollapsed={panelLayout.leftCollapsed}
       rightCollapsed={panelLayout.rightCollapsed}
+      leftPeeked={leftPanelPeeked}
+      rightPeeked={rightPanelPeeked}
       onToggleLeft={toggleLeftPanel}
       onToggleRight={toggleRightPanel}
+      onLeftPeekChange={setLeftPanelPeeked}
+      onRightPeekChange={setRightPanelPeeked}
       leftNav={
         <MatrixLeftNav
           groups={groups}

@@ -663,6 +663,67 @@ test.describe("Feature: Collapsible side panel rails", () => {
     await expect(page.getByRole("button", { name: "Show detail panel" })).toBeVisible();
   });
 
+  test("Scenario: Hovering a collapsed left rail peeks the panel without persisting it", async ({
+    page,
+  }) => {
+    await page.getByRole("button", { name: "Collapse groups/history panel" }).click();
+    const collapsedWidth = await gridWidth(page);
+
+    const leftPanel = page.getByTestId("matrix-left-panel");
+    await expect(leftPanel).toHaveAttribute("data-collapsed", "true");
+    await expect(leftPanel).toHaveAttribute("data-peeked", "false");
+    await expect(page.getByTestId("matrix-group-nav")).toBeHidden();
+
+    await leftPanel.hover();
+
+    await expect(leftPanel).toHaveAttribute("data-collapsed", "true");
+    await expect(leftPanel).toHaveAttribute("data-peeked", "true");
+    await expect(page.getByTestId("matrix-group-nav")).toBeVisible();
+    await expect.poll(() => gridWidth(page)).toBeLessThan(collapsedWidth - 100);
+
+    await page.getByTestId("matrix-grid").hover();
+
+    await expect(leftPanel).toHaveAttribute("data-collapsed", "true");
+    await expect(leftPanel).toHaveAttribute("data-peeked", "false");
+    await expect(page.getByTestId("matrix-group-nav")).toBeHidden();
+
+    await page.reload();
+    await expect(page.getByTestId("matrix-grid")).toBeVisible();
+    await expect(page.getByTestId("matrix-left-panel")).toHaveAttribute("data-collapsed", "true");
+    await expect(page.getByTestId("matrix-left-panel")).toHaveAttribute("data-peeked", "false");
+  });
+
+  test("Scenario: Hovering a collapsed right rail peeks the detail panel", async ({ page }) => {
+    await clickMatrixCell(page, "C1");
+    await expect(page.getByTestId("matrix-detail-pane")).toContainText("Cell C1");
+    await page.getByRole("button", { name: "Collapse detail panel" }).click();
+    const collapsedWidth = await gridWidth(page);
+
+    const rightPanel = page.getByTestId("matrix-right-panel");
+    await expect(rightPanel).toHaveAttribute("data-collapsed", "true");
+    await expect(rightPanel).toHaveAttribute("data-peeked", "false");
+    await expect(page.getByTestId("matrix-detail-pane")).toBeHidden();
+
+    await rightPanel.hover();
+
+    await expect(rightPanel).toHaveAttribute("data-collapsed", "true");
+    await expect(rightPanel).toHaveAttribute("data-peeked", "true");
+    await expect(page.getByTestId("matrix-detail-pane")).toBeVisible();
+    await expect(page.getByTestId("matrix-detail-pane")).toContainText("Cell C1");
+    await expect.poll(() => gridWidth(page)).toBeLessThan(collapsedWidth - 180);
+
+    await page.getByTestId("matrix-grid").hover();
+
+    await expect(rightPanel).toHaveAttribute("data-collapsed", "true");
+    await expect(rightPanel).toHaveAttribute("data-peeked", "false");
+    await expect(page.getByTestId("matrix-detail-pane")).toBeHidden();
+
+    await page.reload();
+    await expect(page.getByTestId("matrix-grid")).toBeVisible();
+    await expect(page.getByTestId("matrix-right-panel")).toHaveAttribute("data-collapsed", "true");
+    await expect(page.getByTestId("matrix-right-panel")).toHaveAttribute("data-peeked", "false");
+  });
+
   test("Scenario: Column width resize persists across reload", async ({ page }) => {
     await resizeMatrixColumn(page, "A", 60);
 
