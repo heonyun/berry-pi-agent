@@ -259,12 +259,14 @@ export function MatrixCanvas(): ReactElement {
   const [selectedHistory, setSelectedHistory] = useState<MatrixHistoryEntry | null>(null);
   const [restoredHistoryId, setRestoredHistoryId] = useState<string | null>(null);
   const restoreSourceRef = useRef<RestoreSourceState | null>(null);
+  const historyEntriesRef = useRef(historyEntries);
   const storedGroupLabelOffsetsRef = useRef(loadMatrixGroupLabelOffsets());
   const activeMatrixRunsRef = useRef(0);
 
   const groups = useMemo(() => visibleMatrixGroups(document), [document]);
 
   useEffect(() => {
+    historyEntriesRef.current = historyEntries;
     saveMatrixHistory(historyEntries);
   }, [historyEntries]);
 
@@ -373,11 +375,10 @@ export function MatrixCanvas(): ReactElement {
           patchesSummary: summarizePatches(boundCommand),
           snapshot: createMatrixHistorySnapshot(result.document),
         });
-        setHistoryEntries((current) => {
-          const nextHistory = appendMatrixHistory(current, historyEntry);
-          scheduleMatrixBundleExport(docRef.current, nextHistory);
-          return nextHistory;
-        });
+        const nextHistory = appendMatrixHistory(historyEntriesRef.current, historyEntry);
+        historyEntriesRef.current = nextHistory;
+        setHistoryEntries(nextHistory);
+        scheduleMatrixBundleExport(docRef.current, nextHistory);
         setDetailCell(null);
         setDetailFrontmatter("");
         setSelectedHistory(historyEntry);
@@ -810,11 +811,10 @@ export function MatrixCanvas(): ReactElement {
           patchesSummary: summarizePatches(boundCommand),
           snapshot: createMatrixHistorySnapshot(result.document),
         });
-        setHistoryEntries((current) => {
-          const nextHistory = appendMatrixHistory(current, historyEntry);
-          scheduleMatrixBundleExport(docRef.current, nextHistory);
-          return nextHistory;
-        });
+        const nextHistory = appendMatrixHistory(historyEntriesRef.current, historyEntry);
+        historyEntriesRef.current = nextHistory;
+        setHistoryEntries(nextHistory);
+        scheduleMatrixBundleExport(docRef.current, nextHistory);
         setDetailCell(null);
         setDetailFrontmatter("");
         setSelectedHistory(historyEntry);
