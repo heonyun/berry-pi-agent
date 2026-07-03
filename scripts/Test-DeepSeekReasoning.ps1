@@ -204,7 +204,7 @@ if (-not $apiKey) {
 }
 
 $model = if ($env:DEEPSEEK_MODEL) { $env:DEEPSEEK_MODEL } else { 'deepseek-v4-flash' }
-$effort = if ($env:DEEPSEEK_REASONING_EFFORT) { $env:DEEPSEEK_REASONING_EFFORT.ToLowerInvariant() } else { 'high' }
+$effort = if ($env:DEEPSEEK_REASONING_EFFORT) { $env:DEEPSEEK_REASONING_EFFORT.ToLowerInvariant() } else { 'max' }
 if ($effort -in @('off', 'disabled', 'none', 'false', '0')) {
     Write-Host "SKIP: DEEPSEEK_REASONING_EFFORT=$effort disables thinking; set high or max for this test"
     exit 0

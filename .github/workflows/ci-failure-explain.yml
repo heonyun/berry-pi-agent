@@ -1,6 +1,6 @@
 # Post CI failure analysis comments when the Verify workflow fails on a PR.
 # Secret: DEEPSEEK_V4 (API key). Variable: DEEPSEEK_V4 (model name).
-# DEEPSEEK_REASONING_EFFORT default high (thinking enabled; set off to disable).
+# DEEPSEEK_REASONING_EFFORT default max (thinking enabled; set off to disable).
 
 name: CI Failure Explain
 
@@ -78,6 +78,7 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_V4 }}
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_V4 || 'deepseek-v4-flash' }}
+          DEEPSEEK_REASONING_EFFORT: max
           GH_TOKEN: ${{ github.token }}
           WORKFLOW_RUN_ID: ${{ needs.dispatch.outputs.run_id }}
           WORKFLOW_RUN_HEAD_SHA: ${{ needs.dispatch.outputs.head_sha }}

@@ -453,7 +453,7 @@ agent_pr_failed_ci_logs() {
 }
 
 # DeepSeek V4 thinking mode ignores temperature/top_p/penalties (no API error).
-# DEEPSEEK_REASONING_EFFORT: high (default) | max | off
+# DEEPSEEK_REASONING_EFFORT: max (default) | high | off
 agent_deepseek_write_payload() {
   local payload_file="${1:?payload file required}"
   local model="${2:?model required}"
@@ -461,7 +461,7 @@ agent_deepseek_write_payload() {
   local user="${4:?user required}"
   local temperature="${5:-0.2}"
 
-  local effort_raw="${DEEPSEEK_REASONING_EFFORT:-high}"
+  local effort_raw="${DEEPSEEK_REASONING_EFFORT:-max}"
   effort_raw="$(printf '%s' "${effort_raw}" | tr '[:upper:]' '[:lower:]')"
 
   case "${effort_raw}" in
