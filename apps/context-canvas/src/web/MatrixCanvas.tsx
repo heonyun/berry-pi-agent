@@ -74,6 +74,121 @@ function rangeLabelForSelection(document: MatrixDocument, range: RangeRefDTO): s
     : formatRangeLabel(range.startCol, range.startRow, range.endCol, range.endRow);
 }
 
+const CELL_REFERENCE_PROMPT =
+  "Answer using only the referenced matrix context. Write the answer into this formula cell.";
+
+interface CellReferenceFormula {
+  readonly label: string;
+  readonly range: RangeRefDTO;
+  readonly groupId?: string;
+}
+
+function parseColumnLabel(label: string): number | null {
+  if (!/^[A-Z]+$/.test(label)) {
+    return null;
+  }
+  let col = 0;
+  for (const char of label) {
+    col = col * 26 + (char.charCodeAt(0) - 64);
+  }
+  return col - 1;
+}
+
+function parseCellAddress(address: string): { readonly row: number; readonly col: number } | null {
+  const match = /^([A-Z]+)([1-9]\d*)$/.exec(address.trim().toUpperCase());
+  if (!match) {
+    return null;
+  }
+  const col = parseColumnLabel(match[1] ?? "");
+  const row = Number(match[2]) - 1;
+  if (col === null || !Number.isInteger(row)) {
+    return null;
+  }
+  return { row, col };
+}
+
+function parseA1Reference(token: string, document: MatrixDocument): CellReferenceFormula | null {
+  const parts = token.split(":");
+  if (parts.length > 2) {
+    return null;
+  }
+  const startToken = parts[0];
+  const endToken = parts[1] ?? startToken;
+  if (!startToken || !endToken) {
+    return null;
+  }
+  const start = parseCellAddress(startToken);
+  const end = parseCellAddress(endToken);
+  if (!start || !end) {
+    return null;
+  }
+  const range: RangeRefDTO = {
+    startRow: Math.min(start.row, end.row),
+    startCol: Math.min(start.col, end.col),
+    endRow: Math.max(start.row, end.row),
+    endCol: Math.max(start.col, end.col),
+  };
+  if (
+    range.startRow < 0 ||
+    range.startCol < 0 ||
+    range.endRow >= document.sheet.rows ||
+    range.endCol >= document.sheet.cols
+  ) {
+    return null;
+  }
+  return {
+    label: formatRangeLabel(range.startCol, range.startRow, range.endCol, range.endRow),
+    range,
+  };
+}
+
+function findNamedRangeByFormulaToken(
+  document: MatrixDocument,
+  token: string,
+): CellReferenceFormula | null {
+  const normalized = token.slice(1).trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  for (const named of document.namedRanges.values()) {
+    if (named.name.trim().toLowerCase() === normalized) {
+      return { label: `@${named.name}`, range: named.range };
+    }
+  }
+  return null;
+}
+
+function resolveCellReferenceFormula(
+  document: MatrixDocument,
+  body: string,
+): CellReferenceFormula | null {
+  if (!body.startsWith("=") || body === "=") {
+    return null;
+  }
+  const token = body.slice(1).trim();
+  if (!token) {
+    return null;
+  }
+
+  const a1Reference = parseA1Reference(token, document);
+  if (a1Reference) {
+    return a1Reference;
+  }
+
+  if (token.startsWith("@")) {
+    return findNamedRangeByFormulaToken(document, token);
+  }
+
+  const matchingGroups = [...document.groups.values()].filter(
+    (group) => !group.dismissed && group.label.trim() === token,
+  );
+  if (matchingGroups.length !== 1) {
+    return null;
+  }
+  const [group] = matchingGroups;
+  return { label: group.label, range: group.range, groupId: group.id };
+}
+
 function nextChipId(): string {
   return `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -145,6 +260,7 @@ export function MatrixCanvas(): ReactElement {
   const [restoredHistoryId, setRestoredHistoryId] = useState<string | null>(null);
   const restoreSourceRef = useRef<RestoreSourceState | null>(null);
   const storedGroupLabelOffsetsRef = useRef(loadMatrixGroupLabelOffsets());
+  const activeMatrixRunsRef = useRef(0);
 
   const groups = useMemo(() => visibleMatrixGroups(document), [document]);
 
@@ -186,6 +302,101 @@ export function MatrixCanvas(): ReactElement {
     return result;
   }, []);
 
+  const beginMatrixRun = useCallback(() => {
+    activeMatrixRunsRef.current += 1;
+    setIsRunning(true);
+  }, []);
+
+  const finishMatrixRun = useCallback(() => {
+    activeMatrixRunsRef.current = Math.max(0, activeMatrixRunsRef.current - 1);
+    if (activeMatrixRunsRef.current === 0) {
+      setIsRunning(false);
+    }
+  }, []);
+
+  const runCellReferenceFormula = useCallback(
+    async (
+      row: number,
+      col: number,
+      body: string,
+      reference: CellReferenceFormula,
+      contextDocument: MatrixDocument,
+    ) => {
+      const target: RangeRefDTO = { startRow: row, startCol: col, endRow: row, endCol: col };
+      const targetLabel = rangeLabelForSelection(contextDocument, target);
+      const formulaCellKey = cellKey(row, col);
+      const formulaBody = body;
+      beginMatrixRun();
+      setStatus(`Running cell reference: ${reference.label}`);
+      try {
+        const contextRanges: MatrixContextRange[] = [
+          { label: reference.label, range: reference.range, groupId: reference.groupId },
+        ];
+        const compiled = compileMatrixRangeContext(
+          contextDocument,
+          contextRanges,
+          target,
+          CELL_REFERENCE_PROMPT,
+        );
+        const response = await runMatrix({
+          prompt: CELL_REFERENCE_PROMPT,
+          targetRange: target,
+          compiled,
+        });
+
+        const parsed = parseAiCommand(response.command);
+        if (!parsed.ok) {
+          setStatus(`Cell reference validation failed: ${parsed.errors.message}`);
+          return;
+        }
+
+        const currentBody = docRef.current.sheet.cells.get(formulaCellKey)?.body ?? "";
+        if (currentBody !== formulaBody) {
+          // INVARIANT: an async reference run must not overwrite a later user edit.
+          setStatus("Cell reference skipped: formula cell changed");
+          return;
+        }
+
+        const { command: boundCommand, strippedCount } = bindAiCommandToUserTarget(
+          parsed.command,
+          target,
+        );
+        const result = dispatch({ type: "apply_ai_command", command: boundCommand });
+
+        const historyEntry = createHistoryEntry({
+          intent: CELL_REFERENCE_PROMPT,
+          contextRanges,
+          targetRange: target,
+          targetRangeLabel: targetLabel ?? compiled.targetRangeLabel,
+          patchesApplied: result.meta.updatedCells,
+          compiledContextPreview: truncatePreview(compiled.contextText),
+          patchesSummary: summarizePatches(boundCommand),
+          snapshot: createMatrixHistorySnapshot(result.document),
+        });
+        setHistoryEntries((current) => {
+          const nextHistory = appendMatrixHistory(current, historyEntry);
+          scheduleMatrixBundleExport(docRef.current, nextHistory);
+          return nextHistory;
+        });
+        setDetailCell(null);
+        setDetailFrontmatter("");
+        setSelectedHistory(historyEntry);
+
+        let message = `Cell reference applied: ${result.meta.updatedCells} cells updated`;
+        if (strippedCount > 0) {
+          message += ` — ${strippedCount} patch(es) outside target range skipped`;
+        }
+        setStatus(message);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        setStatus(`Cell reference failed: ${message}`);
+      } finally {
+        finishMatrixRun();
+      }
+    },
+    [beginMatrixRun, dispatch, finishMatrixRun],
+  );
+
   const groupOffsetRestoreKey = useMemo(
     () =>
       groups
@@ -223,11 +434,12 @@ export function MatrixCanvas(): ReactElement {
   );
 
   const insertReferenceToken = useCallback(
-    (token: string) => {
+    (token: string, referenceOverride?: CellReferenceFormula) => {
       if (!referenceEdit || token.length === 0) {
         return false;
       }
       const body = `=${token}`;
+      const contextDocument = docRef.current;
       const originFrontmatter =
         docRef.current.sheet.cells.get(cellKey(referenceEdit.row, referenceEdit.col))?.frontmatter ?? "";
       dispatch({ type: "update_cell_body", row: referenceEdit.row, col: referenceEdit.col, body });
@@ -235,9 +447,19 @@ export function MatrixCanvas(): ReactElement {
       setDetailFrontmatter(originFrontmatter);
       setReferenceEdit(null);
       setStatus(`Reference inserted: ${token}`);
+      const reference = referenceOverride ?? resolveCellReferenceFormula(contextDocument, body);
+      if (reference) {
+        void runCellReferenceFormula(
+          referenceEdit.row,
+          referenceEdit.col,
+          body,
+          reference,
+          contextDocument,
+        );
+      }
       return true;
     },
-    [dispatch, referenceEdit],
+    [dispatch, referenceEdit, runCellReferenceFormula],
   );
 
   const handleSelectionChange = useCallback(
@@ -541,7 +763,7 @@ export function MatrixCanvas(): ReactElement {
       }
 
       const runTargetLabel = rangeLabelForSelection(docRef.current, runTargetRange);
-      setIsRunning(true);
+      beginMatrixRun();
       setStatus("Running matrix AI...");
       try {
         const contextRanges: MatrixContextRange[] = runContextChips.map((chip) => ({
@@ -588,9 +810,11 @@ export function MatrixCanvas(): ReactElement {
           patchesSummary: summarizePatches(boundCommand),
           snapshot: createMatrixHistorySnapshot(result.document),
         });
-        const nextHistory = appendMatrixHistory(historyEntries, historyEntry);
-        setHistoryEntries(nextHistory);
-        scheduleMatrixBundleExport(docRef.current, nextHistory);
+        setHistoryEntries((current) => {
+          const nextHistory = appendMatrixHistory(current, historyEntry);
+          scheduleMatrixBundleExport(docRef.current, nextHistory);
+          return nextHistory;
+        });
         setDetailCell(null);
         setDetailFrontmatter("");
         setSelectedHistory(historyEntry);
@@ -604,10 +828,10 @@ export function MatrixCanvas(): ReactElement {
         const message = error instanceof Error ? error.message : String(error);
         setStatus(`Run failed: ${message}`);
       } finally {
-        setIsRunning(false);
+        finishMatrixRun();
       }
     },
-    [dispatch, historyEntries, prompt],
+    [beginMatrixRun, dispatch, finishMatrixRun, prompt],
   );
 
   const handleRun = useCallback(async () => {
@@ -746,6 +970,8 @@ export function MatrixCanvas(): ReactElement {
 
   const handleCellEdited = useCallback(
     (row: number, col: number, body: string) => {
+      const contextDocument = docRef.current;
+      const reference = resolveCellReferenceFormula(contextDocument, body);
       dispatch({ type: "update_cell_body", row, col, body });
       setDetailCell({ row, col, body });
       const label = `${formatColumnLabel(col)}${row + 1}`;
@@ -758,9 +984,13 @@ export function MatrixCanvas(): ReactElement {
       if (referenceEdit) {
         setReferenceEdit(null);
       }
+      if (reference) {
+        void runCellReferenceFormula(row, col, body, reference, contextDocument);
+        return;
+      }
       setStatus(`Cell ${label} updated`);
     },
-    [dispatch, referenceEdit],
+    [dispatch, referenceEdit, runCellReferenceFormula],
   );
 
   const handleCellsEdited = useCallback(
@@ -911,7 +1141,11 @@ export function MatrixCanvas(): ReactElement {
   // WHY: column headers use double-click to rename; single click selects only (#95).
   const handleGroupLabelClick = useCallback(
     (group: MatrixGroup, options: { readonly isDoubleClick: boolean }) => {
-      if (!options.isDoubleClick && insertReferenceToken(group.label.trim())) {
+      const label = group.label.trim();
+      if (
+        !options.isDoubleClick &&
+        insertReferenceToken(label, { label, range: group.range, groupId: group.id })
+      ) {
         return;
       }
       if (options.isDoubleClick) {

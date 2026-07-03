@@ -13,18 +13,28 @@ import {
 import type { MatrixGridSelectionState } from "./MatrixGrid.tsx";
 import { createHistoryEntry, loadMatrixHistory, saveMatrixHistory } from "./matrix-history.ts";
 import { MatrixCanvas } from "./MatrixCanvas.tsx";
+import { runMatrix } from "./run-matrix.ts";
 
 vi.mock("./run-matrix.ts", () => ({
-  runMatrix: vi.fn().mockResolvedValue({
+  runMatrix: vi.fn(),
+}));
+
+function defaultRunMatrixResponse(request: Parameters<typeof runMatrix>[0]) {
+  return Promise.resolve({
     command: {
       intent: "test",
-      targetRange: { startRow: 0, startCol: 1, endRow: 1, endCol: 2 },
+      targetRange: request.targetRange,
       patches: [
-        { row: 0, col: 1, value: "text", body: "Hello, World!" },
+        {
+          row: request.targetRange.startRow,
+          col: request.targetRange.startCol,
+          value: "text",
+          body: "Hello, World!",
+        },
       ],
     },
-  }),
-}));
+  });
+}
 
 vi.mock("./MatrixGrid.tsx", () => ({
   MatrixGrid: ({
@@ -61,6 +71,12 @@ vi.mock("./MatrixGrid.tsx", () => ({
       </button>
       <button type="button" onClick={() => onCellEdited(0, 0, "=SUM(B1:C2)")}>
         edit formula
+      </button>
+      <button type="button" onClick={() => onCellEdited(0, 0, "=B1:C2")}>
+        edit range formula
+      </button>
+      <button type="button" onClick={() => onCellEdited(0, 0, "=@inputs")}>
+        edit named formula
       </button>
       <button type="button" onClick={() => onSelectionChange(null)}>
         clear selection
@@ -126,6 +142,8 @@ describe("MatrixCanvas reference edit mode", () => {
 
   beforeEach(() => {
     localStorage.clear();
+    vi.clearAllMocks();
+    vi.mocked(runMatrix).mockImplementation(() => new Promise(() => undefined));
   });
 
   it("inserts a picked range into the equals cell", () => {
@@ -137,7 +155,7 @@ describe("MatrixCanvas reference edit mode", () => {
     fireEvent.click(screen.getByText("pick B1:C2"));
 
     expect(screen.getByTestId("cell-a1").textContent).toBe("=B1:C2");
-    expect(screen.getByText("Reference inserted: B1:C2")).toBeTruthy();
+    expect(screen.getByText("Running cell reference: B1:C2")).toBeTruthy();
   });
 
   it("inserts a group label token into the equals cell", () => {
@@ -148,7 +166,10 @@ describe("MatrixCanvas reference edit mode", () => {
     fireEvent.click(screen.getByText("group label Alpha"));
 
     expect(screen.getByTestId("cell-a1").textContent).toBe("=Alpha");
-    expect(screen.getByText("Reference inserted: Alpha")).toBeTruthy();
+    expect(screen.getByText("Running cell reference: Alpha")).toBeTruthy();
+    const request = vi.mocked(runMatrix).mock.calls[0]?.[0];
+    expect(request?.compiled.contextRangeLabels).toEqual(["Alpha (A1:B2)"]);
+    expect(request?.compiled.contextText).not.toContain("A1: =Alpha");
   });
 
   it("keeps a replayed origin selection from inserting a self-reference", () => {
@@ -218,6 +239,88 @@ describe("MatrixCanvas reference edit mode", () => {
   });
 });
 
+describe("MatrixCanvas cell reference AI formula", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    vi.mocked(runMatrix).mockImplementation(defaultRunMatrixResponse);
+  });
+
+  it("runs matrix AI for a picked range reference and writes the result into the formula cell", async () => {
+    render(<MatrixCanvas />);
+
+    fireEvent.click(screen.getByText("edit equals"));
+    fireEvent.click(screen.getByText("pick B1:C2"));
+
+    await screen.findByText("Running cell reference: B1:C2");
+    await screen.findByText("Cell reference applied: 1 cells updated");
+
+    expect(screen.getByTestId("cell-a1").textContent).toBe("Hello, World!");
+    expect(runMatrix).toHaveBeenCalledTimes(1);
+    const request = vi.mocked(runMatrix).mock.calls[0]?.[0];
+    expect(request?.targetRange).toEqual({ startRow: 0, startCol: 0, endRow: 0, endCol: 0 });
+    expect(request?.compiled.contextRangeLabels).toEqual(["B1:C2 (B1:C2)"]);
+    expect(request?.compiled.targetRangeLabel).toBe("A1:A1");
+  });
+
+  it("shows loading and failure status while preserving the formula for retry", async () => {
+    vi.mocked(runMatrix).mockRejectedValueOnce(new Error("Network down"));
+    render(<MatrixCanvas />);
+
+    fireEvent.click(screen.getByText("edit range formula"));
+
+    await screen.findByText("Running cell reference: B1:C2");
+    await screen.findByText("Cell reference failed: Network down");
+
+    expect(screen.getByTestId("cell-a1").textContent).toBe("=B1:C2");
+  });
+
+  it("runs matrix AI for a group label reference without compiling the formula cell as context", async () => {
+    render(<MatrixCanvas />);
+
+    fireEvent.click(screen.getByText("create group"));
+    fireEvent.click(screen.getByText("edit equals"));
+    fireEvent.click(screen.getByText("group label Alpha"));
+
+    await screen.findByText("Cell reference applied: 1 cells updated");
+
+    expect(screen.getByTestId("cell-a1").textContent).toBe("Hello, World!");
+    const request = vi.mocked(runMatrix).mock.calls[0]?.[0];
+    expect(request?.compiled.contextRangeLabels).toEqual(["Alpha (A1:B2)"]);
+    expect(request?.compiled.contextText).not.toContain("A1: =Alpha");
+  });
+
+  it("runs matrix AI for a named range reference", async () => {
+    render(<MatrixCanvas />);
+
+    fireEvent.click(screen.getByText("pick B1:C2"));
+    fireEvent.change(screen.getByTestId("matrix-range-name-input"), {
+      target: { value: "inputs" },
+    });
+    fireEvent.click(screen.getByTestId("matrix-name-range"));
+    fireEvent.click(screen.getByText("edit named formula"));
+
+    await screen.findByText("Cell reference applied: 1 cells updated");
+
+    expect(screen.getByTestId("cell-a1").textContent).toBe("Hello, World!");
+    const request = vi.mocked(runMatrix).mock.calls[0]?.[0];
+    expect(request?.compiled.contextRangeLabels).toEqual(["@inputs (B1:C2)"]);
+  });
+
+  it("does not run matrix AI for non-reference formulas", () => {
+    render(<MatrixCanvas />);
+
+    fireEvent.click(screen.getByText("edit formula"));
+
+    expect(runMatrix).not.toHaveBeenCalled();
+    expect(screen.getByTestId("cell-a1").textContent).toBe("=SUM(B1:C2)");
+  });
+});
+
 describe("MatrixCanvas AI run history snapshot", () => {
   afterEach(() => {
     cleanup();
@@ -226,6 +329,7 @@ describe("MatrixCanvas AI run history snapshot", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    vi.mocked(runMatrix).mockImplementation(defaultRunMatrixResponse);
   });
 
   it("includes a document snapshot in the history entry after a successful AI run", async () => {
