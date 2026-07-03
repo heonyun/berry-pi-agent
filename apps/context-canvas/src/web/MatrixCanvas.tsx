@@ -311,7 +311,7 @@ export function MatrixCanvas(): ReactElement {
       }
       setContextChips((chips) => [
         ...chips,
-        { id: nextChipId(), label: group.label, range: group.range },
+        { id: nextChipId(), label: group.label, range: group.range, groupId: group.id },
       ]);
       setStatus(`Context added: ${group.label}`);
     },
@@ -443,6 +443,7 @@ export function MatrixCanvas(): ReactElement {
         const contextRanges: MatrixContextRange[] = runContextChips.map((chip) => ({
           label: chip.label,
           range: chip.range,
+          groupId: chip.groupId,
         }));
 
         const compiled = compileMatrixRangeContext(

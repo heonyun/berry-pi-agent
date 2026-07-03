@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { applyMatrixCommand } from "../../core/matrix-reducer.ts";
 import {
   cellKey,
   createEmptyMatrixDocument,
@@ -160,6 +161,29 @@ describe("projectMatrixToBundle", () => {
     expect(manifestJson.groups).toEqual([]);
   });
 
+  it("stores detected stable group ids in the matrix sidecar", () => {
+    const bundleRoot = makeTempDir();
+    let document = createEmptyMatrixDocument({ withResearchTemplate: false });
+    document = applyMatrixCommand(document, {
+      type: "apply_patches",
+      patches: [
+        { row: 0, col: 0, value: null, body: "Alpha" },
+        { row: 0, col: 1, value: null, body: "Beta" },
+      ],
+    }).document;
+    const group = [...document.groups.values()][0]!;
+
+    projectMatrixToBundle(document, bundleRoot);
+    const manifestJson = JSON.parse(
+      fs.readFileSync(path.join(bundleRoot, MATRIX_SIDECAR), "utf8"),
+    );
+    const loaded = loadMatrixBundle(bundleRoot);
+
+    expect(group.id).toMatch(/^auto:group-\d+$/);
+    expect(manifestJson.groups[0]?.id).toBe(group.id);
+    expect(loaded.document?.groups.get(group.id)?.id).toBe(group.id);
+  });
+
   it("omits cell files for empty sparse map entries", () => {
     const bundleRoot = makeTempDir();
     const document = createEmptyMatrixDocument({ withResearchTemplate: false });
@@ -278,7 +302,9 @@ describe("loadMatrixBundle", () => {
     const loaded = loadMatrixBundle(bundleRoot);
 
     expect(loaded.document?.groups.size).toBe(1);
-    expect(loaded.document?.groups.get("auto:A1:B1")?.label).toBe("Cell A1 body");
+    const group = [...(loaded.document?.groups.values() ?? [])][0];
+    expect(group?.id).toMatch(/^auto:group-\d+$/);
+    expect(group?.label).toBe("Cell A1 body");
   });
 
   it("reports forward-slash bundle-relative paths from projection", () => {

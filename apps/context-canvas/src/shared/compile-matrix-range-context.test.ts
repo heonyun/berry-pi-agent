@@ -106,6 +106,40 @@ describe("compileMatrixRangeContext", () => {
     expect(withContext.contextText).toContain("group: Alpha pair");
   });
 
+  it("resolves group context by stable id after the group range changes", () => {
+    let document = createEmptyMatrixDocument();
+    document = applyMatrixCommand(document, {
+      type: "apply_patches",
+      patches: [
+        { row: 0, col: 0, value: "a", body: "Alpha" },
+        { row: 0, col: 1, value: "b", body: "Beta" },
+      ],
+    }).document;
+    const group = [...document.groups.values()][0]!;
+    document = applyMatrixCommand(document, {
+      type: "set_group_label",
+      id: group.id,
+      label: "Alpha pair",
+    }).document;
+    document = applyMatrixCommand(document, {
+      type: "update_cell_body",
+      row: 1,
+      col: 1,
+      body: "Gamma",
+    }).document;
+
+    const compiled = compileMatrixRangeContext(
+      document,
+      [{ label: "Alpha pair", range: group.range, groupId: group.id }],
+      { startRow: 2, startCol: 2, endRow: 2, endCol: 2 },
+      "Summarize",
+    );
+
+    expect(compiled.contextText).toContain("## Alpha pair (A1:B2)");
+    expect(compiled.contextText).toContain("B2: Gamma");
+    expect(compiled.contextText).toContain("group: Alpha pair");
+  });
+
   it("does not include group metadata for intersecting non-group context ranges", () => {
     let document = createEmptyMatrixDocument();
     document = applyMatrixCommand(document, {
