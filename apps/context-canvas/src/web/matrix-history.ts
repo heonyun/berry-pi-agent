@@ -31,6 +31,7 @@ export function createMatrixHistorySnapshot(document: MatrixDocument): MatrixHis
     ...(group.dismissed !== undefined ? { dismissed: group.dismissed } : {}),
   }));
 
+  // WHY: Measure the full snapshot first so oversized payloads can drop cells before storage.
   const snapshot = {
     // schemaVersion typed as literal 1 for MatrixHistorySnapshot
     schemaVersion: 1 as const,
@@ -47,12 +48,27 @@ export function createMatrixHistorySnapshot(document: MatrixDocument): MatrixHis
 
   const serialized = JSON.stringify(snapshot);
   const serializedBytes = new TextEncoder().encode(serialized).length;
-  const truncated = serializedBytes > MATRIX_SNAPSHOT_MAX_BYTES;
+
+  if (serializedBytes > MATRIX_SNAPSHOT_MAX_BYTES) {
+    // WHY: Preserve structural metadata while preventing runaway localStorage writes.
+    const prunedSnapshot = {
+      ...snapshot,
+      cells: [],
+    };
+    const prunedSerialized = JSON.stringify(prunedSnapshot);
+    const prunedSerializedBytes = new TextEncoder().encode(prunedSerialized).length;
+
+    return {
+      ...prunedSnapshot,
+      serializedBytes: prunedSerializedBytes,
+      truncated: true,
+    };
+  }
 
   return {
     ...snapshot,
     serializedBytes,
-    truncated,
+    truncated: false,
   };
 }
 

@@ -10,7 +10,7 @@ import {
   summarizePatches,
   truncatePreview,
 } from "./matrix-history.ts";
-import { createEmptyMatrixDocument } from "../shared/domain.ts";
+import { createEmptyMatrixDocument, type Cell, type MatrixGroup } from "../shared/domain.ts";
 
 describe("matrix-history", () => {
   beforeEach(() => {
@@ -166,6 +166,38 @@ describe("createMatrixHistorySnapshot", () => {
     expect(snapshot.serializedBytes).toBeGreaterThan(0);
     expect(typeof snapshot.truncated).toBe("boolean");
     expect(snapshot.truncated).toBe(false);
+  });
+
+  it("prunes cells when serialized size exceeds MATRIX_SNAPSHOT_MAX_BYTES", () => {
+    const doc = createEmptyMatrixDocument({ withResearchTemplate: false });
+    // WHY: Oversized snapshots must shrink before localStorage persistence, not only report metadata.
+    const bigBody = "x".repeat(50000);
+    const cells = doc.sheet.cells as Map<string, Cell>;
+    for (let i = 0; i < 100; i++) {
+      for (let j = 0; j < 10; j++) {
+        cells.set(`${i},${j}`, {
+          value: bigBody,
+          body: bigBody,
+          frontmatter: "tags: [test]",
+          provenance: "ai",
+        });
+      }
+    }
+    (doc.groups as Map<string, MatrixGroup>).set("g1", {
+      id: "g1",
+      label: "Persistent Group",
+      range: { startRow: 0, startCol: 0, endRow: 2, endCol: 3 },
+      source: "auto",
+    });
+
+    const snapshot = createMatrixHistorySnapshot(doc);
+
+    expect(snapshot.truncated).toBe(true);
+    expect(snapshot.cells).toHaveLength(0);
+    expect(snapshot.groups).toHaveLength(1);
+    expect(snapshot.groups[0]?.id).toBe("g1");
+    expect(snapshot.sheet.id).toBe(doc.sheet.id);
+    expect(snapshot.serializedBytes).toBeLessThanOrEqual(snapshot.maxSerializedBytes);
   });
 
   it("preserves sheet metadata in snapshot", () => {
