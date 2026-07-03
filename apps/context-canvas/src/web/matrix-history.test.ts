@@ -3,12 +3,14 @@ import { describe, expect, it, beforeEach } from "vitest";
 import {
   appendMatrixHistory,
   createHistoryEntry,
+  createMatrixHistorySnapshot,
   formatCellCount,
   loadMatrixHistory,
   saveMatrixHistory,
   summarizePatches,
   truncatePreview,
 } from "./matrix-history.ts";
+import { createEmptyMatrixDocument } from "../shared/domain.ts";
 
 describe("matrix-history", () => {
   beforeEach(() => {
@@ -119,5 +121,96 @@ describe("matrix-history", () => {
       ],
     });
     expect(summary).toBe("E1, E2, E3");
+  });
+});
+
+
+describe("createMatrixHistorySnapshot", () => {
+  it("serializes cells from a MatrixDocument as an array of row/col/cell", () => {
+    const doc = createEmptyMatrixDocument({ withResearchTemplate: false });
+    (doc.sheet.cells as Map<string, import("../shared/domain.ts").Cell>).set("0,0", { value: "A1", body: "Cell A1", frontmatter: "", provenance: "user" });
+    (doc.sheet.cells as Map<string, import("../shared/domain.ts").Cell>).set("2,3", { value: 42, body: "D3", frontmatter: "tags: [test]", provenance: "ai" });
+    const snapshot = createMatrixHistorySnapshot(doc);
+    expect(snapshot.schemaVersion).toBe(1);
+    expect(snapshot.cells).toHaveLength(2);
+    const c0 = snapshot.cells.find(c => c.row === 0 && c.col === 0);
+    expect(c0).toBeDefined();
+    expect(c0?.cell.value).toBe("A1");
+    const c1 = snapshot.cells.find(c => c.row === 2 && c.col === 3);
+    expect(c1).toBeDefined();
+    expect(c1?.cell.value).toBe(42);
+    expect(c1?.cell.frontmatter).toBe("tags: [test]");
+  });
+
+  it("serializes groups preserving id, label, range, source, and optional fields", () => {
+    const doc = createEmptyMatrixDocument({ withResearchTemplate: false });
+    (doc.groups as Map<string, import("../shared/domain.ts").MatrixGroup>).set("g1", { id: "g1", label: "Group A", range: { startRow: 0, startCol: 0, endRow: 2, endCol: 3 }, source: "auto" });
+    (doc.groups as Map<string, import("../shared/domain.ts").MatrixGroup>).set("g2", { id: "g2", label: "Group B", range: { startRow: 3, startCol: 0, endRow: 5, endCol: 1 }, source: "auto", labelOffset: { x: 10, y: 20 }, dismissed: false });
+    const snapshot = createMatrixHistorySnapshot(doc);
+    expect(snapshot.groups).toHaveLength(2);
+    const g1 = snapshot.groups.find(g => g.id === "g1");
+    expect(g1?.label).toBe("Group A");
+    expect(g1?.range.endCol).toBe(3);
+    const g2 = snapshot.groups.find(g => g.id === "g2");
+    expect(g2?.labelOffset).toEqual({ x: 10, y: 20 });
+    expect(g2?.dismissed).toBe(false);
+  });
+
+  it("includes size metadata fields", () => {
+    const doc = createEmptyMatrixDocument({ withResearchTemplate: false });
+    (doc.sheet.cells as Map<string, import("../shared/domain.ts").Cell>).set("0,0", { value: "test", body: "test", frontmatter: "", provenance: "user" });
+    const snapshot = createMatrixHistorySnapshot(doc);
+    expect(typeof snapshot.maxSerializedBytes).toBe("number");
+    expect(snapshot.maxSerializedBytes).toBeGreaterThan(0);
+    expect(typeof snapshot.serializedBytes).toBe("number");
+    expect(snapshot.serializedBytes).toBeGreaterThan(0);
+    expect(typeof snapshot.truncated).toBe("boolean");
+    expect(snapshot.truncated).toBe(false);
+  });
+
+  it("preserves sheet metadata in snapshot", () => {
+    const doc = createEmptyMatrixDocument({ withResearchTemplate: false });
+    const snapshot = createMatrixHistorySnapshot(doc);
+    expect(snapshot.sheet.id).toBe(doc.sheet.id);
+    expect(snapshot.sheet.name).toBe(doc.sheet.name);
+    expect(snapshot.sheet.rows).toBe(doc.sheet.rows);
+    expect(snapshot.sheet.cols).toBe(doc.sheet.cols);
+  });
+});
+
+describe("saveMatrixHistory / loadMatrixHistory with snapshots", () => {
+  it("preserves snapshot through browser localStorage round-trip", () => {
+    const doc = createEmptyMatrixDocument({ withResearchTemplate: false });
+    (doc.sheet.cells as Map<string, import("../shared/domain.ts").Cell>).set("0,0", { value: "A1", body: "Cell A1", frontmatter: "", provenance: "user" });
+    const snapshot = createMatrixHistorySnapshot(doc);
+    const entry = createHistoryEntry({
+      intent: "Test with snapshot",
+      contextRanges: [],
+      targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+      targetRangeLabel: "A1",
+      patchesApplied: 0,
+      snapshot,
+    });
+    saveMatrixHistory([entry]);
+    const loaded = loadMatrixHistory();
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0]?.snapshot).toBeDefined();
+    expect(loaded[0]?.snapshot?.schemaVersion).toBe(1);
+    expect(loaded[0]?.snapshot?.cells).toHaveLength(1);
+    expect(loaded[0]?.snapshot?.cells[0]?.cell.value).toBe("A1");
+  });
+
+  it("round-trips history entry without snapshot", () => {
+    const entry = createHistoryEntry({
+      intent: "No snapshot",
+      contextRanges: [],
+      targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+      targetRangeLabel: "A1",
+      patchesApplied: 0,
+    });
+    saveMatrixHistory([entry]);
+    const loaded = loadMatrixHistory();
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0]?.snapshot).toBeUndefined();
   });
 });

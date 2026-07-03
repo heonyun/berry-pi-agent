@@ -8,6 +8,8 @@ import {
   createEmptyMatrixDocument,
   MATRIX_SHEET_ID,
   type MatrixHistoryEntry,
+  type MatrixHistorySnapshot,
+  MATRIX_SNAPSHOT_MAX_BYTES,
 } from "../../shared/domain.ts";
 import { readMatrixHistory, writeMatrixHistory } from "./history.ts";
 import { loadMatrixBundle } from "./load.ts";
@@ -95,5 +97,62 @@ describe("matrix history storage", () => {
 
     projectMatrixToBundle(document, bundleRoot, { historyEntries: [] });
     expect(readMatrixHistory(bundleRoot)).toEqual([]);
+  });
+  it("round-trips history entry with snapshot through history/runs.json", () => {
+    const bundleRoot = makeTempDir();
+    const document = sampleDocument();
+    const snapshot: MatrixHistorySnapshot = {
+      schemaVersion: 1,
+      sheet: { id: "sheet-main", name: "Test Matrix", rows: 20, cols: 50 },
+      cells: [
+        { row: 0, col: 0, cell: { value: "A1", body: "Cell A1", frontmatter: "", provenance: "user" } },
+      ],
+      groups: [],
+      maxSerializedBytes: MATRIX_SNAPSHOT_MAX_BYTES,
+      serializedBytes: 256,
+      truncated: false,
+    };
+    const history: MatrixHistoryEntry = {
+      ...sampleHistoryEntry(),
+      snapshot,
+    };
+
+    const projectResult = projectMatrixToBundle(document, bundleRoot, { historyEntries: [history] });
+    expect(projectResult.errors).toEqual([]);
+
+    const loadResult = loadMatrixBundle(bundleRoot);
+    expect(loadResult.errors).toEqual([]);
+    expect(loadResult.history).toHaveLength(1);
+    const loaded = loadResult.history![0];
+    expect(loaded.snapshot).toBeDefined();
+    expect(loaded.snapshot?.schemaVersion).toBe(1);
+    expect(loaded.snapshot?.cells).toHaveLength(1);
+    expect(loaded.snapshot?.cells[0]?.cell.value).toBe("A1");
+    expect(loaded.snapshot?.serializedBytes).toBe(256);
+    expect(loaded.snapshot?.truncated).toBe(false);
+  });
+
+  it("filters out history entries with malformed snapshot", () => {
+    const bundleRoot = makeTempDir();
+    const document = sampleDocument();
+    const badSnapshot: MatrixHistorySnapshot = {
+      schemaVersion: 999,
+      sheet: { id: "s", name: "n", rows: 1, cols: 1 },
+      cells: [],
+      groups: [],
+      maxSerializedBytes: 100,
+      serializedBytes: 0,
+      truncated: false,
+    } as unknown as MatrixHistorySnapshot;
+    const history: MatrixHistoryEntry = {
+      ...sampleHistoryEntry(),
+      snapshot: badSnapshot,
+    };
+
+    const projectResult = projectMatrixToBundle(document, bundleRoot, { historyEntries: [history] });
+    expect(projectResult.errors).toEqual([]);
+
+    const loadResult = loadMatrixBundle(bundleRoot);
+    expect(loadResult.history).toHaveLength(0);
   });
 });

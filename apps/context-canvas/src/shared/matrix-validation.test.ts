@@ -1,6 +1,16 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
-import { parseAiCommand, validateWritePatches, WritePatchSchema, AiCommandSchema, filterPatchesToTargetRange, coerceAiCommandPayload, bindAiCommandToUserTarget, relocatePatchesToUserTarget } from "./matrix-validation.ts";
+import {
+  bindAiCommandToUserTarget,
+  coerceAiCommandPayload,
+  filterPatchesToTargetRange,
+  isMatrixHistoryEntry,
+  parseAiCommand,
+  relocatePatchesToUserTarget,
+  validateWritePatches,
+  WritePatchSchema,
+  AiCommandSchema,
+} from "./matrix-validation.ts";
 
 describe("matrix-validation", () => {
   describe("WritePatchSchema", () => {
@@ -255,6 +265,271 @@ describe("matrix-validation", () => {
       if (result.ok) {
         expect(result.patches).toEqual([]);
       }
+    });
+  });
+
+  describe("MatrixHistorySnapshot validation", () => {
+    const validSnapshot = {
+      schemaVersion: 1,
+      sheet: { id: "sheet-1", name: "Test", rows: 20, cols: 50 },
+      cells: [
+        { row: 0, col: 0, cell: { value: "A1", body: "Cell A1", frontmatter: "", provenance: "user" } },
+        { row: 1, col: 2, cell: { value: "C2", body: "Cell C2", frontmatter: "", provenance: "ai" } },
+      ],
+      groups: [
+        { id: "g1", label: "Group 1", range: { startRow: 0, startCol: 0, endRow: 1, endCol: 2 }, source: "auto" },
+      ],
+      maxSerializedBytes: 1000000,
+      serializedBytes: 512,
+      truncated: false,
+    };
+
+    it("accepts a fully valid snapshot on a history entry", () => {
+      const entry = {
+        id: "h1",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        intent: "Test",
+        contextRangeNames: [],
+        contextRanges: [],
+        targetRangeLabel: "A1",
+        targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        patchesApplied: 0,
+        snapshot: validSnapshot,
+      };
+      expect(isMatrixHistoryEntry(entry)).toBe(true);
+    });
+
+    it("rejects a history entry with a malformed snapshot (wrong schemaVersion)", () => {
+      const entry = {
+        id: "h2",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        intent: "Test",
+        contextRangeNames: [],
+        contextRanges: [],
+        targetRangeLabel: "A1",
+        targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        patchesApplied: 0,
+        snapshot: { ...validSnapshot, schemaVersion: 999 },
+      };
+      expect(isMatrixHistoryEntry(entry)).toBe(false);
+    });
+
+    it("rejects a history entry with a malformed snapshot (missing cells)", () => {
+      const entry = {
+        id: "h3",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        intent: "Test",
+        contextRangeNames: [],
+        contextRanges: [],
+        targetRangeLabel: "A1",
+        targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        patchesApplied: 0,
+        snapshot: { schemaVersion: 1, sheet: { id: "s", name: "n", rows: 1, cols: 1 }, groups: [], maxSerializedBytes: 100, serializedBytes: 0, truncated: false },
+      };
+      expect(isMatrixHistoryEntry(entry)).toBe(false);
+    });
+
+    it("accepts a history entry without a snapshot", () => {
+      const entry = {
+        id: "h4",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        intent: "Test",
+        contextRangeNames: [],
+        contextRanges: [],
+        targetRangeLabel: "A1",
+        targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        patchesApplied: 0,
+      };
+      expect(isMatrixHistoryEntry(entry)).toBe(true);
+    });
+
+    it("rejects malformed nested cell with non-integer row", () => {
+      const entry = {
+        id: "h5",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        intent: "Test",
+        contextRangeNames: [],
+        contextRanges: [],
+        targetRangeLabel: "A1",
+        targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        patchesApplied: 0,
+        snapshot: {
+          schemaVersion: 1,
+          sheet: { id: "s", name: "n", rows: 1, cols: 1 },
+          cells: [{ row: 0.5, col: 0, cell: { value: "x", body: "x", frontmatter: "" } }],
+          groups: [],
+          maxSerializedBytes: 100, serializedBytes: 0, truncated: false,
+        },
+      };
+      expect(isMatrixHistoryEntry(entry)).toBe(false);
+    });
+
+    it("rejects malformed nested cell with bad value type", () => {
+      const entry = {
+        id: "h6",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        intent: "Test",
+        contextRangeNames: [],
+        contextRanges: [],
+        targetRangeLabel: "A1",
+        targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        patchesApplied: 0,
+        snapshot: {
+          schemaVersion: 1,
+          sheet: { id: "s", name: "n", rows: 1, cols: 1 },
+          cells: [{ row: 0, col: 0, cell: { value: {}, body: "x", frontmatter: "" } }],
+          groups: [],
+          maxSerializedBytes: 100, serializedBytes: 0, truncated: false,
+        },
+      };
+      expect(isMatrixHistoryEntry(entry)).toBe(false);
+    });
+
+    it("rejects malformed group with wrong source", () => {
+      const entry = {
+        id: "h7",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        intent: "Test",
+        contextRangeNames: [],
+        contextRanges: [],
+        targetRangeLabel: "A1",
+        targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        patchesApplied: 0,
+        snapshot: {
+          schemaVersion: 1,
+          sheet: { id: "s", name: "n", rows: 1, cols: 1 },
+          cells: [],
+          groups: [{ id: "g1", label: "G", range: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 }, source: "manual" }],
+          maxSerializedBytes: 100, serializedBytes: 0, truncated: false,
+        },
+      };
+      expect(isMatrixHistoryEntry(entry)).toBe(false);
+    });
+
+    it("rejects malformed group with bad range", () => {
+      const entry = {
+        id: "h8",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        intent: "Test",
+        contextRangeNames: [],
+        contextRanges: [],
+        targetRangeLabel: "A1",
+        targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        patchesApplied: 0,
+        snapshot: {
+          schemaVersion: 1,
+          sheet: { id: "s", name: "n", rows: 1, cols: 1 },
+          cells: [],
+          groups: [{ id: "g1", label: "G", range: { startRow: -1, startCol: 0, endRow: 0, endCol: 0 }, source: "auto" }],
+          maxSerializedBytes: 100, serializedBytes: 0, truncated: false,
+        },
+      };
+      expect(isMatrixHistoryEntry(entry)).toBe(false);
+    });
+
+    it("rejects malformed group with bad labelOffset", () => {
+      const entry = {
+        id: "h9",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        intent: "Test",
+        contextRangeNames: [],
+        contextRanges: [],
+        targetRangeLabel: "A1",
+        targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        patchesApplied: 0,
+        snapshot: {
+          schemaVersion: 1,
+          sheet: { id: "s", name: "n", rows: 1, cols: 1 },
+          cells: [],
+          groups: [{ id: "g1", label: "G", range: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 }, source: "auto", labelOffset: { x: NaN, y: 0 } }],
+          maxSerializedBytes: 100, serializedBytes: 0, truncated: false,
+        },
+      };
+      expect(isMatrixHistoryEntry(entry)).toBe(false);
+    });
+
+    it("rejects snapshot with non-integer sheet rows", () => {
+      const entry = {
+        id: "h10",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        intent: "Test",
+        contextRangeNames: [],
+        contextRanges: [],
+        targetRangeLabel: "A1",
+        targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        patchesApplied: 0,
+        snapshot: {
+          schemaVersion: 1,
+          sheet: { id: "s", name: "n", rows: 1.5, cols: 1 },
+          cells: [],
+          groups: [],
+          maxSerializedBytes: 100, serializedBytes: 0, truncated: false,
+        },
+      };
+      expect(isMatrixHistoryEntry(entry)).toBe(false);
+    });
+
+    it("rejects snapshot with negative sheet cols", () => {
+      const entry = {
+        id: "h11",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        intent: "Test",
+        contextRangeNames: [],
+        contextRanges: [],
+        targetRangeLabel: "A1",
+        targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        patchesApplied: 0,
+        snapshot: {
+          schemaVersion: 1,
+          sheet: { id: "s", name: "n", rows: 1, cols: -1 },
+          cells: [],
+          groups: [],
+          maxSerializedBytes: 100, serializedBytes: 0, truncated: false,
+        },
+      };
+      expect(isMatrixHistoryEntry(entry)).toBe(false);
+    });
+
+    it("rejects snapshot with negative serializedBytes", () => {
+      const entry = {
+        id: "h12",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        intent: "Test",
+        contextRangeNames: [],
+        contextRanges: [],
+        targetRangeLabel: "A1",
+        targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        patchesApplied: 0,
+        snapshot: {
+          schemaVersion: 1,
+          sheet: { id: "s", name: "n", rows: 1, cols: 1 },
+          cells: [],
+          groups: [],
+          maxSerializedBytes: 100, serializedBytes: -1, truncated: false,
+        },
+      };
+      expect(isMatrixHistoryEntry(entry)).toBe(false);
+    });
+
+    it("rejects snapshot with NaN maxSerializedBytes", () => {
+      const entry = {
+        id: "h13",
+        timestamp: "2026-07-01T00:00:00.000Z",
+        intent: "Test",
+        contextRangeNames: [],
+        contextRanges: [],
+        targetRangeLabel: "A1",
+        targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+        patchesApplied: 0,
+        snapshot: {
+          schemaVersion: 1,
+          sheet: { id: "s", name: "n", rows: 1, cols: 1 },
+          cells: [],
+          groups: [],
+          maxSerializedBytes: NaN, serializedBytes: 0, truncated: false,
+        },
+      };
+      expect(isMatrixHistoryEntry(entry)).toBe(false);
     });
   });
 });
