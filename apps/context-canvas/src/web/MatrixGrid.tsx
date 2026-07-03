@@ -225,7 +225,13 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
 
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.nativeEvent.isComposing) {
+      if (
+        shouldCancelMatrixEditOnTypeForIme({
+          key: event.key,
+          keyCode: event.keyCode,
+          isComposing: event.nativeEvent.isComposing,
+        })
+      ) {
         return;
       }
       if (event.key === "Escape") {

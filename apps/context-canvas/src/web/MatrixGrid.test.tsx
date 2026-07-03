@@ -230,6 +230,7 @@ describe("MatrixGrid IME overlay editor", () => {
 
     const editor = screen.getByLabelText("Matrix cell editor");
     fireEvent.keyDown(editor, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(editor, { key: "Process", keyCode: 229 });
 
     expect(onFinishedEditing).not.toHaveBeenCalled();
   });
