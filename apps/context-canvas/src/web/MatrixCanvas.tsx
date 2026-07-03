@@ -36,6 +36,10 @@ import { MatrixHistoryDetailPane } from "./MatrixHistoryDetailPane.tsx";
 import { MatrixOnboarding } from "./MatrixOnboarding.tsx";
 import { loadMatrixPanelLayout, saveMatrixPanelLayout } from "./matrix-panel-layout.ts";
 import { loadMatrixColumnWidths, saveMatrixColumnWidths } from "./matrix-column-widths.ts";
+import {
+  loadMatrixGroupLabelOffsets,
+  saveMatrixGroupLabelOffsets,
+} from "./matrix-group-label-offsets.ts";
 import { loadMatrixRowHeights, saveMatrixRowHeights } from "./matrix-row-heights.ts";
 import {
   appendMatrixHistory,
@@ -110,6 +114,7 @@ export function MatrixCanvas(): ReactElement {
 
   const [historyEntries, setHistoryEntries] = useState<MatrixHistoryEntry[]>(() => loadMatrixHistory());
   const [selectedHistory, setSelectedHistory] = useState<MatrixHistoryEntry | null>(null);
+  const storedGroupLabelOffsetsRef = useRef(loadMatrixGroupLabelOffsets());
 
   const groups = useMemo(() => visibleMatrixGroups(document), [document]);
 
@@ -126,6 +131,18 @@ export function MatrixCanvas(): ReactElement {
     }
     return result;
   }, []);
+
+  useEffect(() => {
+    for (const group of groups) {
+      const storedOffset = storedGroupLabelOffsetsRef.current.get(group.id);
+      if (
+        storedOffset &&
+        (group.labelOffset?.x !== storedOffset.x || group.labelOffset?.y !== storedOffset.y)
+      ) {
+        dispatch({ type: "set_group_label_offset", id: group.id, offset: storedOffset });
+      }
+    }
+  }, [dispatch, groups]);
 
   const syncDetailFromActiveCell = useCallback((row: number, col: number) => {
     setSelectedHistory(null);
@@ -747,6 +764,16 @@ export function MatrixCanvas(): ReactElement {
     [dispatch, historyEntries],
   );
 
+  const handleGroupLabelOffsetChange = useCallback(
+    (group: MatrixGroup, offset: { readonly x: number; readonly y: number }) => {
+      const result = dispatch({ type: "set_group_label_offset", id: group.id, offset });
+      saveMatrixGroupLabelOffsets(result.document.groups);
+      storedGroupLabelOffsetsRef.current = loadMatrixGroupLabelOffsets();
+      scheduleMatrixBundleExport(result.document, historyEntries);
+    },
+    [dispatch, historyEntries],
+  );
+
   const handleGroupDismiss = useCallback(
     (group: MatrixGroup) => {
       dispatch({ type: "dismiss_group", id: group.id });
@@ -788,6 +815,7 @@ export function MatrixCanvas(): ReactElement {
               onColumnResize={handleColumnWidthChange}
               onRowResize={handleRowHeightChange}
               onGroupLabelClick={handleGroupLabelClick}
+              onGroupLabelOffsetChange={handleGroupLabelOffsetChange}
               onGroupLabelDraftChange={setGroupLabelDraft}
               onGroupLabelSave={handleSaveGroupLabel}
               onGroupLabelCancel={() => {

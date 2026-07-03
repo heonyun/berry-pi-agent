@@ -67,6 +67,10 @@ export interface MatrixGridProps {
     group: MatrixGroup,
     options: { readonly isDoubleClick: boolean },
   ) => void;
+  readonly onGroupLabelOffsetChange?: (
+    group: MatrixGroup,
+    offset: { readonly x: number; readonly y: number },
+  ) => void;
   readonly onGroupLabelDraftChange: (label: string) => void;
   readonly onGroupLabelSave: () => void;
   readonly onGroupLabelCancel: () => void;
@@ -105,6 +109,16 @@ interface RowResizeDrag {
   readonly currentHeight: number;
 }
 
+interface GroupLabelDrag {
+  readonly group: MatrixGroup;
+  readonly pointerId: number;
+  readonly startX: number;
+  readonly startY: number;
+  readonly baseOffset: { readonly x: number; readonly y: number };
+  readonly currentOffset: { readonly x: number; readonly y: number };
+  readonly moved: boolean;
+}
+
 interface MatrixVisibleRows {
   readonly x: number;
   readonly y: number;
@@ -139,6 +153,7 @@ export function MatrixGrid({
   onColumnResize = () => {},
   onRowResize = () => {},
   onGroupLabelClick = () => {},
+  onGroupLabelOffsetChange = () => {},
   onGroupLabelDraftChange,
   onGroupLabelSave,
   onGroupLabelCancel,
@@ -156,6 +171,8 @@ export function MatrixGrid({
     readonly CellCornerDotPosition[]
   >([]);
   const [rowResizeDrag, setRowResizeDrag] = useState<RowResizeDrag | null>(null);
+  const [groupLabelDrag, setGroupLabelDrag] = useState<GroupLabelDrag | null>(null);
+  const suppressNextGroupLabelClick = useRef(false);
   const visibleRowsRef = useRef<MatrixVisibleRows>({
     x: 0,
     y: 0,
@@ -235,8 +252,12 @@ export function MatrixGrid({
       const boundaryBottom = endBounds.y + endBounds.height - containerBounds.y;
       const boundaryWidth = boundaryRight - boundaryLeft;
       const boundaryHeight = boundaryBottom - boundaryTop;
-      const left = Math.max(4, bounds.x - containerBounds.x + 4);
-      const top = Math.max(2, bounds.y - containerBounds.y - 12);
+      const previewOffset =
+        groupLabelDrag?.group.id === group.id ? groupLabelDrag.currentOffset : group.labelOffset;
+      const offsetX = previewOffset?.x ?? 0;
+      const offsetY = previewOffset?.y ?? 0;
+      const left = Math.max(4, bounds.x - containerBounds.x + 4 + offsetX);
+      const top = Math.max(2, bounds.y - containerBounds.y - 12 + offsetY);
       const maxWidth = Math.max(72, Math.min(190, bounds.width + 88));
       if (
         boundaryLeft > containerBounds.width ||
@@ -322,7 +343,78 @@ export function MatrixGrid({
     setGroupLabelPositions(nextPositions);
     setRowResizeHandlePositions(nextRowResizeHandles);
     setCellCornerDotPositions(nextCellCornerDots);
-  }, [config.cols, config.rows, groups, rowHeight]);
+  }, [config.cols, config.rows, groupLabelDrag, groups, rowHeight]);
+
+  const handleGroupLabelPointerDown = useCallback(
+    (group: MatrixGroup, event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (event.button !== 0 || editingGroupId !== null) {
+        return;
+      }
+      suppressNextGroupLabelClick.current = false;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      const baseOffset = group.labelOffset ?? { x: 0, y: 0 };
+      setGroupLabelDrag({
+        group,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        baseOffset,
+        currentOffset: baseOffset,
+        moved: false,
+      });
+    },
+    [editingGroupId],
+  );
+
+  const handleGroupLabelPointerMove = useCallback(
+    (group: MatrixGroup, event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!groupLabelDrag || groupLabelDrag.group.id !== group.id || groupLabelDrag.pointerId !== event.pointerId) {
+        return;
+      }
+      const dx = event.clientX - groupLabelDrag.startX;
+      const dy = event.clientY - groupLabelDrag.startY;
+      const moved = groupLabelDrag.moved || Math.abs(dx) + Math.abs(dy) >= 4;
+      setGroupLabelDrag({
+        ...groupLabelDrag,
+        currentOffset: {
+          x: groupLabelDrag.baseOffset.x + dx,
+          y: groupLabelDrag.baseOffset.y + dy,
+        },
+        moved,
+      });
+    },
+    [groupLabelDrag],
+  );
+
+  const handleGroupLabelPointerUp = useCallback(
+    (group: MatrixGroup, event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!groupLabelDrag || groupLabelDrag.group.id !== group.id || groupLabelDrag.pointerId !== event.pointerId) {
+        return;
+      }
+      setGroupLabelDrag(null);
+      if (!groupLabelDrag.moved) {
+        return;
+      }
+      suppressNextGroupLabelClick.current = true;
+      event.preventDefault();
+      event.stopPropagation();
+      // INVARIANT: Persist group label offset only after drag end; click and double-click semantics stay intact.
+      onGroupLabelOffsetChange(group, groupLabelDrag.currentOffset);
+      updateGroupLabelPositions();
+    },
+    [groupLabelDrag, onGroupLabelOffsetChange, updateGroupLabelPositions],
+  );
+
+  const handleGroupLabelPointerCancel = useCallback(
+    (group: MatrixGroup, event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!groupLabelDrag || groupLabelDrag.group.id !== group.id || groupLabelDrag.pointerId !== event.pointerId) {
+        return;
+      }
+      setGroupLabelDrag(null);
+      suppressNextGroupLabelClick.current = false;
+    },
+    [groupLabelDrag],
+  );
 
   const handleRowResizePointerDown = useCallback(
     (row: number, event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -655,7 +747,17 @@ export function MatrixGrid({
                     type="button"
                     className="matrix-group-label-button"
                     data-testid={`matrix-group-label-${group.id}`}
-                    onClick={() => onGroupLabelClick(group, { isDoubleClick: false })}
+                    onPointerDown={(event) => handleGroupLabelPointerDown(group, event)}
+                    onPointerMove={(event) => handleGroupLabelPointerMove(group, event)}
+                    onPointerUp={(event) => handleGroupLabelPointerUp(group, event)}
+                    onPointerCancel={(event) => handleGroupLabelPointerCancel(group, event)}
+                    onClick={() => {
+                      if (suppressNextGroupLabelClick.current) {
+                        suppressNextGroupLabelClick.current = false;
+                        return;
+                      }
+                      onGroupLabelClick(group, { isDoubleClick: false });
+                    }}
                     onDoubleClick={(event) => {
                       event.preventDefault();
                       onGroupLabelClick(group, { isDoubleClick: true });

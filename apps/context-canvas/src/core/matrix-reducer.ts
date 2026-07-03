@@ -23,6 +23,7 @@ export type MatrixCommand =
   | { type: "set_named_range"; namedRange: NamedRange }
   | { type: "remove_named_range"; name: string }
   | { type: "set_group_label"; id: string; label: string }
+  | { type: "set_group_label_offset"; id: string; offset: { x: number; y: number } }
   | { type: "dismiss_group"; id: string }
   | { type: "set_column_custom_label"; col: number; label: string }
   | { type: "set_column_width"; col: number; width: number }
@@ -153,6 +154,28 @@ export function applyMatrixCommand(
         meta: {
           updatedCells: 0,
           message: `Group label updated: ${label}`,
+        },
+      };
+    }
+
+    case "set_group_label_offset": {
+      const group = document.groups?.get(command.id);
+      if (!group || !Number.isFinite(command.offset.x) || !Number.isFinite(command.offset.y)) {
+        return {
+          document,
+          meta: { updatedCells: 0 },
+        };
+      }
+      const nextGroups = new Map(document.groups ?? []);
+      nextGroups.set(group.id, {
+        ...group,
+        labelOffset: { x: Math.round(command.offset.x), y: Math.round(command.offset.y) },
+      });
+      return {
+        document: { ...document, groups: nextGroups },
+        meta: {
+          updatedCells: 0,
+          message: `Group label moved: ${group.label}`,
         },
       };
     }

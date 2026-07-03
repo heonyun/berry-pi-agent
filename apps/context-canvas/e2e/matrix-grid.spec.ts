@@ -15,6 +15,8 @@ import {
   clickRowMarker,
   clickColumnHeader,
   doubleClickColumnHeader,
+  dragFirstGroupLabel,
+  firstGroupLabelPositionInGrid,
   resizeMatrixRow,
   resizeMatrixColumn,
   expectStoredColumnWidth,
@@ -497,6 +499,37 @@ test.describe("Feature: Side panel and auto groups (real clicks)", () => {
     await page.getByTestId(/matrix-group-label-/).first().click();
     await expect(page.getByTestId("matrix-group-label-input")).not.toBeVisible();
     await expect(page.getByTestId("matrix-status-bar")).toContainText(/Selected group/i);
+  });
+
+  test("Scenario: Dragging group label persists its offset across reload", async ({ page }) => {
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+
+    const exportDone = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/matrix-bundle/export") &&
+        response.request().method() === "POST" &&
+        response.request().postData()?.includes("labelOffset") === true &&
+        response.ok(),
+    );
+    const moved = await dragFirstGroupLabel(page, { x: 36, y: 18 });
+    expect(moved.after.x - moved.before.x).toBeGreaterThan(24);
+    expect(moved.after.y - moved.before.y).toBeGreaterThan(8);
+    await expect(page.getByTestId("matrix-status-bar")).toContainText("Group label moved");
+    await exportDone;
+
+    await page.reload();
+    await expect(page.getByTestId("matrix-grid")).toBeVisible();
+    const onboardingDismiss = page.getByTestId("matrix-onboarding").getByRole("button", {
+      name: "Got it",
+    });
+    if (await onboardingDismiss.isVisible().catch(() => false)) {
+      await onboardingDismiss.click();
+    }
+    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+    await expect(page.getByTestId(/matrix-group-label-/).first()).toBeVisible();
+    const reloadedPosition = await firstGroupLabelPositionInGrid(page);
+    expect(Math.abs(reloadedPosition.x - moved.afterRelative.x)).toBeLessThan(6);
+    expect(Math.abs(reloadedPosition.y - moved.afterRelative.y)).toBeLessThan(6);
   });
 
   test("Scenario: Escape cancels group label edits", async ({ page }) => {

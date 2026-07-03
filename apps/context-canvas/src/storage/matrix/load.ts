@@ -141,7 +141,18 @@ function isValidManifestGroup(
     value.range.endRow >= value.range.startRow &&
     value.range.endCol >= value.range.startCol &&
     value.range.endRow < rows &&
-    value.range.endCol < cols
+    value.range.endCol < cols &&
+    isValidGroupLabelOffset(value.labelOffset)
+  );
+}
+
+function isValidGroupLabelOffset(offset: MatrixGroup["labelOffset"]): boolean {
+  return (
+    offset === undefined ||
+    (typeof offset.x === "number" &&
+      Number.isFinite(offset.x) &&
+      typeof offset.y === "number" &&
+      Number.isFinite(offset.y))
   );
 }
 

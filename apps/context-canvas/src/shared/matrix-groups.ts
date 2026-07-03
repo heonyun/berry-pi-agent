@@ -156,6 +156,7 @@ export function detectMatrixGroups(
       label: previous?.label ?? firstCellLabel(document, component, fallbackLabel),
       range,
       source: "auto",
+      labelOffset: previous?.labelOffset,
     });
   }
 
