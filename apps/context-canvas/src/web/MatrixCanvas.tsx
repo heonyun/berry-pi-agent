@@ -76,6 +76,11 @@ function nextChipId(): string {
   return `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+interface ReferenceEditState {
+  readonly row: number;
+  readonly col: number;
+}
+
 export function MatrixCanvas(): ReactElement {
   const [document, setDocument] = useState<MatrixDocument>(() => {
     const storedWidths = loadMatrixColumnWidths();
@@ -110,6 +115,7 @@ export function MatrixCanvas(): ReactElement {
   const [columnLabelDraft, setColumnLabelDraft] = useState("");
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [groupLabelDraft, setGroupLabelDraft] = useState("");
+  const [referenceEdit, setReferenceEdit] = useState<ReferenceEditState | null>(null);
   const [panelLayout, setPanelLayout] = useState(() => loadMatrixPanelLayout());
 
   const [historyEntries, setHistoryEntries] = useState<MatrixHistoryEntry[]>(() => loadMatrixHistory());
@@ -164,14 +170,58 @@ export function MatrixCanvas(): ReactElement {
     setDetailFrontmatter(domainCell?.frontmatter ?? "");
   }, []);
 
+  const insertReferenceToken = useCallback(
+    (token: string) => {
+      if (!referenceEdit || token.length === 0) {
+        return false;
+      }
+      const body = `=${token}`;
+      const originFrontmatter =
+        docRef.current.sheet.cells.get(cellKey(referenceEdit.row, referenceEdit.col))?.frontmatter ?? "";
+      dispatch({ type: "update_cell_body", row: referenceEdit.row, col: referenceEdit.col, body });
+      setDetailCell({ row: referenceEdit.row, col: referenceEdit.col, body });
+      setDetailFrontmatter(originFrontmatter);
+      setReferenceEdit(null);
+      setStatus(`Reference inserted: ${token}`);
+      return true;
+    },
+    [dispatch, referenceEdit],
+  );
+
   const handleSelectionChange = useCallback(
     (next: MatrixGridSelectionState | null) => {
       setSelection(next);
+      if (referenceEdit && !next) {
+        setReferenceEdit(null);
+        setStatus("Reference edit cancelled");
+        return;
+      }
+      if (referenceEdit && next) {
+        const pickedRange = selectionToRangeRef(next);
+        // INVARIANT: entering reference mode should not immediately rewrite the origin cell
+        // if Glide replays the current single-cell selection.
+        const isSameOrigin =
+          pickedRange.startRow === referenceEdit.row &&
+          pickedRange.endRow === referenceEdit.row &&
+          pickedRange.startCol === referenceEdit.col &&
+          pickedRange.endCol === referenceEdit.col;
+        if (!isSameOrigin) {
+          insertReferenceToken(
+            formatRangeLabel(
+              pickedRange.startCol,
+              pickedRange.startRow,
+              pickedRange.endCol,
+              pickedRange.endRow,
+            ),
+          );
+        }
+        return;
+      }
       if (next) {
         syncDetailFromActiveCell(next.activeRow, next.activeCol);
       }
     },
-    [syncDetailFromActiveCell],
+    [insertReferenceToken, referenceEdit, syncDetailFromActiveCell],
   );
 
   const selectionRange = useMemo(
@@ -644,9 +694,18 @@ export function MatrixCanvas(): ReactElement {
       dispatch({ type: "update_cell_body", row, col, body });
       setDetailCell({ row, col, body });
       const label = `${formatColumnLabel(col)}${row + 1}`;
+      // CONTRACT: only a bare "=" opens #103 reference picking; typed formulas execute in #104.
+      if (body === "=") {
+        setReferenceEdit({ row, col });
+        setStatus("Reference edit mode: select a range or group label");
+        return;
+      }
+      if (referenceEdit) {
+        setReferenceEdit(null);
+      }
       setStatus(`Cell ${label} updated`);
     },
-    [dispatch],
+    [dispatch, referenceEdit],
   );
 
   const handleCellsEdited = useCallback(
@@ -667,6 +726,9 @@ export function MatrixCanvas(): ReactElement {
         };
       });
       dispatch({ type: "apply_patches", patches });
+      if (referenceEdit) {
+        setReferenceEdit(null);
+      }
 
       const activeEdit = selection
         ? edits.find((edit) => edit.row === selection.activeRow && edit.col === selection.activeCol)
@@ -676,7 +738,7 @@ export function MatrixCanvas(): ReactElement {
       const label = `${formatColumnLabel(detailEdit.col)}${detailEdit.row + 1}`;
       setStatus(edits.length === 1 ? `Cell ${label} updated` : `${edits.length} cells updated`);
     },
-    [dispatch, selection],
+    [dispatch, referenceEdit, selection],
   );
 
   const handleQuickSummarize = useCallback(() => {
@@ -747,6 +809,9 @@ export function MatrixCanvas(): ReactElement {
   // WHY: column headers use double-click to rename; single click selects only (#95).
   const handleGroupLabelClick = useCallback(
     (group: MatrixGroup, options: { readonly isDoubleClick: boolean }) => {
+      if (!options.isDoubleClick && insertReferenceToken(group.label.trim())) {
+        return;
+      }
       if (options.isDoubleClick) {
         handleStartGroupLabelEdit(group);
         return;
@@ -757,7 +822,7 @@ export function MatrixCanvas(): ReactElement {
       }
       handleGroupSelect(group);
     },
-    [editingGroupId, handleGroupSelect, handleStartGroupLabelEdit],
+    [editingGroupId, handleGroupSelect, handleStartGroupLabelEdit, insertReferenceToken],
   );
 
   const handleColumnWidthChange = useCallback(
