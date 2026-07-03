@@ -109,8 +109,9 @@ assert_antigravity_plan "github-actions[bot]" "NONE" "plan me <!-- pi-agent:crea
 assert_no_auto_plan "github-actions[bot]" "NONE" "bot issue without marker"
 assert_no_auto_plan "random-user" "NONE" "untrusted issue"
 
-footer="$(agent_footer "deepseek-pr-review" "deepseek-v4-flash")"
+footer="$(agent_footer "deepseek-pr-review" "deepseek-v4-flash" "abc123def")"
 assert_contains "${footer}" "<!-- pi-agent:workflow:deepseek-pr-review -->" "footer marker"
+assert_contains "${footer}" "<!-- pi-agent:review-head:abc123def -->" "footer review head marker"
 assert_contains "${footer}" "workflow: deepseek-pr-review" "footer workflow id"
 
 sections="$(agent_output_sections_prompt)"
@@ -143,6 +144,31 @@ fail_comment=$'## Conclusion\nfail\n\n## Summary\nBlocker\n\n## Findings\nNone.\
 processed="$(agent_post_process_review_comment "${fail_comment}" "1")"
 assert_contains "${processed}" "hold (truncated)" "downgrade fail on truncated diff"
 assert_contains "${processed}" "Review note (automated)" "truncation review note"
+
+fail_test_comment=$'## Conclusion\nfail\n\n## Summary\nTests will fail\n\n## Findings\n1. [P0][evidence:diff][blocker:yes] Test crash\n   - Evidence: `App.test.tsx` — mock missing\n   - Why: CI break\n   - Fix: fix mock\n\n## Suggested next steps\nnone\n\n## Commands to rerun\nnpm test'
+processed_ci="$(agent_post_process_review_comment "${fail_test_comment}" "0" "1")"
+assert_contains "${processed_ci}" "## Conclusion" "ci downgrade keeps conclusion section"
+assert_contains "${processed_ci}" "hold" "ci downgrade fail to hold on test claim"
+assert_contains "${processed_ci}" "build-check-test" "ci advisory note"
+
+domain_block="$(agent_pr_domain_invariants_prompt)"
+assert_contains "${domain_block}" "MatrixGroup.source" "domain invariants block"
+
+if agent_ci_build_check_passed $'build-check-test\tpass\t2m\nlint\tpass\t1m'; then
+  pass_count=$((pass_count + 1))
+  echo "PASS: ci build check passed detector"
+else
+  fail_count=$((fail_count + 1))
+  echo "FAIL: ci build check passed detector" >&2
+fi
+
+if ! agent_ci_build_check_passed $'build-check-test\tfail\t2m'; then
+  pass_count=$((pass_count + 1))
+  echo "PASS: ci build check failed detector"
+else
+  fail_count=$((fail_count + 1))
+  echo "FAIL: ci build check failed detector" >&2
+fi
 
 issue_context="$(agent_issue_assistant_context_from_comment "@deepseek focus on server error path")"
 if [[ "${issue_context}" == "focus on server error path" ]]; then
@@ -202,6 +228,7 @@ assert_contains "${pr_system}" "Evidence" "pr review instructions in system"
 assert_contains "${pr_system}" "Unified diff lines that start with a space" "pr diff context guard rule"
 assert_contains "${pr_system}" "Test plan" "pr test plan cross-check rule"
 assert_contains "${pr_system}" "Surrounding file context" "pr surrounding context rule"
+assert_contains "${pr_system}" "Repository domain invariants" "pr domain invariant rule"
 if [[ "${pr_system}" == *"Diff:"* ]]; then
   fail_count=$((fail_count + 1))
   echo "FAIL: pr system prompt must not contain diff placeholder" >&2

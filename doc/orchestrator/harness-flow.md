@@ -99,6 +99,14 @@ drill_down: <path>
 - [ ] `complex` → post-implementation Diff Review once
 - [ ] CI green; `evidence_all_done` when actionable items existed
 
+## DeepSeek PR review (automated)
+
+- **Advisory only** — `Conclusion: fail` is not a merge gate. Codex reconciles with CI + local verification.
+- **One comment per PR** — workflow upserts the latest bot comment and skips duplicate runs for the same head SHA (use `@deepseek-review` to force re-run).
+- **Context injection** — Context Canvas PRs receive domain invariants (for example `MatrixGroup.source` is `"auto"` only) and test-file mock excerpts so reviewers do not confuse test-only UI with production UI.
+- **CI-aware triage** — when `build-check-test` passed, unverified test-failure `fail` is downgraded to `hold` with an automated note.
+- **CodeRabbit** — treat rate-limit / draft-skip as weak evidence; do not block merge on comment alone.
+
 ## Related
 
 - [read-next.template.md](./read-next.template.md)
