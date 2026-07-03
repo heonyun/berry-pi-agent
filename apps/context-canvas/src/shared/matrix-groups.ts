@@ -98,6 +98,10 @@ function nextStableGroupId(previousGroups: ReadonlyMap<string, MatrixGroup>, det
   return `auto:group-${nextIndex}`;
 }
 
+function isStableGroupId(id: string): boolean {
+  return /^auto:group-\d+$/.test(id);
+}
+
 export function detectMatrixGroups(
   document: MatrixDocument,
   previousGroups: ReadonlyMap<string, MatrixGroup> = document.groups ?? new Map(),
@@ -113,6 +117,7 @@ export function detectMatrixGroups(
 
   const visited = new Set<string>();
   const detected = new Map<string, MatrixGroup>();
+  const consumedPreviousIds = new Set<string>();
 
   for (const key of sortCellKeysByCoordinate(populated)) {
     if (visited.has(key)) {
@@ -156,9 +161,14 @@ export function detectMatrixGroups(
     };
     const matchedPrevious = findPreviousGroup(previousGroups, range);
     // INVARIANT: A split group can overlap the same previous group from multiple new
-    // components; only one component may inherit that stable id.
-    const previous = matchedPrevious && !detected.has(matchedPrevious.id) ? matchedPrevious : undefined;
-    const id = previous?.id ?? nextStableGroupId(previousGroups, detected);
+    // components; only one component may inherit its label, offset, dismissal, or stable id.
+    const previous =
+      matchedPrevious && !consumedPreviousIds.has(matchedPrevious.id) ? matchedPrevious : undefined;
+    if (previous) {
+      consumedPreviousIds.add(previous.id);
+    }
+    // INVARIANT: Legacy range-derived ids migrate to stable auto:group-N ids on recompute/load.
+    const id = previous && isStableGroupId(previous.id) ? previous.id : nextStableGroupId(previousGroups, detected);
     if (previous?.dismissed && previous.id === id && rangesEqual(previous.range, range)) {
       detected.set(id, { ...previous, id, range });
       continue;
