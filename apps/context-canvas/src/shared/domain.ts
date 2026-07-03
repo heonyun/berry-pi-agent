@@ -395,6 +395,11 @@ export interface SnapshotCell {
   readonly cell: Cell;
 }
 
+export type MatrixHistorySnapshotGroup = Pick<
+  MatrixGroup,
+  "id" | "label" | "range" | "source" | "labelOffset" | "dismissed"
+>;
+
 /** Serializable snapshot of a MatrixDocument, stored with a history entry.
   * Cells and groups are serialized as arrays (not Map) for JSON round-trip safety. */
 export interface MatrixHistorySnapshot {
@@ -406,14 +411,7 @@ export interface MatrixHistorySnapshot {
     readonly cols: number;
   };
   readonly cells: readonly SnapshotCell[];
-  readonly groups: readonly {
-    readonly id: string;
-    readonly label: string;
-    readonly range: RangeRefDTO;
-    readonly source: MatrixGroup["source"];
-    readonly labelOffset?: Vec2;
-    readonly dismissed?: boolean;
-  }[];
+  readonly groups: readonly MatrixHistorySnapshotGroup[];
   readonly maxSerializedBytes: number;
   readonly serializedBytes: number;
   readonly truncated: boolean;

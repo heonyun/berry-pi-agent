@@ -19,7 +19,13 @@ export function createMatrixHistorySnapshot(document: MatrixDocument): MatrixHis
   const cells: Array<{ row: number; col: number; cell: Cell }> = [];
   for (const [key, cell] of document.sheet.cells) {
     const parts = key.split(",");
-    cells.push({ row: parseInt(parts[0], 10), col: parseInt(parts[1], 10), cell });
+    const row = Number(parts[0]);
+    const col = Number(parts[1]);
+    if (parts.length !== 2 || !Number.isInteger(row) || !Number.isInteger(col) || row < 0 || col < 0) {
+      // WHY: Invalid map keys should not poison the whole persisted history entry.
+      continue;
+    }
+    cells.push({ row, col, cell });
   }
 
   const groups: MatrixHistorySnapshot["groups"] = Array.from(document.groups.values()).map((group) => ({

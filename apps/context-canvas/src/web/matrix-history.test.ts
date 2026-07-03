@@ -10,7 +10,30 @@ import {
   summarizePatches,
   truncatePreview,
 } from "./matrix-history.ts";
-import { createEmptyMatrixDocument, type Cell, type MatrixGroup } from "../shared/domain.ts";
+import {
+  createEmptyMatrixDocument,
+  type Cell,
+  type MatrixDocument,
+  type MatrixGroup,
+} from "../shared/domain.ts";
+
+function snapshotDocument({
+  cells = [],
+  groups = [],
+}: {
+  readonly cells?: Iterable<readonly [string, Cell]>;
+  readonly groups?: Iterable<readonly [string, MatrixGroup]>;
+} = {}): MatrixDocument {
+  const document = createEmptyMatrixDocument({ withResearchTemplate: false });
+  return {
+    ...document,
+    sheet: {
+      ...document.sheet,
+      cells: new Map(cells),
+    },
+    groups: new Map(groups),
+  };
+}
 
 describe("matrix-history", () => {
   beforeEach(() => {
@@ -127,9 +150,12 @@ describe("matrix-history", () => {
 
 describe("createMatrixHistorySnapshot", () => {
   it("serializes cells from a MatrixDocument as an array of row/col/cell", () => {
-    const doc = createEmptyMatrixDocument({ withResearchTemplate: false });
-    (doc.sheet.cells as Map<string, import("../shared/domain.ts").Cell>).set("0,0", { value: "A1", body: "Cell A1", frontmatter: "", provenance: "user" });
-    (doc.sheet.cells as Map<string, import("../shared/domain.ts").Cell>).set("2,3", { value: 42, body: "D3", frontmatter: "tags: [test]", provenance: "ai" });
+    const doc = snapshotDocument({
+      cells: [
+        ["0,0", { value: "A1", body: "Cell A1", frontmatter: "", provenance: "user" }],
+        ["2,3", { value: 42, body: "D3", frontmatter: "tags: [test]", provenance: "ai" }],
+      ],
+    });
     const snapshot = createMatrixHistorySnapshot(doc);
     expect(snapshot.schemaVersion).toBe(1);
     expect(snapshot.cells).toHaveLength(2);
@@ -142,10 +168,47 @@ describe("createMatrixHistorySnapshot", () => {
     expect(c1?.cell.frontmatter).toBe("tags: [test]");
   });
 
+  it("skips malformed cell map keys before snapshot persistence", () => {
+    const doc = snapshotDocument({
+      cells: [
+        ["0,0", { value: "A1", body: "Cell A1", frontmatter: "", provenance: "user" }],
+        ["bad-key", { value: "bad", body: "bad", frontmatter: "", provenance: "user" }],
+        ["1,-1", { value: "negative", body: "negative", frontmatter: "", provenance: "user" }],
+      ],
+    });
+
+    const snapshot = createMatrixHistorySnapshot(doc);
+
+    expect(snapshot.cells).toHaveLength(1);
+    expect(snapshot.cells[0]?.row).toBe(0);
+    expect(snapshot.cells[0]?.col).toBe(0);
+  });
+
   it("serializes groups preserving id, label, range, source, and optional fields", () => {
-    const doc = createEmptyMatrixDocument({ withResearchTemplate: false });
-    (doc.groups as Map<string, import("../shared/domain.ts").MatrixGroup>).set("g1", { id: "g1", label: "Group A", range: { startRow: 0, startCol: 0, endRow: 2, endCol: 3 }, source: "auto" });
-    (doc.groups as Map<string, import("../shared/domain.ts").MatrixGroup>).set("g2", { id: "g2", label: "Group B", range: { startRow: 3, startCol: 0, endRow: 5, endCol: 1 }, source: "auto", labelOffset: { x: 10, y: 20 }, dismissed: false });
+    const doc = snapshotDocument({
+      groups: [
+        [
+          "g1",
+          {
+            id: "g1",
+            label: "Group A",
+            range: { startRow: 0, startCol: 0, endRow: 2, endCol: 3 },
+            source: "auto",
+          },
+        ],
+        [
+          "g2",
+          {
+            id: "g2",
+            label: "Group B",
+            range: { startRow: 3, startCol: 0, endRow: 5, endCol: 1 },
+            source: "auto",
+            labelOffset: { x: 10, y: 20 },
+            dismissed: false,
+          },
+        ],
+      ],
+    });
     const snapshot = createMatrixHistorySnapshot(doc);
     expect(snapshot.groups).toHaveLength(2);
     const g1 = snapshot.groups.find(g => g.id === "g1");
@@ -157,8 +220,9 @@ describe("createMatrixHistorySnapshot", () => {
   });
 
   it("includes size metadata fields", () => {
-    const doc = createEmptyMatrixDocument({ withResearchTemplate: false });
-    (doc.sheet.cells as Map<string, import("../shared/domain.ts").Cell>).set("0,0", { value: "test", body: "test", frontmatter: "", provenance: "user" });
+    const doc = snapshotDocument({
+      cells: [["0,0", { value: "test", body: "test", frontmatter: "", provenance: "user" }]],
+    });
     const snapshot = createMatrixHistorySnapshot(doc);
     expect(typeof snapshot.maxSerializedBytes).toBe("number");
     expect(snapshot.maxSerializedBytes).toBeGreaterThan(0);
@@ -169,10 +233,9 @@ describe("createMatrixHistorySnapshot", () => {
   });
 
   it("prunes cells when serialized size exceeds MATRIX_SNAPSHOT_MAX_BYTES", () => {
-    const doc = createEmptyMatrixDocument({ withResearchTemplate: false });
     // WHY: Oversized snapshots must shrink before localStorage persistence, not only report metadata.
     const bigBody = "x".repeat(50000);
-    const cells = doc.sheet.cells as Map<string, Cell>;
+    const cells = new Map<string, Cell>();
     for (let i = 0; i < 100; i++) {
       for (let j = 0; j < 10; j++) {
         cells.set(`${i},${j}`, {
@@ -183,11 +246,19 @@ describe("createMatrixHistorySnapshot", () => {
         });
       }
     }
-    (doc.groups as Map<string, MatrixGroup>).set("g1", {
-      id: "g1",
-      label: "Persistent Group",
-      range: { startRow: 0, startCol: 0, endRow: 2, endCol: 3 },
-      source: "auto",
+    const doc = snapshotDocument({
+      cells,
+      groups: [
+        [
+          "g1",
+          {
+            id: "g1",
+            label: "Persistent Group",
+            range: { startRow: 0, startCol: 0, endRow: 2, endCol: 3 },
+            source: "auto",
+          },
+        ],
+      ],
     });
 
     const snapshot = createMatrixHistorySnapshot(doc);
@@ -212,8 +283,9 @@ describe("createMatrixHistorySnapshot", () => {
 
 describe("saveMatrixHistory / loadMatrixHistory with snapshots", () => {
   it("preserves snapshot through browser localStorage round-trip", () => {
-    const doc = createEmptyMatrixDocument({ withResearchTemplate: false });
-    (doc.sheet.cells as Map<string, import("../shared/domain.ts").Cell>).set("0,0", { value: "A1", body: "Cell A1", frontmatter: "", provenance: "user" });
+    const doc = snapshotDocument({
+      cells: [["0,0", { value: "A1", body: "Cell A1", frontmatter: "", provenance: "user" }]],
+    });
     const snapshot = createMatrixHistorySnapshot(doc);
     const entry = createHistoryEntry({
       intent: "Test with snapshot",
