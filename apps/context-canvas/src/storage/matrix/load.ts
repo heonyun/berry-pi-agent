@@ -66,6 +66,7 @@ export function loadMatrixBundle(bundleRoot: string): LoadResult {
   const groups = new Map(
     (Array.isArray(manifest.groups) ? manifest.groups : [])
       .filter((entry): entry is MatrixGroup => isValidManifestGroup(entry, manifest.rows, manifest.cols))
+      .map((entry) => normalizeManifestGroup(entry))
       .map((entry) => [entry.id, entry] as const),
   );
   const customColumnLabels = new Map(
@@ -141,12 +142,19 @@ function isValidManifestGroup(
     value.range.endRow >= value.range.startRow &&
     value.range.endCol >= value.range.startCol &&
     value.range.endRow < rows &&
-    value.range.endCol < cols &&
-    isValidGroupLabelOffset(value.labelOffset)
+    value.range.endCol < cols
   );
 }
 
-function isValidGroupLabelOffset(offset: unknown): offset is MatrixGroup["labelOffset"] {
+function normalizeManifestGroup(group: MatrixGroup): MatrixGroup {
+  if (isValidGroupLabelOffset(group.labelOffset)) {
+    return group;
+  }
+  const { labelOffset: _labelOffset, ...groupWithoutOffset } = group;
+  return groupWithoutOffset;
+}
+
+function isValidGroupLabelOffset(offset: unknown): offset is NonNullable<MatrixGroup["labelOffset"]> | undefined {
   if (offset === undefined) {
     return true;
   }

@@ -172,6 +172,7 @@ export function MatrixGrid({
   >([]);
   const [rowResizeDrag, setRowResizeDrag] = useState<RowResizeDrag | null>(null);
   const [groupLabelDrag, setGroupLabelDrag] = useState<GroupLabelDrag | null>(null);
+  const groupLabelDragRef = useRef<GroupLabelDrag | null>(null);
   const suppressNextGroupLabelClick = useRef(false);
   const visibleRowsRef = useRef<MatrixVisibleRows>({
     x: 0,
@@ -353,7 +354,7 @@ export function MatrixGrid({
       suppressNextGroupLabelClick.current = false;
       event.currentTarget.setPointerCapture(event.pointerId);
       const baseOffset = group.labelOffset ?? { x: 0, y: 0 };
-      setGroupLabelDrag({
+      const nextDrag = {
         group,
         pointerId: event.pointerId,
         startX: event.clientX,
@@ -361,62 +362,72 @@ export function MatrixGrid({
         baseOffset,
         currentOffset: baseOffset,
         moved: false,
-      });
+      };
+      groupLabelDragRef.current = nextDrag;
+      setGroupLabelDrag(nextDrag);
     },
     [editingGroupId],
   );
 
   const handleGroupLabelPointerMove = useCallback(
     (group: MatrixGroup, event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (!groupLabelDrag || groupLabelDrag.group.id !== group.id || groupLabelDrag.pointerId !== event.pointerId) {
+      const activeDrag = groupLabelDragRef.current;
+      if (!activeDrag || activeDrag.group.id !== group.id || activeDrag.pointerId !== event.pointerId) {
         return;
       }
-      const dx = event.clientX - groupLabelDrag.startX;
-      const dy = event.clientY - groupLabelDrag.startY;
-      const moved = groupLabelDrag.moved || Math.abs(dx) + Math.abs(dy) >= 4;
-      setGroupLabelDrag({
-        ...groupLabelDrag,
+      const dx = event.clientX - activeDrag.startX;
+      const dy = event.clientY - activeDrag.startY;
+      const moved = activeDrag.moved || Math.abs(dx) + Math.abs(dy) >= 4;
+      const nextDrag = {
+        ...activeDrag,
         currentOffset: {
-          x: groupLabelDrag.baseOffset.x + dx,
-          y: groupLabelDrag.baseOffset.y + dy,
+          x: activeDrag.baseOffset.x + dx,
+          y: activeDrag.baseOffset.y + dy,
         },
         moved,
-      });
+      };
+      groupLabelDragRef.current = nextDrag;
+      setGroupLabelDrag(nextDrag);
     },
-    [groupLabelDrag],
+    [],
   );
 
   const handleGroupLabelPointerUp = useCallback(
     (group: MatrixGroup, event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (!groupLabelDrag || groupLabelDrag.group.id !== group.id || groupLabelDrag.pointerId !== event.pointerId) {
+      const activeDrag = groupLabelDragRef.current;
+      if (!activeDrag || activeDrag.group.id !== group.id || activeDrag.pointerId !== event.pointerId) {
         return;
       }
+      groupLabelDragRef.current = null;
       setGroupLabelDrag(null);
-      if (!groupLabelDrag.moved) {
+      if (!activeDrag.moved) {
         return;
       }
       suppressNextGroupLabelClick.current = true;
+      // WHY: Some drag releases do not emit a follow-up click; the click handler clears this sooner when one does.
       window.setTimeout(() => {
         suppressNextGroupLabelClick.current = false;
       }, 0);
       event.preventDefault();
       event.stopPropagation();
       // INVARIANT: Persist group label offset only after drag end; click and double-click semantics stay intact.
-      onGroupLabelOffsetChange(group, groupLabelDrag.currentOffset);
+      onGroupLabelOffsetChange(group, activeDrag.currentOffset);
       updateGroupLabelPositions();
     },
-    [groupLabelDrag, onGroupLabelOffsetChange, updateGroupLabelPositions],
+    [onGroupLabelOffsetChange, updateGroupLabelPositions],
   );
 
   const handleGroupLabelPointerCancel = useCallback(
     (group: MatrixGroup, event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (!groupLabelDrag || groupLabelDrag.group.id !== group.id || groupLabelDrag.pointerId !== event.pointerId) {
+      const activeDrag = groupLabelDragRef.current;
+      if (!activeDrag || activeDrag.group.id !== group.id || activeDrag.pointerId !== event.pointerId) {
         return;
       }
+      groupLabelDragRef.current = null;
       setGroupLabelDrag(null);
       suppressNextGroupLabelClick.current = false;
     },
-    [groupLabelDrag],
+    [],
   );
 
   const handleRowResizePointerDown = useCallback(
