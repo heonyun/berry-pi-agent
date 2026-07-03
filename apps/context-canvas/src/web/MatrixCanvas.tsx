@@ -43,6 +43,7 @@ import {
 import { loadMatrixRowHeights, saveMatrixRowHeights } from "./matrix-row-heights.ts";
 import {
   appendMatrixHistory,
+  createMatrixDocumentFromHistorySnapshot,
   createMatrixHistorySnapshot,
   createHistoryEntry,
   loadMatrixHistory,
@@ -80,6 +81,24 @@ function nextChipId(): string {
 interface ReferenceEditState {
   readonly row: number;
   readonly col: number;
+}
+
+interface RestoreSourceState {
+  readonly document: MatrixDocument;
+  readonly selection: MatrixGridSelectionState | null;
+  readonly contextChips: readonly ContextChip[];
+  readonly targetRange: RangeRefDTO | null;
+}
+
+function rangeRefToSelection(range: RangeRefDTO): MatrixGridSelectionState {
+  return {
+    startRow: range.startRow,
+    startCol: range.startCol,
+    endRow: range.endRow,
+    endCol: range.endCol,
+    activeRow: range.startRow,
+    activeCol: range.startCol,
+  };
 }
 
 export function MatrixCanvas(): ReactElement {
@@ -121,6 +140,8 @@ export function MatrixCanvas(): ReactElement {
 
   const [historyEntries, setHistoryEntries] = useState<MatrixHistoryEntry[]>(() => loadMatrixHistory());
   const [selectedHistory, setSelectedHistory] = useState<MatrixHistoryEntry | null>(null);
+  const [restoredHistoryId, setRestoredHistoryId] = useState<string | null>(null);
+  const restoreSourceRef = useRef<RestoreSourceState | null>(null);
   const storedGroupLabelOffsetsRef = useRef(loadMatrixGroupLabelOffsets());
 
   const groups = useMemo(() => visibleMatrixGroups(document), [document]);
@@ -766,14 +787,60 @@ export function MatrixCanvas(): ReactElement {
     setStatus(`AI ready for ${selectionLabel} — review and Run`);
   }, [contextChips, selectionLabel, selectionRange]);
 
-  const handleHistorySelect = useCallback((entry: MatrixHistoryEntry) => {
-    setSelectedHistory(entry);
-    setDetailCell(null);
-    setDetailFrontmatter("");
-  }, []);
+  const handleHistorySelect = useCallback(
+    (entry: MatrixHistoryEntry) => {
+      setSelectedHistory(entry);
+      setDetailCell(null);
+      setDetailFrontmatter("");
+
+      if (!entry.snapshot) {
+        setStatus("History entry has no document snapshot");
+        return;
+      }
+      if (entry.snapshot.truncated) {
+        setStatus("History snapshot is truncated and cannot restore full cells");
+        return;
+      }
+
+      if (!restoreSourceRef.current) {
+        restoreSourceRef.current = {
+          document: docRef.current,
+          selection,
+          contextChips,
+          targetRange,
+        };
+      }
+
+      const restoredDocument = createMatrixDocumentFromHistorySnapshot(entry.snapshot, docRef.current);
+      docRef.current = restoredDocument;
+      setDocument(restoredDocument);
+      setSelection(rangeRefToSelection(entry.targetRange));
+      setRestoredHistoryId(entry.id);
+      setStatus(`Restored history snapshot: ${entry.targetRangeLabel}`);
+    },
+    [contextChips, selection, targetRange],
+  );
 
   const handleHistoryClose = useCallback(() => {
     setSelectedHistory(null);
+  }, []);
+
+  const handleReturnToCurrentDocument = useCallback(() => {
+    const source = restoreSourceRef.current;
+    if (!source) {
+      setSelectedHistory(null);
+      setRestoredHistoryId(null);
+      return;
+    }
+    restoreSourceRef.current = null;
+    docRef.current = source.document;
+    setDocument(source.document);
+    setSelection(source.selection);
+    setContextChips([...source.contextChips]);
+    setTargetRange(source.targetRange);
+    setSelectedHistory(null);
+    setRestoredHistoryId(null);
+    setStatus("Returned to current document");
   }, []);
 
   const handleHistoryRerun = useCallback((entry: MatrixHistoryEntry) => {
@@ -1012,8 +1079,10 @@ export function MatrixCanvas(): ReactElement {
         selectedHistory ? (
           <MatrixHistoryDetailPane
             entry={selectedHistory}
-            onClose={handleHistoryClose}
+            isRestored={restoredHistoryId !== null}
+            onClose={restoredHistoryId !== null ? handleReturnToCurrentDocument : handleHistoryClose}
             onRerun={handleHistoryRerun}
+            onReturnToCurrent={handleReturnToCurrentDocument}
           />
         ) : (
           <MatrixDetailPane
