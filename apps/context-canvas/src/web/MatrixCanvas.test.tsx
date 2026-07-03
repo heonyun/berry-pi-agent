@@ -1,11 +1,29 @@
 // @vitest-environment jsdom
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
-import { cellKey, type MatrixDocument, type MatrixGroup } from "../shared/domain.ts";
+import {
+  cellKey,
+  type MatrixDocument,
+  type MatrixGroup,
+  type MatrixHistorySnapshot,
+} from "../shared/domain.ts";
 import type { MatrixGridSelectionState } from "./MatrixGrid.tsx";
+import { loadMatrixHistory } from "./matrix-history.ts";
 import { MatrixCanvas } from "./MatrixCanvas.tsx";
+
+vi.mock("./run-matrix.ts", () => ({
+  runMatrix: vi.fn().mockResolvedValue({
+    command: {
+      intent: "test",
+      targetRange: { startRow: 0, startCol: 1, endRow: 1, endCol: 2 },
+      patches: [
+        { row: 0, col: 1, value: "text", body: "Hello, World!" },
+      ],
+    },
+  }),
+}));
 
 vi.mock("./MatrixGrid.tsx", () => ({
   MatrixGrid: ({
@@ -196,5 +214,46 @@ describe("MatrixCanvas reference edit mode", () => {
     expect(screen.getByTestId("cell-a1").textContent).toBe("=");
     expect(screen.getByTestId("cell-b2").textContent).toBe("Beta");
     expect(screen.getByText("2 cells updated")).toBeTruthy();
+  });
+});
+
+describe("MatrixCanvas AI run history snapshot", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  it("includes a document snapshot in the history entry after a successful AI run", async () => {
+    render(<MatrixCanvas />);
+
+    fireEvent.click(screen.getByText("pick B1:C2"));
+    const input = screen.getByTestId("matrix-composer-input");
+    fireEvent.change(input, { target: { value: "Write test data" } });
+    fireEvent.click(screen.getByTestId("matrix-set-target"));
+    fireEvent.click(screen.getByTestId("matrix-run"));
+
+    await screen.findByText(/Run applied:/);
+
+    let snapshot: MatrixHistorySnapshot | undefined;
+    await waitFor(() => {
+      const entries = loadMatrixHistory();
+      expect(entries.length).toBeGreaterThanOrEqual(1);
+      snapshot = entries[0].snapshot;
+      expect(snapshot).toBeDefined();
+    });
+    if (!snapshot) throw new Error("Expected snapshot to be present");
+    expect(snapshot.sheet).toBeDefined();
+    expect(snapshot.cells.length).toBeGreaterThanOrEqual(1);
+    const writtenCell = snapshot.cells.find(
+      (c) => c.row === 0 && c.col === 1,
+    );
+    expect(writtenCell).toBeDefined();
+    if (!writtenCell) throw new Error("Expected AI-written cell in snapshot");
+    expect(writtenCell.cell.body).toBe("Hello, World!");
+    expect(snapshot.serializedBytes).toBeGreaterThan(0);
   });
 });

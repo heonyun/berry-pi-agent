@@ -3,6 +3,7 @@ import type {
   AiCommand,
   MatrixHistoryContextRange,
   MatrixHistoryEntry,
+  MatrixHistorySnapshot,
   RangeRefDTO,
   WritePatch,
 } from "./domain.ts";
@@ -93,12 +94,89 @@ export function isMatrixHistoryContextRange(value: unknown): value is MatrixHist
   );
 }
 
+export function isMatrixHistorySnapshot(value: unknown): value is MatrixHistorySnapshot {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const s = value as Record<string, unknown>;
+  if (s.schemaVersion !== 1) {
+    return false;
+  }
+  if (!s.sheet || typeof s.sheet !== "object") {
+    return false;
+  }
+  const sheet = s.sheet as Record<string, unknown>;
+  if (
+    typeof sheet.id !== "string" ||
+    typeof sheet.name !== "string" ||
+    typeof sheet.rows !== "number" || !Number.isInteger(sheet.rows) || sheet.rows < 0 ||
+    typeof sheet.cols !== "number" || !Number.isInteger(sheet.cols) || sheet.cols < 0
+  ) {
+    return false;
+  }
+  if (!Array.isArray(s.cells)) {
+    return false;
+  }
+  if (!s.cells.every(
+    (c: unknown) => {
+      if (c === null || typeof c !== "object") return false;
+      const cell = c as Record<string, unknown>;
+      if (typeof cell.row !== "number" || !Number.isInteger(cell.row) || cell.row < 0) return false;
+      if (typeof cell.col !== "number" || !Number.isInteger(cell.col) || cell.col < 0) return false;
+      if (!cell.cell || typeof cell.cell !== "object") return false;
+      const inner = cell.cell as Record<string, unknown>;
+      if (!["string", "number", "boolean"].includes(typeof inner.value) && inner.value !== null) return false;
+      if (typeof inner.body !== "string") return false;
+      if (typeof inner.frontmatter !== "string") return false;
+      if (inner.provenance !== undefined && typeof inner.provenance !== "string") return false;
+      return true;
+    }
+  )) {
+    return false;
+  }
+  if (!Array.isArray(s.groups)) {
+    return false;
+  }
+  if (!s.groups.every(
+    (g: unknown) => {
+      if (g === null || typeof g !== "object") return false;
+      const group = g as Record<string, unknown>;
+      if (typeof group.id !== "string") return false;
+      if (typeof group.label !== "string") return false;
+      if (group.source !== "auto") return false;
+      if (!isRangeRefDTO(group.range)) return false;
+      if (group.labelOffset !== undefined) {
+        if (typeof group.labelOffset !== "object" || group.labelOffset === null) return false;
+        const lo = group.labelOffset as Record<string, unknown>;
+        if (typeof lo.x !== "number" || !Number.isFinite(lo.x)) return false;
+        if (typeof lo.y !== "number" || !Number.isFinite(lo.y)) return false;
+      }
+      if (group.dismissed !== undefined && typeof group.dismissed !== "boolean") return false;
+      return true;
+    }
+  )) {
+    return false;
+  }
+  if (
+    typeof s.maxSerializedBytes !== "number" || !Number.isFinite(s.maxSerializedBytes) || s.maxSerializedBytes < 0 ||
+    typeof s.serializedBytes !== "number" || !Number.isFinite(s.serializedBytes) || s.serializedBytes < 0 ||
+    typeof s.truncated !== "boolean"
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function isMatrixHistoryEntry(value: unknown): value is MatrixHistoryEntry {
   if (!value || typeof value !== "object") {
     return false;
   }
   const entry = value as Record<string, unknown>;
+  const snapshotOk =
+    entry.snapshot === undefined ||
+    isMatrixHistorySnapshot(entry.snapshot);
   return (
+    snapshotOk &&
     typeof entry.id === "string" &&
     typeof entry.timestamp === "string" &&
     typeof entry.intent === "string" &&

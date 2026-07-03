@@ -1,14 +1,88 @@
 import {
   formatColumnLabel,
+  MATRIX_SNAPSHOT_MAX_BYTES,
   type AiCommand,
+  type Cell,
+  type MatrixDocument,
   type MatrixHistoryContextRange,
   type MatrixHistoryEntry,
+  type MatrixHistorySnapshot,
   type RangeRefDTO,
 } from "../shared/domain.ts";
 import { isMatrixHistoryEntry } from "../shared/matrix-validation.ts";
 
+/** Build a serializable document snapshot from the current MatrixDocument state.
+  * Cells are serialized as an array of {row, col, Cell} pairs (Map is not JSON-safe).
+  * Groups are serialized as an array preserving id, label, range, source, and optional fields.
+  * Size metadata documents the configured byte limit and the observed serialized size. */
+export function createMatrixHistorySnapshot(document: MatrixDocument): MatrixHistorySnapshot {
+  const cells: Array<{ row: number; col: number; cell: Cell }> = [];
+  for (const [key, cell] of document.sheet.cells) {
+    const parts = key.split(",");
+    const row = Number(parts[0]);
+    const col = Number(parts[1]);
+    if (parts.length !== 2 || !Number.isInteger(row) || !Number.isInteger(col) || row < 0 || col < 0) {
+      // WHY: Invalid map keys should not poison the whole persisted history entry.
+      continue;
+    }
+    cells.push({ row, col, cell });
+  }
+
+  const groups: MatrixHistorySnapshot["groups"] = Array.from(document.groups.values()).map((group) => ({
+    id: group.id,
+    label: group.label,
+    range: group.range,
+    source: group.source,
+    ...(group.labelOffset ? { labelOffset: group.labelOffset } : {}),
+    ...(group.dismissed !== undefined ? { dismissed: group.dismissed } : {}),
+  }));
+
+  // WHY: Measure the full snapshot first so oversized payloads can drop cells before storage.
+  const snapshot = {
+    // schemaVersion typed as literal 1 for MatrixHistorySnapshot
+    schemaVersion: 1 as const,
+    sheet: {
+      id: document.sheet.id,
+      name: document.sheet.name,
+      rows: document.sheet.rows,
+      cols: document.sheet.cols,
+    },
+    cells,
+    groups,
+    maxSerializedBytes: MATRIX_SNAPSHOT_MAX_BYTES,
+  };
+
+  const serialized = JSON.stringify(snapshot);
+  const serializedBytes = new TextEncoder().encode(serialized).length;
+
+  if (serializedBytes > MATRIX_SNAPSHOT_MAX_BYTES) {
+    // WHY: Preserve structural metadata while preventing runaway localStorage writes.
+    const prunedSnapshot = {
+      ...snapshot,
+      cells: [],
+    };
+    const prunedSerialized = JSON.stringify(prunedSnapshot);
+    const prunedSerializedBytes = new TextEncoder().encode(prunedSerialized).length;
+
+    return {
+      ...prunedSnapshot,
+      serializedBytes: prunedSerializedBytes,
+      truncated: true,
+    };
+  }
+
+  return {
+    ...snapshot,
+    serializedBytes,
+    truncated: false,
+  };
+}
+
 const STORAGE_KEY = "context-matrix-history";
-/** CONTRACT: localStorage is authoritative for in-browser history; bundle export is async second persist (see scheduleMatrixBundleExport). */
+/**
+ * CONTRACT: localStorage is authoritative for in-browser history;
+ * bundle export is async second persist (see scheduleMatrixBundleExport).
+ */
 const MAX_HISTORY = 50;
 const PREVIEW_MAX = 280;
 
@@ -91,6 +165,7 @@ export interface CreateHistoryEntryInput {
   readonly targetRange: RangeRefDTO;
   readonly targetRangeLabel: string;
   readonly patchesApplied: number;
+  readonly snapshot?: MatrixHistorySnapshot;
   readonly compiledContextPreview?: string;
   readonly patchesSummary?: string;
 }
@@ -105,6 +180,7 @@ export function createHistoryEntry(input: CreateHistoryEntryInput): MatrixHistor
     targetRangeLabel: input.targetRangeLabel,
     targetRange: input.targetRange,
     patchesApplied: input.patchesApplied,
+    ...(input.snapshot ? { snapshot: input.snapshot } : {}),
     ...(input.compiledContextPreview ? { compiledContextPreview: input.compiledContextPreview } : {}),
     ...(input.patchesSummary ? { patchesSummary: input.patchesSummary } : {}),
   };

@@ -383,6 +383,40 @@ export interface CellFrontmatterParsed {
   readonly [key: string]: unknown;
 }
 
+/** Maximum serialized bytes allowed for a document snapshot attached to a history entry.
+  * 1 MB is a generous limit that covers the vast majority of practical matrix canvases
+  * while preventing runaway localStorage/bundle bloat. */
+export const MATRIX_SNAPSHOT_MAX_BYTES = 1_048_576;
+
+/** Serialized cell data entry -- Map cannot round-trip through JSON directly. */
+export interface SnapshotCell {
+  readonly row: number;
+  readonly col: number;
+  readonly cell: Cell;
+}
+
+export type MatrixHistorySnapshotGroup = Pick<
+  MatrixGroup,
+  "id" | "label" | "range" | "source" | "labelOffset" | "dismissed"
+>;
+
+/** Serializable snapshot of a MatrixDocument, stored with a history entry.
+  * Cells and groups are serialized as arrays (not Map) for JSON round-trip safety. */
+export interface MatrixHistorySnapshot {
+  readonly schemaVersion: 1;
+  readonly sheet: {
+    readonly id: string;
+    readonly name: string;
+    readonly rows: number;
+    readonly cols: number;
+  };
+  readonly cells: readonly SnapshotCell[];
+  readonly groups: readonly MatrixHistorySnapshotGroup[];
+  readonly maxSerializedBytes: number;
+  readonly serializedBytes: number;
+  readonly truncated: boolean;
+}
+
 /** Context range snapshot stored with a history entry for re-run pre-fill. */
 export interface MatrixHistoryContextRange {
   readonly label: string;
@@ -400,6 +434,7 @@ export interface MatrixHistoryEntry {
   readonly targetRangeLabel: string;
   readonly targetRange: RangeRefDTO;
   readonly patchesApplied: number;
+  readonly snapshot?: MatrixHistorySnapshot;
   readonly compiledContextPreview?: string;
   readonly patchesSummary?: string;
 }
