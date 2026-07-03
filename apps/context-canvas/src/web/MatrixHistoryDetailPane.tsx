@@ -76,7 +76,7 @@ export function MatrixHistoryDetailPane({
         {isRestored && onReturnToCurrent && (
           <button
             type="button"
-            className="matrix-history-rerun nodrag nopan"
+            className="matrix-history-return nodrag nopan"
             data-testid="history-return-current"
             onClick={onReturnToCurrent}
           >
