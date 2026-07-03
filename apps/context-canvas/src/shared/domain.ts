@@ -387,6 +387,7 @@ export interface CellFrontmatterParsed {
 export interface MatrixHistoryContextRange {
   readonly label: string;
   readonly range: RangeRefDTO;
+  readonly groupId?: string;
 }
 
 /** Append-only record of a successful matrix AI run (Phase 4b). */

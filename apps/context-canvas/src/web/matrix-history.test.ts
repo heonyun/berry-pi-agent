@@ -36,6 +36,27 @@ describe("matrix-history", () => {
     expect(loaded[0]?.contextRangeNames).toEqual(["@inputs"]);
   });
 
+  it("preserves stable group ids for history reruns", () => {
+    const entry = createHistoryEntry({
+      intent: "Summarize group",
+      contextRanges: [
+        {
+          label: "Research",
+          range: { startRow: 0, startCol: 0, endRow: 1, endCol: 1 },
+          groupId: "auto:group-1",
+        },
+      ],
+      targetRange: { startRow: 0, startCol: 2, endRow: 1, endCol: 2 },
+      targetRangeLabel: "C1:C2",
+      patchesApplied: 2,
+    });
+
+    saveMatrixHistory([entry]);
+
+    const loaded = loadMatrixHistory();
+    expect(loaded[0]?.contextRanges[0]?.groupId).toBe("auto:group-1");
+  });
+
   it("prepends newest entry and caps list size", () => {
     const first = createHistoryEntry({
       intent: "first",
