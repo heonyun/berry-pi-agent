@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ImeTextarea } from "./ImeTextarea.tsx";
 
@@ -128,5 +129,13 @@ describe("ImeTextarea", () => {
     );
 
     expect(screen.getByLabelText("prompt").getAttribute("data-prompt-id")).toBe("prompt-123");
+  });
+
+  it("forwards refs to the underlying textarea", () => {
+    const ref = createRef<HTMLTextAreaElement>();
+
+    render(<ImeTextarea ref={ref} value="prompt" onValueChange={vi.fn()} aria-label="prompt" />);
+
+    expect(ref.current).toBe(screen.getByLabelText("prompt"));
   });
 });

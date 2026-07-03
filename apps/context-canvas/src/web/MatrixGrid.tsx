@@ -6,6 +6,8 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactElement,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -22,6 +24,10 @@ import {
   type HeaderClickedEventArgs,
   type GridSelection,
   type Item,
+  type ProvideEditorCallback,
+  type ProvideEditorComponent,
+  type SelectionRange,
+  type TextCell,
 } from "@glideapps/glide-data-grid";
 import { shouldCancelMatrixEditOnTypeForIme } from "../shared/matrix-ime.ts";
 import "@glideapps/glide-data-grid/dist/index.css";
@@ -39,6 +45,7 @@ import {
   rangeRefToGridSelection,
   type MatrixGridSelectionState,
 } from "../adapters/matrix-grid-selection.ts";
+import { ImeTextarea } from "./ImeTextarea.tsx";
 
 export type { MatrixGridSelectionState };
 
@@ -129,6 +136,119 @@ interface MatrixVisibleRows {
 
 const ROW_RESIZE_HANDLE_WIDTH = 32;
 const MATRIX_HEADER_HEIGHT = 36;
+const MATRIX_IME_EDITOR_STYLE: CSSProperties = {
+  width: "100%",
+  height: "100%",
+  minHeight: "100%",
+  boxSizing: "border-box",
+  resize: "none",
+  border: "none",
+  outline: "none",
+  background: "transparent",
+  color: "inherit",
+  font: "inherit",
+  lineHeight: "inherit",
+  padding: "3px 8.5px",
+};
+
+function applyValidatedSelection(
+  textarea: HTMLTextAreaElement | null,
+  range: SelectionRange | undefined,
+): void {
+  if (!textarea || range === undefined) {
+    return;
+  }
+  const [start, end] = typeof range === "number" ? [range, range] : range;
+  textarea.setSelectionRange(start, end);
+}
+
+const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
+  isHighlighted,
+  onChange,
+  onFinishedEditing,
+  validatedSelection,
+  value,
+}) => {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const finishedRef = useRef(false);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea || value.readonly === true) {
+      return;
+    }
+    const length = value.data.length;
+    textarea.focus();
+    textarea.setSelectionRange(isHighlighted ? 0 : length, length);
+  }, [isHighlighted, value.data.length, value.readonly]);
+
+  useLayoutEffect(() => {
+    applyValidatedSelection(textareaRef.current, validatedSelection);
+  }, [validatedSelection]);
+
+  const updateValue = useCallback(
+    (next: string): TextCell => ({
+      ...value,
+      data: next,
+      displayData: next,
+    }),
+    [value],
+  );
+
+  const handleLocalChange = useCallback(
+    (next: string) => {
+      onChange(updateValue(next));
+    },
+    [onChange, updateValue],
+  );
+
+  const finishEditing = useCallback(
+    (next?: TextCell) => {
+      if (finishedRef.current) {
+        return;
+      }
+      finishedRef.current = true;
+      onFinishedEditing(next);
+    },
+    [onFinishedEditing],
+  );
+
+  const handleValueChange = useCallback(
+    (next: string) => {
+      finishEditing(updateValue(next));
+    },
+    [finishEditing, updateValue],
+  );
+
+  const handleKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        finishEditing(undefined);
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        finishEditing(updateValue(event.currentTarget.value));
+      }
+    },
+    [finishEditing, updateValue],
+  );
+
+  return (
+    <ImeTextarea
+      ref={textareaRef}
+      aria-label="Matrix cell editor"
+      className="matrix-grid-ime-editor gdg-input"
+      disabled={value.readonly === true}
+      value={value.data}
+      style={MATRIX_IME_EDITOR_STYLE}
+      onKeyDown={handleKeyDown}
+      onLocalChange={handleLocalChange}
+      onValueChange={handleValueChange}
+    />
+  );
+};
 
 function matrixSelectionToGridSelection(selection: MatrixGridSelectionState | null): GridSelection {
   if (!selection) {
@@ -600,6 +720,18 @@ export function MatrixGrid({
     [],
   );
 
+  const provideEditor = useCallback<ProvideEditorCallback<TextCell>>((cell) => {
+    if (cell.kind !== GridCellKind.Text) {
+      return undefined;
+    }
+    return {
+      // CONTRACT: replacing Glide's GrowingEntry must preserve `.gdg-input`
+      // so matrix shortcut guards still recognize an active overlay editor.
+      editor: MatrixImeTextEditor,
+      disablePadding: cell.allowWrapping === true,
+    };
+  }, []);
+
   const handleGridKeyDown = useCallback((event: GridKeyEventArgs) => {
     const native = event.rawEvent?.nativeEvent;
     // WHY: Glide editOnType calls reselect(..., event.key) before IME composition; cancel avoids Latin seed.
@@ -647,7 +779,7 @@ export function MatrixGrid({
         cellActivationBehavior="second-click"
         editOnType={true}
         keybindings={keybindings}
-        // TODO: issue-93 — provideEditor with ImeTextarea for in-overlay IME; onKeyDown cancel is skeleton only.
+        provideEditor={provideEditor as DataEditorProps["provideEditor"]}
         trapFocus={true}
         scrollToActiveCell={true}
         smoothScrollX

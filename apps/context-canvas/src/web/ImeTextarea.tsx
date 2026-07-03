@@ -1,7 +1,9 @@
 import {
   memo,
+  forwardRef,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
   type ChangeEvent,
@@ -32,7 +34,7 @@ export interface ImeTextareaProps
  * Draft-controlled textarea that defers parent commits until editing is done.
  * See: https://github.com/langflow-ai/langflow/issues/12376
  */
-export const ImeTextarea = memo(function ImeTextarea({
+export const ImeTextarea = memo(forwardRef<HTMLTextAreaElement, ImeTextareaProps>(function ImeTextarea({
   value,
   clearOnFocusValue,
   onLocalChange,
@@ -44,12 +46,15 @@ export const ImeTextarea = memo(function ImeTextarea({
   onCompositionEnd,
   onChange: onChangeProp,
   ...rest
-}: ImeTextareaProps) {
+}: ImeTextareaProps, forwardedRef) {
   const [draft, setDraft] = useState(value);
   const composingRef = useRef(false);
   const draftRef = useRef(value);
   const focusedRef = useRef(false);
   const blurDuringCompositionRef = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useImperativeHandle(forwardedRef, () => textareaRef.current as HTMLTextAreaElement, []);
 
   useEffect(() => {
     draftRef.current = draft;
@@ -137,6 +142,7 @@ export const ImeTextarea = memo(function ImeTextarea({
   return (
     <textarea
       {...rest}
+      ref={textareaRef}
       value={draft}
       onChange={handleChange}
       onFocus={handleFocus}
@@ -145,7 +151,7 @@ export const ImeTextarea = memo(function ImeTextarea({
       onBlur={handleBlur}
     />
   );
-});
+}));
 
 export function stopNodeKeyPropagation(event: KeyboardEvent<HTMLElement>): void {
   event.stopPropagation();
