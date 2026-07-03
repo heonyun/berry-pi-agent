@@ -20,6 +20,18 @@ if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
   exit 1
 fi
 
+head_sha="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.head.sha' 2>/dev/null || true)"
+force_rerun=0
+if [[ -n "${EXTRA}" ]]; then
+  force_rerun=1
+fi
+
+if [[ "${force_rerun}" -eq 0 ]] && [[ -n "${head_sha}" ]] &&
+  agent_pr_should_skip_duplicate_review "${REPO}" "${PR_NUMBER}" "${head_sha}" "${WORKFLOW_ID}"; then
+  echo "Skipping duplicate DeepSeek PR review for head ${head_sha}"
+  exit 0
+fi
+
 diff_file="$(mktemp)"
 payload_file="$(mktemp)"
 response_file="$(mktemp)"
@@ -40,13 +52,26 @@ diff_metadata="$(agent_pr_diff_metadata "${diff_file}" "${MAX_DIFF_CHARS}" "${RE
 
 surrounding_context="$(agent_pr_surrounding_context "${REPO}" "${PR_NUMBER}" "${SURROUNDING_CONTEXT_LINES:-25}" "${SURROUNDING_CONTEXT_MAX_FILES:-4}" "${SURROUNDING_CONTEXT_MAX_CHARS:-14000}")"
 
+test_harness_context="$(agent_pr_test_harness_context "${REPO}" "${PR_NUMBER}" "${TEST_HARNESS_MAX_FILES:-3}" "${TEST_HARNESS_MAX_CHARS:-12000}")"
+
+domain_invariants=""
+if agent_pr_touches_context_canvas "${REPO}" "${PR_NUMBER}"; then
+  domain_invariants="$(agent_pr_domain_invariants_prompt)"
+fi
+
 ci_checks="$(gh pr checks "${PR_NUMBER}" --repo "${REPO}" 2>/dev/null | head -20 || echo "unavailable")"
 
 failed_ci_logs="$(agent_pr_failed_ci_logs "${REPO}" "${PR_NUMBER}" "${FAILED_CI_LOG_MAX_CHARS:-8000}")"
 
+ci_build_passed=0
+if agent_ci_build_check_passed "${ci_checks}"; then
+  ci_build_passed=1
+fi
+
 user_content="$(cat <<EOF
 Repository: ${REPO}
 Pull request #${PR_NUMBER}: ${TITLE}
+PR head: ${head_sha:-unknown}
 
 PR body:
 ${BODY}
@@ -55,6 +80,10 @@ Additional request:
 ${EXTRA}
 
 ${diff_metadata}
+
+${domain_invariants}
+
+${test_harness_context}
 
 ${surrounding_context}
 
@@ -93,17 +122,13 @@ if [[ -z "${comment_body}" ]]; then
   exit 1
 fi
 
-comment_body="$(agent_post_process_review_comment "${comment_body}" "${diff_truncated}")"
+comment_body="$(agent_post_process_review_comment "${comment_body}" "${diff_truncated}" "${ci_build_passed}")"
 
 {
   echo "${comment_body}"
-  agent_footer "${WORKFLOW_ID}" "${MODEL}"
+  agent_footer "${WORKFLOW_ID}" "${MODEL}" "${head_sha}"
 } > "${response_file}"
 
-gh api \
-  "repos/${REPO}/issues/${PR_NUMBER}/comments" \
-  -f body="$(cat "${response_file}")"
+agent_pr_upsert_review_comment "${REPO}" "${PR_NUMBER}" "$(cat "${response_file}")" "${WORKFLOW_ID}"
 
 agent_apply_labels "${PR_NUMBER}" "agent:reviewed"
-
-echo "Posted DeepSeek PR review comment on PR #${PR_NUMBER}"

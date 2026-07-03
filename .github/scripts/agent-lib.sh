@@ -7,9 +7,13 @@ AGENT_ANTIGRAVITY_MARKER='<!-- pi-agent:created-by:antigravity -->'
 agent_footer() {
   local workflow_id="${1:?workflow id required}"
   local model="${2:-deepseek-v4-flash}"
+  local head_sha="${3:-}"
   echo ""
   echo "---"
   echo "${AGENT_MARKER_PREFIX}${workflow_id} -->"
+  if [[ -n "${head_sha}" ]]; then
+    echo "<!-- pi-agent:review-head:${head_sha} -->"
+  fi
   echo "_Automated note via DeepSeek (${model}) · workflow: ${workflow_id}_"
 }
 
@@ -143,6 +147,15 @@ Review requirements:
 - Keep non-blocking follow-ups separate from Findings under residual risks or
   Suggested next steps, and state that they are not blockers.
 - Do not claim you ran tests.
+- Never use Conclusion "fail" with blocker:yes solely because a test "will fail" or "must fail"
+  unless the diff itself shows a definite logic error. When Latest CI checks show
+  build-check-test passed, treat test-failure claims as needs-verification with
+  blocker:no at most.
+- When Repository domain invariants are provided, treat them as authoritative over
+  generic assumptions (for example MatrixGroup.source is only "auto", not "manual").
+- UI elements referenced only inside *.test.ts(x) mocks or test helpers may not exist
+  in production components. Read the Test harness context section before claiming
+  a button or label is missing from the product UI.
 - In "Commands to rerun", suggest only commands supported by the PR context or
   repository scripts visible in the PR body/diff. If unsure, write "inspect
   package.json for the exact workspace command" instead of inventing package
@@ -153,6 +166,171 @@ remaining test gaps or residual risks under Suggested next steps only.
 When Conclusion is "pass", Findings must be empty (write "None.") — do not list
 P2/P3 or missing-test items as numbered findings.
 EOF
+}
+
+# Context Canvas domain contracts injected into PR reviews when the diff touches that app.
+agent_pr_domain_invariants_prompt() {
+  cat <<'EOF'
+Repository domain invariants (authoritative for apps/context-canvas):
+- MatrixGroup.source is exactly "auto" only. Do not claim snapshots or validators must accept "manual".
+- MatrixHistorySnapshotGroup.source follows MatrixGroup.source ("auto" only).
+- isMatrixHistorySnapshot rejecting non-"auto" group source matches the domain; that is not data-loss for manual groups.
+- Reference edit mode (#103+): bare body "==" enters pick mode; full formulas like "=SUM(A1)" do not.
+- Test files (*.test.tsx) often define mock buttons/labels (for example "edit text", "replay A1") that are not production UI.
+
+When a finding contradicts these invariants, move it to Suggested next steps as needs-verification or drop it.
+EOF
+}
+
+# Exit 0 when CI build-check-test (or build-check) passed in gh pr checks output.
+agent_ci_build_check_passed() {
+  local checks="${1:-}"
+  if [[ -z "${checks}" ]] || [[ "${checks}" == "unavailable" ]]; then
+    return 1
+  fi
+  printf '%s\n' "${checks}" | awk '
+    tolower($0) ~ /build-check/ && tolower($0) ~ /pass/ { found=1 }
+    END { exit(found ? 0 : 1) }
+  '
+}
+
+# Exit 0 when the PR changes files under apps/context-canvas/.
+agent_pr_touches_context_canvas() {
+  local repo="${1:?repo required}"
+  local pr_number="${2:?pr number required}"
+  local filenames
+  filenames="$(gh api "repos/${repo}/pulls/${pr_number}/files" --jq '.[].filename' 2>/dev/null || true)"
+  [[ -n "${filenames}" ]] && printf '%s\n' "${filenames}" | grep -q '^apps/context-canvas/'
+}
+
+# Exit 0 when an automated review for this head SHA was already posted (skip re-run).
+agent_pr_should_skip_duplicate_review() {
+  local repo="${1:?repo required}"
+  local pr_number="${2:?pr number required}"
+  local head_sha="${3:?head sha required}"
+  local workflow_id="${4:-deepseek-pr-review}"
+  local marker="${AGENT_MARKER_PREFIX}${workflow_id} -->"
+  local head_marker="<!-- pi-agent:review-head:${head_sha} -->"
+  local comments body
+
+  if ! command -v gh >/dev/null 2>&1; then
+    return 1
+  fi
+
+  comments="$(gh api "repos/${repo}/issues/${pr_number}/comments" --paginate 2>/dev/null || true)"
+  body="$(printf '%s' "${comments}" | jq -r --arg m "${marker}" --arg h "${head_marker}" '
+    [.[] | select(.body | contains($m))] | last | .body // empty
+  ' 2>/dev/null || true)"
+
+  [[ -n "${body}" ]] && [[ "${body}" == *"${head_marker}"* ]]
+}
+
+# Find the latest issue comment id for a workflow marker (prints id or empty).
+agent_pr_latest_workflow_comment_id() {
+  local repo="${1:?repo required}"
+  local pr_number="${2:?pr number required}"
+  local workflow_id="${3:?workflow id required}"
+  local marker="${AGENT_MARKER_PREFIX}${workflow_id} -->"
+
+  gh api "repos/${repo}/issues/${pr_number}/comments" --paginate \
+    --jq ".[] | select(.body | contains(\"${marker}\")) | .id" 2>/dev/null | tail -1
+}
+
+# Create or update the single workflow review comment on a PR/issue.
+agent_pr_upsert_review_comment() {
+  local repo="${1:?repo required}"
+  local pr_number="${2:?pr number required}"
+  local body="${3:?body required}"
+  local workflow_id="${4:?workflow id required}"
+  local comment_id
+
+  comment_id="$(agent_pr_latest_workflow_comment_id "${repo}" "${pr_number}" "${workflow_id}")"
+  if [[ -n "${comment_id}" ]]; then
+    gh api \
+      -X PATCH \
+      "repos/${repo}/issues/comments/${comment_id}" \
+      -f body="${body}" >/dev/null
+    echo "Updated DeepSeek PR review comment #${comment_id} on PR #${pr_number}"
+    return 0
+  fi
+
+  gh api \
+    "repos/${repo}/issues/${pr_number}/comments" \
+    -f body="${body}" >/dev/null
+  echo "Posted DeepSeek PR review comment on PR #${pr_number}"
+}
+
+# Fetch top-of-file / mock harness excerpts from changed test files on the PR head.
+agent_pr_test_harness_context() {
+  local repo="${1:?repo required}"
+  local pr_number="${2:?pr number required}"
+  local max_files="${3:-3}"
+  local max_chars="${4:-12000}"
+
+  if ! command -v gh >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local head_sha filenames file_count total_chars snippets block block_len
+  head_sha="$(gh api "repos/${repo}/pulls/${pr_number}" --jq '.head.sha' 2>/dev/null || true)"
+  if [[ -z "${head_sha}" ]]; then
+    return 0
+  fi
+
+  filenames="$(gh api "repos/${repo}/pulls/${pr_number}/files" --jq '.[].filename' 2>/dev/null \
+    | grep -E '\.test\.(ts|tsx)$' || true)"
+  if [[ -z "${filenames}" ]]; then
+    return 0
+  fi
+
+  file_count=0
+  total_chars=0
+  snippets=""
+
+  while IFS= read -r filename; do
+    [[ -z "${filename}" ]] && continue
+    if [[ "${file_count}" -ge "${max_files}" ]]; then
+      break
+    fi
+
+    local encoded_path content_b64 content excerpt
+    encoded_path="$(jq -rn --arg v "${filename}" '$v|@uri')"
+    content_b64="$(gh api "repos/${repo}/contents/${encoded_path}?ref=${head_sha}" \
+      --jq '.content // empty' 2>/dev/null | tr -d '\n' || true)"
+    if [[ -z "${content_b64}" ]]; then
+      continue
+    fi
+
+    content="$(printf '%s' "${content_b64}" | base64 -d 2>/dev/null || true)"
+    if [[ -z "${content}" ]]; then
+      continue
+    fi
+
+    excerpt="$(printf '%s\n' "${content}" | head -n 160)"
+    block="$(cat <<EOF
+
+### ${filename} (test harness excerpt, first 160 lines)
+\`\`\`typescript
+${excerpt}
+\`\`\`
+EOF
+)"
+
+    block_len="${#block}"
+    if [[ $(( total_chars + block_len )) -gt "${max_chars}" ]]; then
+      break
+    fi
+
+    snippets="${snippets}${block}"
+    total_chars=$(( total_chars + block_len ))
+    file_count=$(( file_count + 1 ))
+  done <<<"${filenames}"
+
+  if [[ -n "${snippets}" ]]; then
+    echo "Test harness context (mocks/helpers in changed test files; not production UI):"
+    printf '%s\n' "${snippets}"
+    echo ""
+  fi
 }
 
 agent_ci_explain_instructions() {
@@ -236,10 +414,11 @@ agent_findings_have_evidence() {
 }
 
 # Normalize model output before posting to GitHub.
-# Args: comment_body diff_truncated(0|1)
+# Args: comment_body diff_truncated(0|1) [ci_build_passed(0|1)]
 agent_post_process_review_comment() {
   local body="${1:-}"
   local diff_truncated="${2:-0}"
+  local ci_build_passed="${3:-0}"
   local notes=()
   local conclusion
   local finding_count
@@ -250,6 +429,19 @@ agent_post_process_review_comment() {
   if [[ "${diff_truncated}" == "1" ]] && [[ "${conclusion}" == "fail" ]]; then
     body="$(printf '%s\n' "${body}" | sed '0,/^## Conclusion$/{n;s/^fail[[:space:]]*$/hold (truncated)/;s/^`fail`[[:space:]]*$/hold (truncated)/}')"
     notes+=("Diff was truncated; Conclusion downgraded from \`fail\` to \`hold (truncated)\`.")
+    conclusion="$(agent_extract_conclusion "${body}")"
+  fi
+
+  if [[ "${ci_build_passed}" == "1" ]] && [[ "${conclusion}" == "fail" ]]; then
+    if printf '%s' "${body}" | grep -Eiq 'test|테스트|will fail|must fail|반드시 실패|crash|typeerror'; then
+      body="$(printf '%s\n' "${body}" | sed '0,/^## Conclusion$/{n;s/^fail[[:space:]]*$/hold/;s/^`fail`[[:space:]]*$/hold/}')"
+      notes+=("CI \`build-check-test\` passed; Conclusion downgraded from \`fail\` to \`hold\` because test-failure claims were not verified in CI.")
+      conclusion="$(agent_extract_conclusion "${body}")"
+    fi
+  fi
+
+  if [[ "${ci_build_passed}" == "1" ]] && [[ "${conclusion}" =~ ^(fail|hold)$ ]]; then
+    notes+=("CI \`build-check-test\` passed. DeepSeek \`${conclusion}\` is advisory — Codex should re-verify locally before blocking merge.")
   fi
 
   if [[ "${finding_count}" -eq 0 ]] && [[ "${conclusion}" =~ ^(fail|hold)$ ]]; then
@@ -334,11 +526,15 @@ agent_pr_surrounding_context() {
     return 0
   fi
 
-  local filenames
+  local filenames test_files other_files sorted_files
   filenames="$(gh api "repos/${repo}/pulls/${pr_number}/files" --jq '.[].filename' 2>/dev/null || true)"
   if [[ -z "${filenames}" ]]; then
     return 0
   fi
+
+  test_files="$(printf '%s\n' "${filenames}" | grep -E '\.test\.(ts|tsx)$' || true)"
+  other_files="$(printf '%s\n' "${filenames}" | grep -vE '\.test\.(ts|tsx)$' || true)"
+  sorted_files="$(printf '%s\n%s\n' "${test_files}" "${other_files}" | sed '/^$/d')"
 
   local file_count=0
   local total_chars=0
@@ -397,7 +593,7 @@ EOF
     snippets="${snippets}${block}"
     total_chars=$(( total_chars + block_len ))
     file_count=$(( file_count + 1 ))
-  done <<<"${filenames}"
+  done <<<"${sorted_files}"
 
   if [[ -n "${snippets}" ]]; then
     echo "Surrounding file context (from PR head; use with Diff section):"
