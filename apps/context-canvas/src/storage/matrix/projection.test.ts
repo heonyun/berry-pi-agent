@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { applyMatrixCommand } from "../../core/matrix-reducer.ts";
 import {
   cellKey,
   createEmptyMatrixDocument,
@@ -56,9 +57,9 @@ function sampleMatrixDocument(): MatrixDocument {
   const rowHeights = new Map([[0, 72], [2, 95]]);
   const groups = new Map([
     [
-      "auto:A1:B1",
+      "auto:group-1",
       {
-        id: "auto:A1:B1",
+        id: "auto:group-1",
         label: "Sample group",
         range: { startRow: 0, startCol: 0, endRow: 0, endCol: 1 },
         source: "auto" as const,
@@ -158,6 +159,29 @@ describe("projectMatrixToBundle", () => {
       fs.readFileSync(path.join(bundleRoot, MATRIX_SIDECAR), "utf8"),
     );
     expect(manifestJson.groups).toEqual([]);
+  });
+
+  it("stores detected stable group ids in the matrix sidecar", () => {
+    const bundleRoot = makeTempDir();
+    let document = createEmptyMatrixDocument({ withResearchTemplate: false });
+    document = applyMatrixCommand(document, {
+      type: "apply_patches",
+      patches: [
+        { row: 0, col: 0, value: null, body: "Alpha" },
+        { row: 0, col: 1, value: null, body: "Beta" },
+      ],
+    }).document;
+    const group = [...document.groups.values()][0]!;
+
+    projectMatrixToBundle(document, bundleRoot);
+    const manifestJson = JSON.parse(
+      fs.readFileSync(path.join(bundleRoot, MATRIX_SIDECAR), "utf8"),
+    );
+    const loaded = loadMatrixBundle(bundleRoot);
+
+    expect(group.id).toMatch(/^auto:group-\d+$/);
+    expect(manifestJson.groups[0]?.id).toBe(group.id);
+    expect(loaded.document?.groups.get(group.id)?.id).toBe(group.id);
   });
 
   it("omits cell files for empty sparse map entries", () => {
@@ -263,8 +287,27 @@ describe("loadMatrixBundle", () => {
     const loaded = loadMatrixBundle(bundleRoot);
 
     expect(loaded.document?.groups.size).toBe(1);
-    expect(loaded.document?.groups.get("auto:A1:B1")?.label).toBe("Sample group");
-    expect(loaded.document?.groups.get("auto:A1:B1")?.labelOffset).toBeUndefined();
+    const group = [...(loaded.document?.groups.values() ?? [])][0];
+    expect(group?.id).toMatch(/^auto:group-\d+$/);
+    expect(group?.label).toBe("Sample group");
+    expect(group?.labelOffset).toBeUndefined();
+  });
+
+  it("migrates legacy range-derived group ids when loading a manifest", () => {
+    const bundleRoot = makeTempDir();
+    projectMatrixToBundle(sampleMatrixDocument(), bundleRoot);
+    const sidecarPath = path.join(bundleRoot, MATRIX_SIDECAR);
+    const manifest = JSON.parse(fs.readFileSync(sidecarPath, "utf8"));
+    manifest.groups[0].id = "auto:A1:B1";
+    fs.writeFileSync(sidecarPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+    const loaded = loadMatrixBundle(bundleRoot);
+
+    const group = [...(loaded.document?.groups.values() ?? [])][0];
+    expect(loaded.document?.groups.has("auto:A1:B1")).toBe(false);
+    expect(group?.id).toMatch(/^auto:group-\d+$/);
+    expect(group?.label).toBe("Sample group");
+    expect(group?.labelOffset).toEqual({ x: 18, y: -10 });
   });
 
   it("detects groups when loading a legacy manifest without groups", () => {
@@ -278,7 +321,9 @@ describe("loadMatrixBundle", () => {
     const loaded = loadMatrixBundle(bundleRoot);
 
     expect(loaded.document?.groups.size).toBe(1);
-    expect(loaded.document?.groups.get("auto:A1:B1")?.label).toBe("Cell A1 body");
+    const group = [...(loaded.document?.groups.values() ?? [])][0];
+    expect(group?.id).toMatch(/^auto:group-\d+$/);
+    expect(group?.label).toBe("Cell A1 body");
   });
 
   it("reports forward-slash bundle-relative paths from projection", () => {

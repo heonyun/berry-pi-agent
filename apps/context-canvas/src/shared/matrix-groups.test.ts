@@ -52,6 +52,30 @@ describe("detectMatrixGroups", () => {
     expect(visibleMatrixGroups(document)[0]?.label).toBe("Interview flow");
   });
 
+  it("keeps a stable group id when a semantic group grows", () => {
+    let document = createEmptyMatrixDocument({ withResearchTemplate: false });
+    document = applyMatrixCommand(document, {
+      type: "apply_patches",
+      patches: [
+        { row: 1, col: 1, value: null, body: "Question" },
+        { row: 1, col: 2, value: null, body: "Answer" },
+      ],
+    }).document;
+    const before = visibleMatrixGroups(document)[0]!;
+
+    document = applyMatrixCommand(document, {
+      type: "update_cell_body",
+      row: 2,
+      col: 2,
+      body: "Follow-up",
+    }).document;
+
+    const after = visibleMatrixGroups(document)[0]!;
+    expect(before.id).toMatch(/^auto:group-\d+$/);
+    expect(after.id).toBe(before.id);
+    expect(after.range).toEqual({ startRow: 1, startCol: 1, endRow: 2, endCol: 2 });
+  });
+
   it("keeps dismissed groups out of the visible list", () => {
     let document = createEmptyMatrixDocument({ withResearchTemplate: false });
     document = applyMatrixCommand(document, {
@@ -106,6 +130,30 @@ describe("detectMatrixGroups", () => {
 
     expect(visibleMatrixGroups(document)).toHaveLength(1);
     expect(visibleMatrixGroups(document)[0]?.label).toBe("Right group");
+  });
+
+  it("keeps only one old id when a group splits into two components", () => {
+    let document = createEmptyMatrixDocument({ withResearchTemplate: false });
+    document = applyMatrixCommand(document, {
+      type: "apply_patches",
+      patches: [
+        { row: 0, col: 0, value: null, body: "A" },
+        { row: 0, col: 1, value: null, body: "B" },
+        { row: 0, col: 2, value: null, body: "C" },
+        { row: 1, col: 0, value: null, body: "D" },
+        { row: 1, col: 1, value: null, body: "E" },
+        { row: 1, col: 2, value: null, body: "F" },
+      ],
+    }).document;
+    const original = visibleMatrixGroups(document)[0]!;
+
+    document = applyMatrixCommand(document, { type: "clear_cell", row: 0, col: 1 }).document;
+    document = applyMatrixCommand(document, { type: "clear_cell", row: 1, col: 1 }).document;
+
+    const groups = visibleMatrixGroups(document);
+    expect(groups).toHaveLength(2);
+    expect(new Set(groups.map((group) => group.id)).size).toBe(2);
+    expect(groups.some((group) => group.id === original.id)).toBe(true);
   });
 
   it("does not carry dismissal to an expanded neighboring range", () => {

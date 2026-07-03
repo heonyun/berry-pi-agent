@@ -1,6 +1,6 @@
 import {
   cellKey,
-  formatRangeLabel,
+  rangesEqual,
   type Cell,
   type MatrixDocument,
   type MatrixGroup,
@@ -66,13 +66,8 @@ function overlapArea(a: RangeRefDTO, b: RangeRefDTO): number {
 
 function findPreviousGroup(
   previousGroups: ReadonlyMap<string, MatrixGroup> | undefined,
-  id: string,
   range: RangeRefDTO,
 ): MatrixGroup | undefined {
-  const exact = previousGroups?.get(id);
-  if (exact) {
-    return exact;
-  }
   // INVARIANT: Renamed labels carry across recompute only when the new group overlaps old cells.
   // Adjacent-but-non-overlapping ranges are treated as fresh groups to avoid sticky wrong labels.
   let best: { readonly group: MatrixGroup; readonly score: number } | undefined;
@@ -86,6 +81,25 @@ function findPreviousGroup(
     }
   }
   return best?.group;
+}
+
+function nextStableGroupId(previousGroups: ReadonlyMap<string, MatrixGroup>, detected: ReadonlyMap<string, MatrixGroup>): string {
+  const usedIds = new Set([...previousGroups.keys(), ...detected.keys()]);
+  let nextIndex = 1;
+  for (const id of usedIds) {
+    const match = /^auto:group-(\d+)$/.exec(id);
+    if (match) {
+      nextIndex = Math.max(nextIndex, Number.parseInt(match[1]!, 10) + 1);
+    }
+  }
+  while (usedIds.has(`auto:group-${nextIndex}`)) {
+    nextIndex++;
+  }
+  return `auto:group-${nextIndex}`;
+}
+
+function isStableGroupId(id: string): boolean {
+  return /^auto:group-\d+$/.test(id);
 }
 
 export function detectMatrixGroups(
@@ -103,6 +117,7 @@ export function detectMatrixGroups(
 
   const visited = new Set<string>();
   const detected = new Map<string, MatrixGroup>();
+  const consumedPreviousIds = new Set<string>();
 
   for (const key of sortCellKeysByCoordinate(populated)) {
     if (visited.has(key)) {
@@ -144,9 +159,17 @@ export function detectMatrixGroups(
       endRow: Math.max(...component.map((coord) => coord.row)),
       endCol: Math.max(...component.map((coord) => coord.col)),
     };
-    const id = `auto:${formatRangeLabel(range.startCol, range.startRow, range.endCol, range.endRow)}`;
-    const previous = findPreviousGroup(previousGroups, id, range);
-    if (previous?.dismissed && previous.id === id) {
+    const matchedPrevious = findPreviousGroup(previousGroups, range);
+    // INVARIANT: A split group can overlap the same previous group from multiple new
+    // components; only one component may inherit its label, offset, dismissal, or stable id.
+    const previous =
+      matchedPrevious && !consumedPreviousIds.has(matchedPrevious.id) ? matchedPrevious : undefined;
+    if (previous) {
+      consumedPreviousIds.add(previous.id);
+    }
+    // INVARIANT: Legacy range-derived ids migrate to stable auto:group-N ids on recompute/load.
+    const id = previous && isStableGroupId(previous.id) ? previous.id : nextStableGroupId(previousGroups, detected);
+    if (previous?.dismissed && previous.id === id && rangesEqual(previous.range, range)) {
       detected.set(id, { ...previous, id, range });
       continue;
     }

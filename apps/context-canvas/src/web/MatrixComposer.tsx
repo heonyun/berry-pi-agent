@@ -5,6 +5,7 @@ export interface ContextChip {
   readonly id: string;
   readonly label: string;
   readonly range: RangeRefDTO;
+  readonly groupId?: string;
 }
 
 export interface MatrixComposerProps {

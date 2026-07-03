@@ -86,7 +86,11 @@ export function isMatrixHistoryContextRange(value: unknown): value is MatrixHist
     return false;
   }
   const range = value as Record<string, unknown>;
-  return typeof range.label === "string" && isRangeRefDTO(range.range);
+  return (
+    typeof range.label === "string" &&
+    isRangeRefDTO(range.range) &&
+    (range.groupId === undefined || typeof range.groupId === "string")
+  );
 }
 
 export function isMatrixHistoryEntry(value: unknown): value is MatrixHistoryEntry {

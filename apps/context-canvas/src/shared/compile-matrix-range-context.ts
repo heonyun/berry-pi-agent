@@ -3,6 +3,7 @@ import {
   formatColumnLabel,
   formatRangeLabel,
   rangesEqual,
+  type MatrixGroup,
   type MatrixDocument,
   type RangeRefDTO,
 } from "./domain.ts";
@@ -18,6 +19,7 @@ export interface CompiledRangeContext {
 export interface MatrixContextRange {
   readonly label: string;
   readonly range: RangeRefDTO;
+  readonly groupId?: string;
 }
 
 const MATRIX_AI_SYSTEM_PROMPT = `You are a matrix AI assistant. Respond with ONLY valid JSON matching this schema:
@@ -58,6 +60,25 @@ function groupLabelForRange(document: MatrixDocument, range: RangeRefDTO): strin
   return undefined;
 }
 
+function findGroupByLabel(document: MatrixDocument, label: string): MatrixGroup | undefined {
+  const normalizedLabel = label.trim();
+  const matches = [...(document.groups ?? new Map()).values()].filter(
+    (group) => !group.dismissed && group.label.trim() === normalizedLabel,
+  );
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function resolveContextRange(document: MatrixDocument, entry: MatrixContextRange): MatrixContextRange {
+  let group = entry.groupId ? (document.groups ?? new Map()).get(entry.groupId) : undefined;
+  if (!group) {
+    group = findGroupByLabel(document, entry.label);
+  }
+  if (!group || group.dismissed) {
+    return entry;
+  }
+  return { ...entry, label: group.label, range: group.range, groupId: group.id };
+}
+
 function renderContextBlock(
   label: string,
   range: RangeRefDTO,
@@ -96,7 +117,8 @@ export function compileMatrixRangeContext(
   targetRange: RangeRefDTO,
   userPrompt: string,
 ): CompiledRangeContext {
-  const blocks = contextRanges.map((entry) =>
+  const resolvedContextRanges = contextRanges.map((entry) => resolveContextRange(document, entry));
+  const blocks = resolvedContextRanges.map((entry) =>
     renderContextBlock(
       entry.label,
       entry.range,
@@ -113,8 +135,8 @@ export function compileMatrixRangeContext(
   );
 
   const contextRangeLabels =
-    contextRanges.length > 0
-      ? contextRanges.map((entry) => {
+    resolvedContextRanges.length > 0
+      ? resolvedContextRanges.map((entry) => {
           const rangeLabel = formatRangeLabel(
             entry.range.startCol,
             entry.range.startRow,

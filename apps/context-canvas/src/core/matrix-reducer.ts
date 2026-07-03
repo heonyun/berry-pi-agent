@@ -147,6 +147,15 @@ export function applyMatrixCommand(
           meta: { updatedCells: 0 },
         };
       }
+      const hasCollision = [...(document.groups ?? new Map()).values()].some(
+        (candidate) => candidate.id !== group.id && !candidate.dismissed && candidate.label.trim() === label,
+      );
+      if (hasCollision) {
+        return {
+          document,
+          meta: { updatedCells: 0, message: `Group label already exists: ${label}` },
+        };
+      }
       const nextGroups = new Map(document.groups ?? []);
       nextGroups.set(group.id, { ...group, label });
       return {
