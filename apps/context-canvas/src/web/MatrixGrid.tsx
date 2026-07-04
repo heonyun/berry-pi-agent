@@ -206,12 +206,12 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
   );
 
   const finishEditing = useCallback(
-    (next?: TextCell) => {
+    (next?: TextCell, movement?: readonly [-1 | 0 | 1, -1 | 0 | 1]) => {
       if (finishedRef.current) {
         return;
       }
       finishedRef.current = true;
-      onFinishedEditing(next);
+      onFinishedEditing(next, movement);
     },
     [onFinishedEditing],
   );
@@ -240,10 +240,24 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
         finishEditing(undefined);
         return;
       }
-      if (event.key === "Enter" && !event.shiftKey) {
+      // WHY: Ctrl+Enter is reserved for matrix AI shortcuts; the overlay must not commit first.
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
         event.preventDefault();
         event.stopPropagation();
-        finishEditing(updateValue(event.currentTarget.value));
+        return;
+      }
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        // CONTRACT: Glide custom editors must pass movement explicitly; stopping the
+        // key event for IME safety otherwise prevents Enter from moving to the next row.
+        finishEditing(updateValue(event.currentTarget.value), [0, 1]);
       }
     },
     [finishEditing, updateValue],

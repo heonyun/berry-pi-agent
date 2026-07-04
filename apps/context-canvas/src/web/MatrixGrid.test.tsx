@@ -113,6 +113,7 @@ describe("MatrixGrid IME overlay editor", () => {
 
     expect(onFinishedEditing).toHaveBeenCalledWith(
       expect.objectContaining({ data: "안녕", displayData: "안녕" }),
+      undefined,
     );
   });
 
@@ -153,10 +154,10 @@ describe("MatrixGrid IME overlay editor", () => {
     fireEvent.blur(editor);
 
     expect(onFinishedEditing).toHaveBeenCalledTimes(1);
-    expect(onFinishedEditing).toHaveBeenCalledWith(undefined);
+    expect(onFinishedEditing).toHaveBeenCalledWith(undefined, undefined);
   });
 
-  it("confirms the text editor on Enter outside IME composition", () => {
+  it("confirms the text editor on Enter outside IME composition and moves down", () => {
     renderMatrixGrid();
 
     const TextEditor = getTextEditor(
@@ -194,6 +195,7 @@ describe("MatrixGrid IME overlay editor", () => {
     expect(onFinishedEditing).toHaveBeenCalledTimes(1);
     expect(onFinishedEditing).toHaveBeenCalledWith(
       expect.objectContaining({ data: "confirmed", displayData: "confirmed" }),
+      [0, 1],
     );
   });
 
@@ -233,5 +235,43 @@ describe("MatrixGrid IME overlay editor", () => {
     fireEvent.keyDown(editor, { key: "Process", keyCode: 229 });
 
     expect(onFinishedEditing).not.toHaveBeenCalled();
+  });
+
+  it("does not confirm the text editor on Ctrl+Enter", () => {
+    renderMatrixGrid();
+
+    const TextEditor = getTextEditor(
+      dataEditorState.props?.provideEditor?.({
+        kind: GridCellKind.Text,
+        data: "",
+        displayData: "",
+        allowOverlay: true,
+        location: [0, 0],
+      }) as ProvideEditorCallbackResult<TextCell>,
+    );
+    const onFinishedEditing = vi.fn();
+
+    render(
+      <TextEditor
+        isHighlighted={false}
+        onChange={vi.fn()}
+        onFinishedEditing={onFinishedEditing}
+        value={{
+          kind: GridCellKind.Text,
+          data: "",
+          displayData: "",
+          allowOverlay: true,
+        }}
+        target={{ x: 0, y: 0, width: 100, height: 32 }}
+        forceEditMode={false}
+        theme={{} as never}
+      />,
+    );
+
+    const editor = screen.getByLabelText("Matrix cell editor");
+    const event = fireEvent.keyDown(editor, { key: "Enter", ctrlKey: true });
+
+    expect(onFinishedEditing).not.toHaveBeenCalled();
+    expect(event).toBe(false);
   });
 });
