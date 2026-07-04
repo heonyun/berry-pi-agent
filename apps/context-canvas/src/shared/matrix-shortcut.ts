@@ -60,14 +60,18 @@ export function shouldHandleMatrixShortcut(target: EventTarget | null): boolean 
  * RELATED: issue-94, matrix-shortcut.test.ts
  */
 export function matrixShortcutBlockedStatus(target: EventTarget | null): string | null {
-  if (!(target instanceof Element) || !isMatrixShellElement(target)) {
+  if (!(target instanceof Element)) {
+    return null;
+  }
+  // WHY: Glide mounts its overlay editor in a body-level portal, outside matrix-shell.
+  if (target.closest(".gdg-input")) {
+    return "Finish cell edit before Ctrl+Enter";
+  }
+  if (!isMatrixShellElement(target)) {
     return null;
   }
   if (shouldHandleMatrixShortcut(target)) {
     return null;
-  }
-  if (target.closest(".gdg-input")) {
-    return "Finish cell edit before Ctrl+Enter";
   }
   if (
     target.closest(

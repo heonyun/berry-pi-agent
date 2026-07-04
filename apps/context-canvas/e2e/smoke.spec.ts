@@ -12,8 +12,8 @@ test.describe("context-canvas smoke", () => {
     await expect(page.getByTestId("matrix-shell")).toBeVisible();
     await expect(page.getByTestId("matrix-grid")).toBeVisible();
     await expect(page.getByTestId("matrix-composer")).toBeVisible();
-    await expect(page.getByLabel("Recent ranges")).toBeVisible();
-    await expect(page.getByLabel("Run history")).toBeVisible();
+    await expect(page.getByTestId("matrix-group-nav")).toBeVisible();
+    await expect(page.getByTestId("matrix-history-nav")).toBeVisible();
     await expect(page.getByRole("button", { name: "Canvas" })).toBeVisible();
     await expect(page.getByText("Ready")).toBeVisible();
 

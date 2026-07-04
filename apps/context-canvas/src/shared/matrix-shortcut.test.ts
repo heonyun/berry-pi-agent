@@ -104,6 +104,12 @@ describe("matrixShortcutBlockedStatus", () => {
     );
   });
 
+  it("explains portal-mounted overlay edit block outside matrix shell", () => {
+    const overlay = el(`<textarea class="gdg-input"></textarea>`);
+
+    expect(matrixShortcutBlockedStatus(overlay)).toMatch(/Finish cell edit/i);
+  });
+
   it("returns null outside matrix shell", () => {
     expect(matrixShortcutBlockedStatus(document.body)).toBeNull();
   });

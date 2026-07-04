@@ -392,7 +392,6 @@ test.describe("Feature: Matrix inferred target shortcuts", () => {
     await page.keyboard.press("F2");
     const overlayInput = page.locator(".gdg-input");
     await overlayInput.waitFor({ state: "visible" });
-    await page.getByTestId("matrix-composer-input").fill("blocked while editing");
     await overlayInput.focus();
     await page.keyboard.press("Control+Enter");
 
