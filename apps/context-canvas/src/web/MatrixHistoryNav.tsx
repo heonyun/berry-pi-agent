@@ -15,7 +15,7 @@ export function MatrixHistoryNav({
 }: MatrixHistoryNavProps): ReactElement {
   return (
     <section className="matrix-left-nav-section" data-testid="matrix-history-nav" aria-label="Run history">
-      <h2 className="matrix-left-nav-title">History</h2>
+      <h2 className="matrix-left-nav-title">Recent Activity</h2>
       {entries.length === 0 ? (
         <p className="matrix-left-nav-empty">No runs yet. Complete a matrix AI run.</p>
       ) : (

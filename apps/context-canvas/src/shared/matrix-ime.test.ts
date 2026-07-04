@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldCancelMatrixEditOnTypeForIme } from "./matrix-ime.ts";
+import { shouldCancelMatrixEditOnTypeForIme, isLikelyImeLatinSeed } from "./matrix-ime.ts";
 
 describe("shouldCancelMatrixEditOnTypeForIme", () => {
   it("cancels when isComposing is true", () => {
@@ -29,5 +29,10 @@ describe("shouldCancelMatrixEditOnTypeForIme", () => {
         isComposing: false,
       }),
     ).toBe(false);
+  });
+
+  it("flags a lone Latin letter as a likely IME seed", () => {
+    expect(isLikelyImeLatinSeed("d")).toBe(true);
+    expect(isLikelyImeLatinSeed("hello")).toBe(false);
   });
 });

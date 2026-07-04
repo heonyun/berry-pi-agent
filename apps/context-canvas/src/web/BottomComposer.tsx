@@ -38,7 +38,7 @@ export const BottomComposer = forwardRef<BottomComposerHandle, BottomComposerPro
           className="bottom-composer-input nodrag nopan"
           value={draft}
           disabled={disabled}
-          placeholder="Ask a question… (Ctrl+Enter to send)"
+          placeholder="Ask AI about this canvas or type a command..."
           onLocalChange={setDraft}
           onValueChange={setDraft}
           onKeyDown={(event) => {
@@ -69,7 +69,7 @@ export const BottomComposer = forwardRef<BottomComposerHandle, BottomComposerPro
             }
           }}
         >
-          Run
+          Send
         </button>
       </footer>
     );

@@ -59,6 +59,18 @@ export function MatrixShell({
         >
           <span aria-hidden="true">{leftCollapsed ? ">" : "<"}</span>
         </button>
+        <div
+          className="matrix-panel-rail"
+          data-testid="matrix-left-panel-rail"
+          aria-hidden={!leftCollapsed || isLeftPeeked}
+        >
+          <span className="matrix-panel-rail-icon" aria-hidden="true">
+            G
+          </span>
+          <span className="matrix-panel-rail-icon" aria-hidden="true">
+            H
+          </span>
+        </div>
         <div className="matrix-panel-content" aria-hidden={leftCollapsed && !isLeftPeeked}>
           {leftNav}
         </div>
@@ -86,6 +98,15 @@ export function MatrixShell({
         >
           <span aria-hidden="true">{rightCollapsed ? "<" : ">"}</span>
         </button>
+        <div
+          className="matrix-panel-rail"
+          data-testid="matrix-right-panel-rail"
+          aria-hidden={!rightCollapsed || isRightPeeked}
+        >
+          <span className="matrix-panel-rail-icon" aria-hidden="true">
+            I
+          </span>
+        </div>
         <div className="matrix-panel-content" aria-hidden={rightCollapsed && !isRightPeeked}>
           {detailPane}
         </div>

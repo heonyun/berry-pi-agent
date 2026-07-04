@@ -20,12 +20,14 @@ describe("matrix-glide adapter", () => {
   });
 
   describe("getMatrixGridTheme", () => {
-    it("minimizes rigid grid lines for the corner-dot cell UI", () => {
+    it("uses soft blue-accented dot-canvas theme without spreadsheet borders", () => {
       const theme = getMatrixGridTheme();
 
+      expect(theme.accentColor).toBe("#2563eb");
+      expect(theme.bgCell).toBe("rgba(255, 255, 255, 0)");
       expect(theme.borderColor).toBe("transparent");
       expect(theme.horizontalBorderColor).toBe("transparent");
-      expect(theme.headerBottomBorderColor).toBe("rgba(88, 111, 142, 0.12)");
+      expect(theme.headerBottomBorderColor).toBe("rgba(203, 213, 225, 0.4)");
     });
   });
 

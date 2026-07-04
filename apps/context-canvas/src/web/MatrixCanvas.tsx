@@ -562,11 +562,7 @@ export function MatrixCanvas(): ReactElement {
     }
   }, [editingGroupId, groups]);
 
-  const hasCellContent = useMemo(() => document.sheet.cells.size > 0, [document]);
-
-  const showAiSection = Boolean(
-    selectionRange || targetRange || contextChips.length > 0 || hasCellContent,
-  );
+  const showAiSection = true;
 
   const targetLabel = useMemo(() => {
     if (!targetRange) {
@@ -835,12 +831,20 @@ export function MatrixCanvas(): ReactElement {
   );
 
   const handleRun = useCallback(async () => {
-    if (!targetRange) {
-      setStatus("Set a target range before running");
+    const runTarget = targetRange ?? selectionRange;
+    if (!runTarget) {
+      setStatus("Select a range before running");
       return;
     }
-    await runWithTarget(targetRange, contextChips);
-  }, [contextChips, runWithTarget, targetRange]);
+    if (!prompt.trim()) {
+      setStatus("Enter a prompt before running");
+      return;
+    }
+    if (!targetRange) {
+      setTargetRange(runTarget);
+    }
+    await runWithTarget(runTarget, contextChips);
+  }, [contextChips, prompt, runWithTarget, selectionRange, targetRange]);
 
   const contextChipsWithSelection = useCallback(
     (
@@ -1319,7 +1323,7 @@ export function MatrixCanvas(): ReactElement {
             prompt={prompt}
             rangeNameInput={rangeNameInput}
             isRunning={isRunning}
-            hasTarget={targetRange !== null}
+            canRun={Boolean(targetRange ?? selectionRange) && prompt.trim().length > 0}
             showAiSection={showAiSection}
             onPromptChange={setPrompt}
             onRangeNameChange={setRangeNameInput}
