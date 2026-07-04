@@ -90,6 +90,10 @@ drill_down: <path>
 - [ ] Local verification recorded (`npm test` / build / typecheck per class)
 - [ ] Non-obvious behavior has comment tags per `COMMENT_CONVENTIONS.md` (no WHAT comments)
 - [ ] Worker disposition recorded if a worker ticket ran
+- [ ] **Repo worklog** written: `doc/working-log/YYYY-MM-DD-<topic>.md` with YAML frontmatter (required for `task_class: standard` or `complex`)
+- [ ] **Obsidian DailyNote** updated with TL;DR index + link to repo worklog (see `worklog-writer` skill)
+- [ ] UI/visual issues: screenshot or manual check against issue mockup / acceptance criteria recorded in worklog
+- [ ] Changes on a **feature branch** (not uncommitted `main`) unless user explicitly waived
 - [ ] PR opened or branch ready
 
 ### review — exit before merge

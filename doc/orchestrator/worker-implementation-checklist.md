@@ -29,7 +29,7 @@ Run after a Qwen implementation worker ticket completes. Orchestrator verifies; 
 
 ## 4. Disposition
 
-Record in worker ticket disposition file:
+Record in worker ticket disposition file when a Qwen ticket ran; template shape in `QWEN.md`.
 
 | Item | adopt / reject / defer | Evidence |
 | --- | --- | --- |
@@ -39,7 +39,9 @@ Record in worker ticket disposition file:
 
 - [ ] Update task record phase / `00-index.md` if applicable
 - [ ] Commit message references task id (e.g. T-003)
-- [ ] Repo worklog + Obsidian daily note when the round closes
+- [ ] **Repo worklog** `doc/working-log/YYYY-MM-DD-<topic>.md` with frontmatter (required for non-trivial work)
+- [ ] **Obsidian DailyNote** summary + link to repo worklog (`worklog-writer` skill)
+- [ ] UI issues: visual AC check vs issue mockup noted in worklog
 
 ## Budget note
 

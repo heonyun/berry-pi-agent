@@ -24,3 +24,8 @@ export function shouldCancelMatrixEditOnTypeForIme(probe: MatrixImeKeyProbe): bo
   }
   return false;
 }
+
+/** True when a lone Latin letter is likely an IME physical-key seed, not intentional ASCII input. */
+export function isLikelyImeLatinSeed(value: string): boolean {
+  return value.length === 1 && /^[a-z]$/i.test(value);
+}

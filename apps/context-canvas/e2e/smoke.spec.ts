@@ -15,7 +15,7 @@ test.describe("context-canvas smoke", () => {
     await expect(page.getByTestId("matrix-group-nav")).toBeVisible();
     await expect(page.getByTestId("matrix-history-nav")).toBeVisible();
     await expect(page.getByRole("button", { name: "Canvas" })).toBeVisible();
-    await expect(page.getByText("Ready")).toBeVisible();
+    await expect(page.getByTestId("matrix-status-bar").getByText("Ready")).toBeVisible();
 
     expect(pageErrors, `Unexpected page errors: ${pageErrors.join("; ")}`).toEqual([]);
   });
@@ -31,9 +31,8 @@ test.describe("context-canvas smoke", () => {
 
     await expect(page.getByTestId("app-shell")).toBeVisible();
     await expect(page.getByLabel("Canvas question input")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Run" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Matrix" })).toBeVisible();
-    await expect(page.getByText("Ready")).toBeVisible();
 
     expect(pageErrors, `Unexpected page errors: ${pageErrors.join("; ")}`).toEqual([]);
   });

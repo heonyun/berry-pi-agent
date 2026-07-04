@@ -514,7 +514,37 @@ export function App() {
   return (
     <div className="context-app-shell" data-testid="context-app-shell">
       <header className="app-chrome" data-testid="app-chrome">
-        <ViewToggle view={view} onToggle={() => setView((v) => (v === "canvas" ? "matrix" : "canvas"))} />
+        <div className="app-brand" aria-label="Product">
+          <span className="app-brand-mark" aria-hidden="true">
+            GP
+          </span>
+          <span className="app-brand-name">Grid Paper</span>
+          <span className="app-brand-version">v0.2.1</span>
+        </div>
+        <label className="app-command-search">
+          <span className="sr-only">Search or command</span>
+          <input
+            type="search"
+            aria-label="Search or command"
+            placeholder="Search or command..."
+            disabled
+          />
+        </label>
+        <div className="app-chrome-actions">
+          <button type="button" className="app-icon-button" aria-label="Undo" disabled>
+            U
+          </button>
+          <button type="button" className="app-icon-button" aria-label="Redo" disabled>
+            R
+          </button>
+          <button type="button" className="app-share-button" disabled>
+            Share
+          </button>
+          <span className="app-user-pill" aria-label="Current user">
+            You
+          </span>
+          <ViewToggle view={view} onToggle={() => setView((v) => (v === "canvas" ? "matrix" : "canvas"))} />
+        </div>
       </header>
       <div className="app-body" data-testid="app-body">
         {view === "canvas" ? (

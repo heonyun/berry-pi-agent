@@ -8,6 +8,7 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type CompositionEvent as ReactCompositionEvent,
   type ReactElement,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -29,7 +30,7 @@ import {
   type SelectionRange,
   type TextCell,
 } from "@glideapps/glide-data-grid";
-import { shouldCancelMatrixEditOnTypeForIme } from "../shared/matrix-ime.ts";
+import { shouldCancelMatrixEditOnTypeForIme, isLikelyImeLatinSeed } from "../shared/matrix-ime.ts";
 import "@glideapps/glide-data-grid/dist/index.css";
 import { getColumnHeader, type MatrixDocument, type MatrixGroup } from "../shared/domain.ts";
 import { getMatrixColumnWidth } from "../shared/matrix-column-width.ts";
@@ -223,6 +224,18 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
     [finishEditing, updateValue],
   );
 
+  const handleCompositionStart = useCallback(
+    (event: ReactCompositionEvent<HTMLTextAreaElement>) => {
+      // WHY: Glide editOnType can seed a Latin key before compositionstart on Windows IME (#93).
+      if (isLikelyImeLatinSeed(event.currentTarget.value)) {
+        event.currentTarget.value = "";
+        event.currentTarget.setSelectionRange(0, 0);
+        handleLocalChange("");
+      }
+    },
+    [handleLocalChange],
+  );
+
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
       if (
@@ -271,6 +284,7 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
       disabled={value.readonly === true}
       value={value.data}
       style={MATRIX_IME_EDITOR_STYLE}
+      onCompositionStart={handleCompositionStart}
       onKeyDown={handleKeyDown}
       onLocalChange={handleLocalChange}
       onValueChange={handleValueChange}
@@ -458,7 +472,7 @@ export function MatrixGrid({
 
       const startCol = Math.max(0, Math.floor(visibleRows.x));
       const endCol = Math.min(config.cols, Math.ceil(visibleRows.x + visibleRows.width) + 1);
-      // WHY: issue-99 corner dots are visual affordances; grid interaction stays in Glide.
+      // WHY: issue-99 corner dots mark cell lattice intersections; one dot per cell keeps the canvas subtle (#131).
       // INVARIANT: This overlay must remain pointer-events:none so selection/edit/clipboard stay unchanged.
       for (let row = startRow; row < endRow; row += 1) {
         for (let col = startCol; col < endCol; col += 1) {
@@ -843,7 +857,7 @@ export function MatrixGrid({
               height: position.height,
             }}
           >
-            {["top-left", "top-right", "bottom-left", "bottom-right"].map((corner) => (
+            {["bottom-right"].map((corner) => (
               <span
                 key={corner}
                 className={`matrix-cell-corner-dot matrix-cell-corner-dot-${corner}`}

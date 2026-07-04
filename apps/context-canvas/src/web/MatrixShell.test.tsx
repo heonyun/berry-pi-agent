@@ -95,6 +95,15 @@ describe("MatrixShell hover peek", () => {
     expect(screen.getByTestId("matrix-left-panel").getAttribute("data-collapsed")).toBe("true");
   });
 
+  it("uses icon-first rail controls when panels are collapsed", () => {
+    renderShell({ leftCollapsed: true, rightCollapsed: true });
+
+    expect(screen.getByTestId("matrix-left-panel-rail").textContent).toContain("G");
+    expect(screen.getByTestId("matrix-right-panel-rail").textContent).toContain("I");
+    expect(screen.queryByText("DETAIL")).toBeNull();
+    expect(screen.queryByText("Detail")).toBeNull();
+  });
+
   it("keeps touch pointers on the explicit toggle path", () => {
     const onLeftPeekChange = vi.fn();
     renderShell({ leftCollapsed: true, onLeftPeekChange });

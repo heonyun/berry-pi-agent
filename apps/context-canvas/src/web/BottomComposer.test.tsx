@@ -15,8 +15,8 @@ describe("BottomComposer", () => {
 
     render(<BottomComposer onSubmit={onSubmit} />);
 
-    const textarea = screen.getByPlaceholderText("Ask a question… (Ctrl+Enter to send)");
-    const runButton = screen.getByRole("button", { name: "Run" });
+    const textarea = screen.getByPlaceholderText("Ask AI about this canvas or type a command...");
+    const runButton = screen.getByRole("button", { name: "Send" });
 
     expect(runButton).toHaveProperty("disabled", true);
 
@@ -33,9 +33,9 @@ describe("BottomComposer", () => {
 
     render(<BottomComposer onSubmit={onSubmit} />);
 
-    const textarea = screen.getByPlaceholderText("Ask a question… (Ctrl+Enter to send)");
+    const textarea = screen.getByPlaceholderText("Ask AI about this canvas or type a command...");
     fireEvent.change(textarea, { target: { value: "  stack gap  " } });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(onSubmit).toHaveBeenCalledWith("stack gap");
   });
@@ -44,7 +44,7 @@ describe("BottomComposer", () => {
     const ref = createRef<BottomComposerHandle>();
     render(<BottomComposer ref={ref} onSubmit={vi.fn()} />);
 
-    const textarea = screen.getByPlaceholderText("Ask a question… (Ctrl+Enter to send)");
+    const textarea = screen.getByPlaceholderText("Ask AI about this canvas or type a command...");
     textarea.blur();
     expect(document.activeElement).not.toBe(textarea);
 
@@ -56,7 +56,7 @@ describe("BottomComposer", () => {
     const ref = createRef<BottomComposerHandle>();
     render(<BottomComposer ref={ref} disabled onSubmit={vi.fn()} />);
 
-    const textarea = screen.getByPlaceholderText("Ask a question… (Ctrl+Enter to send)");
+    const textarea = screen.getByPlaceholderText("Ask AI about this canvas or type a command...");
     textarea.blur();
     ref.current?.focus();
     expect(document.activeElement).not.toBe(textarea);

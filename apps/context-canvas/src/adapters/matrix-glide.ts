@@ -48,18 +48,23 @@ function gridDisplayText(domainCell: Cell | undefined): string {
   return String(domainCell.value);
 }
 
-/** Theme tuned for visible range/active-cell highlights. */
+/** Theme tuned for dot-canvas: no cell borders, transparent fill so lattice shows through. */
 export function getMatrixGridTheme(): Partial<Theme> {
   const base = getDefaultTheme();
   return {
     ...base,
-    accentColor: "#586f8e",
-    accentLight: "rgba(88, 111, 142, 0.22)",
-    bgHeaderHasFocus: "#e4e9ef",
+    accentColor: "#2563eb",
+    accentLight: "rgba(37, 99, 235, 0.08)",
+    bgCell: "rgba(255, 255, 255, 0)",
+    bgCellMedium: "rgba(248, 250, 252, 0.35)",
+    bgHeader: "#f8fafc",
+    bgHeaderHasFocus: "#eff6ff",
     borderColor: "transparent",
-    headerBottomBorderColor: "rgba(88, 111, 142, 0.12)",
+    headerBottomBorderColor: "rgba(203, 213, 225, 0.4)",
     horizontalBorderColor: "transparent",
-    textHeaderSelected: "#586f8e",
+    textDark: "#0f172a",
+    textHeader: "#94a3b8",
+    textHeaderSelected: "#2563eb",
   };
 }
 

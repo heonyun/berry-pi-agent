@@ -146,6 +146,14 @@ describe("MatrixCanvas reference edit mode", () => {
     vi.mocked(runMatrix).mockImplementation(() => new Promise(() => undefined));
   });
 
+  it("shows the AI command bar even before a selection is made", () => {
+    render(<MatrixCanvas />);
+
+    expect(screen.getByLabelText("Selection None")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Compare" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Send" })).toHaveProperty("disabled", true);
+  });
+
   it("inserts a picked range into the equals cell", () => {
     render(<MatrixCanvas />);
 

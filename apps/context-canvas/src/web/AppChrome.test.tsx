@@ -36,6 +36,19 @@ afterEach(() => {
 });
 
 describe("App chrome", () => {
+  it("presents Grid Paper as a lightweight workspace chrome", () => {
+    render(<App />);
+
+    expect(screen.getByText("Grid Paper")).toBeTruthy();
+    expect(screen.getByRole("searchbox", { name: "Search or command" })).toHaveProperty(
+      "placeholder",
+      "Search or command...",
+    );
+    expect(screen.getByRole("button", { name: "Undo" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Redo" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Share" })).toHaveProperty("disabled", true);
+  });
+
   it("keeps the view toggle in a stable app chrome across Matrix and Canvas views", () => {
     render(<App />);
 

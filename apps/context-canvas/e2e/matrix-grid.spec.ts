@@ -113,7 +113,7 @@ test.describe("Feature: Excel-like matrix cell editing", () => {
   });
 
   test("Scenario: Shift plus Arrow extends the range", async ({ page }) => {
-    await clickMatrixCell(page, "C12");
+    await focusMatrixCell(page, "C12");
     await page.keyboard.press("Shift+ArrowRight");
 
     await expectSelectionSummary(page, "C12:D12", "2×1");
