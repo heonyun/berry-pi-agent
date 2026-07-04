@@ -225,11 +225,12 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
   );
 
   const handleCompositionStart = useCallback(
-    (event: React.CompositionEvent<HTMLTextAreaElement>) => {
+    (event: ReactCompositionEvent<HTMLTextAreaElement>) => {
       // WHY: Glide editOnType can seed a Latin key before compositionstart on Windows IME (#93).
       if (isLikelyImeLatinSeed(event.currentTarget.value)) {
-        handleLocalChange("");
+        event.currentTarget.value = "";
         event.currentTarget.setSelectionRange(0, 0);
+        handleLocalChange("");
       }
     },
     [handleLocalChange],
