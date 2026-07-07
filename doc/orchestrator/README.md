@@ -1,24 +1,33 @@
-# Orchestrator docs (tracked mirror)
+# Orchestrator docs
 
-Local-only templates also live under `.orchestrator/templates/` (git-excluded). This directory is the **tracked** copy for fork contributors and PRs.
+**Anti-bloat:** one phase doc ([harness-flow.md](./harness-flow.md)). Everything else is on-demand.
 
-| Doc | Purpose |
+## Phase indexes (draft — for review)
+
+Optional navigation; **not** wired into AGENTS.md yet.
+
+| Index | `harness_flow` |
 | --- | --- |
-| [harness-flow.md](./harness-flow.md) | `harness_flow` stages (plan / implement / review), breadcrumbs, context dropping |
-| [read-next.template.md](./read-next.template.md) | PR loop handoff shape |
-| [task-record-template/00-index.md](./task-record-template/00-index.md) | Obsidian task record mirror |
-| [pr-review-triage.md](./pr-review-triage.md) | Classify PR review findings; truncated hold; disposition table |
-| [worker-implementation-checklist.md](./worker-implementation-checklist.md) | Post-run verification after Qwen implementation tickets |
-| [agent-code-comments.md](./agent-code-comments.md) | Comment tag conventions (context-canvas) |
-| [orchestrator-report-format.md](./orchestrator-report-format.md) | 2×2 user-facing report matrix (cognitive load) |
-| [ponytail-inspiration.md](./ponytail-inspiration.md) | Ponytail lite ladder for workers (no `pi install` required) |
-| [harness-eval-orchestrator-worker.md](./harness-eval-orchestrator-worker.md) | Harness eval case summary (orchestrator + Qwen worker) |
-| [workflow-improvement-log.md](./workflow-improvement-log.md) | Candidate-only workflow improvements |
-| [harness-eval-cases.md](./harness-eval-cases.md) | Tracked eval case index |
-| [harness-pilot-runbook.md](./harness-pilot-runbook.md) | Local harness pilot procedures |
-| [harness-pilot-recorded-2026-06-24.md](./harness-pilot-recorded-2026-06-24.md) | Pilot batch 3/3 helped; global-harness-candidate |
-| [failure-mode-defenses.md](./failure-mode-defenses.md) | Failure modes with execution checks |
+| [plan.md](./plan.md) | plan |
+| [implement.md](./implement.md) | implement |
+| [review.md](./review.md) | review |
+| [cross.md](./cross.md) | multi-phase / meta |
 
-Product-specific conventions: `apps/context-canvas/AGENTS.md`, `apps/context-canvas/COMMENT_CONVENTIONS.md`.
+## On-demand runbooks
 
-Roadmap worklog: `doc/working-log/2026-06-24-harness-improvement-roadmap.md`.
+| Doc | When |
+| --- | --- |
+| [harness-flow.md](./harness-flow.md) | Every session — `## plan` / `## implement` / `## review` (also via `Invoke-HarnessPhaseContext.ps1`) |
+| [workflow-improvement-log.md](./workflow-improvement-log.md) | Before proposing new process rules |
+| [pr-review-triage.md](./pr-review-triage.md) | `review` phase, open PR |
+| [subagent-mini-ticket-template.md](./subagent-mini-ticket-template.md) | Codex → DeepSeek subagent prompt |
+| [phase-peer-review.md](./phase-peer-review.md) | `plan` / `implement` exit peer review (PEPR) |
+| [issue-process-modes.md](./issue-process-modes.md) | XS–XL gates, escalation |
+| [issue-agent-prompts.md](./issue-agent-prompts.md) | Writer / Reviewer / Implementer prompts |
+| [harness-improvement-roadmap.md](./harness-improvement-roadmap.md) | Merged harness enforceability backlog (candidate) |
+| [templates/issue-review-reception.md](./templates/issue-review-reception.md) | Pre-implement disposition table |
+| [task-record-template/00-index.md](./task-record-template/00-index.md) | Obsidian task record |
+
+Router: [AGENTS.md](../../AGENTS.md) · `scripts/Invoke-HarnessPhaseContext.ps1`
+
+Worklogs: [doc/working-log/README.md](../working-log/README.md)

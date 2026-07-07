@@ -11,6 +11,8 @@ summary: How to run plan-router eval pilots and when to promote to TASK_CLASSIFI
 
 # Plan method router — pilot protocol
 
+> **Superseded for daily use** by `harness_flow` + [issue-process-modes.md](./issue-process-modes.md). `plan-method-router.md` is not shipped — do not follow broken links in this doc.
+
 Runs under `.orchestrator/harness-pilot/runs/` (local). Tracked procedure only.
 
 ## Goal

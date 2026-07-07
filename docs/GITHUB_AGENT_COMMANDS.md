@@ -28,10 +28,12 @@ Do not interpret upstream auto-close text as a DeepSeek refusal. It is maintaine
 
 | Layer | Role |
 | --- | --- |
-| **GitHub Issue/PR** | Public collaboration ledger for humans and Codex |
+| **GitHub Issue** | **Primary ledger**: goal, `harness_flow`, peer review comments (`phase-peer-review`), `implement_failure_count`, `next_action`, `drill_down` |
+| **GitHub PR** | implement/review output; link from Issue (`Closes #N`) |
+| **Repo worklog** | Verification, disposition tables; Issue `drill_down` points here or `peer-runs/issue-<N>/` |
 | **Actions bots** | Low-cost plan/review/CI-explain comments only; no code commits |
-| **`.orchestrator/`** | Local raw handoff; not pushed by default |
-| **Codex** | Parses bot output, implements fixes, commits, merge |
+| **`.orchestrator/`** | Local raw handoff (`signals.json` failure count mirror); not pushed by default |
+| **Codex** | Parses bot output, implements fixes, commits, merge; records PEPR disposition |
 
 When reading bot comments, use the five sections in `GITHUB_AGENT_OUTPUT.md`. Treat `Conclusion` and `Findings` as hints. Prefer `Commands to rerun` for local verification. Ignore comments with `<!-- pi-agent:workflow:` when deciding whether to post a new mention — those are bot output, not user requests.
 
@@ -121,6 +123,72 @@ Trusted authors and Antigravity-marked issues receive automatic planning review 
 ```
 
 `/deepseek` avoids notifying unrelated accounts. `@deepseek` and `@github-actions` remain supported aliases.
+
+### Local agy second opinion (`/agy` — not a GitHub Action)
+
+Antigravity (`agy`) runs **only on a local workstation** with `agy-bridge`. A `/agy` comment does **not** auto-run in the cloud; it signals Cursor/Codex to run:
+
+```powershell
+pwsh -NoProfile -File scripts/Invoke-AgyIssueReview.ps1 -IssueNumber <N> -PostComment
+```
+
+Check whether agy is recommended before offering:
+
+```powershell
+pwsh -NoProfile -File scripts/Test-AgyIssueReviewSuggested.ps1 -IssueNumber <N>
+```
+
+**When to use agy vs DeepSeek**
+
+| Use DeepSeek (GitHub) | Use agy (local) |
+| --- | --- |
+| Issue open/reopen 1st pass | 2nd opinion after DeepSeek `hold` |
+| No local machine | Verify Affected paths, types, commits in repo |
+| Standard planning triage | `task_class: complex` + codebase grounding |
+
+**Request template**
+
+```md
+/agy second-opinion
+- focus: dependency verification | Glide overlay types | missing tests
+- out of scope: implementation
+```
+
+**Contract-bearing skeleton**
+
+```md
+/agy skeleton
+- kind: contract-bearing
+- focus: domain types + Zod validation + red unit tests
+- out of scope: UI, full reducer logic
+```
+
+Run locally:
+
+```powershell
+pwsh -NoProfile -File scripts/Invoke-AgyIssueReview.ps1 `
+  -IssueNumber 105 -ReviewKind contract-bearing-skeleton -PostComment
+```
+
+Posted comments use workflow `agy-skeleton-assistant`. See `agy-runs/skeleton-pilot-summary.md`.
+
+### Local harness PEPR (`/harness review` — not a GitHub Action)
+
+Signals the orchestrator to run phase exit peer review locally (same pattern as `/agy`):
+
+```powershell
+pwsh -NoProfile -File scripts/Invoke-HarnessPhasePeerReview.ps1 -IssueNumber <N> -Phase plan -DryRun
+pwsh -NoProfile -File scripts/Invoke-HarnessPhasePeerReview.ps1 -IssueNumber <N> -Phase implement -PostComment
+```
+
+Process mode gates: `scripts/Test-ProcessModeGating.ps1 -IssueNumber <N>`. Runbook: `doc/orchestrator/issue-process-modes.md`.
+
+```md
+/harness review
+- phase: plan | implement
+- process_mode: XS | S | M | L | XL
+- focus: reception table | escalation | verification gaps
+```
 
 ### PR description (Harness block — matches `.github/pull_request_template.md`)
 

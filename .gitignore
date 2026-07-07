@@ -11,6 +11,8 @@ packages/*/dist-firefox/
 
 # Environment
 .env
+.env.*
+!.env.example
 
 # Editor files
 .vscode/
@@ -39,3 +41,62 @@ plans/
 .pi/hf-sessions/
 .pi/hf-sessions-backup/
 collect.sh
+
+# Agent orchestration local artifacts
+.orchestrator/
+/doc/handoff/
+/reasonix-runs/
+/qwen-runs/
+/agy-runs/
+/cursor-runs/
+cache/
+
+# Context Canvas / matrix runtime bundles
+.context-matrix-bundles/
+apps/context-canvas/playwright-report/
+apps/context-canvas/test-results/
+
+# Local/runtime artifacts from workflow experiments
+data
+*.sqlite
+.qwen/
+.codegraph/
+tmp-*.png
+artifacts/
+deploy-main-*.tar.gz
+release.tgz
+
+# ---------------------------------------------------------------------------
+# Local agent harness — workstation-only (do not push to GitHub)
+# Product PRs: apps/, packages/, build/test/release scripts under scripts/
+# ---------------------------------------------------------------------------
+/doc/orchestrator/
+/doc/working-log/
+/codex-runs/
+/peer-runs/
+/outputs/
+/.cursor/
+
+/docs/GITHUB_AGENT_COMMANDS.md
+/docs/GITHUB_AGENT_OUTPUT.md
+/docs/PR_REVIEW_DEPLOY_LOOP.md
+
+/AGENTS.md
+/QWEN.md
+/REASONIX.md
+/CURSOR.md
+
+/scripts/Invoke-*.ps1
+/scripts/Get-PrReviewDisposition.ps1
+/scripts/lib/
+/scripts/Test-AgentCommentTags*.ps1
+/scripts/Test-Agy*.ps1
+/scripts/Test-Codex*.ps1
+/scripts/Test-IssueContractGate.ps1
+/scripts/Test-PeerReviewOutput.ps1
+/scripts/Test-ProcessMode*.ps1
+/scripts/Test-WorklogFrontmatter.ps1
+/scripts/New-MatrixUxIssues.ps1
+/scripts/Test-DeepSeekReasoning.ps1
+
+/.github/ISSUE_TEMPLATE/agent-task.yml

@@ -17,12 +17,78 @@ Use when an open PR receives automated or human review comments. Codex owns fina
 
 ## Classify each finding
 
+Every **inline review comment** on the PR must appear in the disposition table with an explicit decision before merge. CI green alone is not sufficient.
+
 | Bucket | Action |
 | --- | --- |
 | `actionable now` | Fix in this PR; cite evidence in commit message |
 | `stale / already addressed` | Reply with file:line + test name; no code change |
 | `heuristic / outside diff` | Downgrade to residual risk unless diff contradicts |
 | `not actionable by code` | Document in PR comment; skip implementation |
+
+## Reporting format (required)
+
+Use a **per-comment disposition table** in the repo worklog and PR triage comment. One row per inline comment and per non-empty review body.
+
+| # | Reviewer | Path | Finding | Decision | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| 1 | gemini-code-assist[bot] | `path:line` | … | adopt | `309ca952` + test name |
+
+| Decision | Meaning |
+| --- | --- |
+| `adopt` | Fixed on head SHA (commit SHA in Evidence) |
+| `dismiss` | Invalid against current code (cite file:line) |
+| `defer` | Valid; **open GitHub issue** and put `#N` in Evidence — worklog alone is not enough |
+| `stale` | Superseded by later commit on head SHA |
+| `no_signal` | Reviewer produced no comment (quota error, empty body) |
+
+**Do not** merge or hand off with summary-only prose (“addressed some reviews”, “CI green”). **Do not** use disclaimers that leave reviewer coverage unclear.
+
+Scaffold before triage:
+
+```powershell
+pwsh scripts/Get-PrReviewDisposition.ps1 -PrNumber <N> -Markdown -OutputPath .orchestrator/runs/pr-<N>/disposition-scaffold.md
+```
+
+## Reporting format (mandatory before merge)
+
+Every reviewer source gets an explicit row. **Do not** merge or hand off with summary-only prose.
+
+### Per-reviewer disposition table
+
+Use this in the repo worklog (`## Review disposition`) and/or PR triage comment:
+
+| Reviewer | Source | Finding | Decision | Evidence |
+| --- | --- | --- | --- | --- |
+| `gemini-code-assist[bot]` | inline `path:line` | one-line summary | `adopt` \| `dismiss` \| `defer` \| `stale` | commit SHA, `path:line`, or test name |
+| `coderabbitai[bot]` | inline / nitpick | … | … | … |
+| `github-actions` (DeepSeek) | PR comment P1… | … | … | … |
+| `chatgpt-codex-connector` | review skipped | no findings | `stale` | usage-limit message URL |
+
+**Decision meanings:** `adopt` = fixed in this PR · `dismiss` = false positive · `defer` = follow-up issue · `stale` = N/A or already on head SHA.
+
+### Merge summary (user-facing)
+
+State only facts in tables or bullets:
+
+1. **Merged:** PR URL, squash SHA, issue closed.
+2. **Review disposition:** full table (one row per finding).
+3. **Verification:** command + pass/fail.
+
+**Forbidden in handoff text** (invites wrong inference):
+
+- “CI green so merged” without the disposition table.
+- “Not all inline comments were reviewed” without naming each reviewer’s outcome.
+- “CodeRabbit had no blocking findings” when inline rows are still empty.
+- Equating check status with review body (`DeepSeek status pass` ≠ no P1 in body).
+
+### Scaffold command
+
+```powershell
+pwsh scripts/Get-PrReviewDisposition.ps1 -PrNumber <N> -Repo heonyun/berry-pi-agent
+```
+
+Fill `Decision` and `Evidence` for every row before squash merge.
 
 ## Finding disposition table
 
@@ -69,6 +135,18 @@ New finding
 3. If PR Test plan claims tests passed and CI is green, do not treat missing-test findings as blockers without diff evidence.
 4. Post a short triage comment listing adopted vs rejected findings with one-line evidence each.
 
+## DeepSeek PR review (automated)
+
+Workflow behavior for `deepseek-pr-review` on berry-pi-agent PRs. Codex reconciles bot output with CI and local verification.
+
+- **Advisory only** — `Conclusion: fail` is not a merge gate.
+- **One comment per PR** — workflow upserts the latest bot comment and skips duplicate runs for the same head SHA (use `@deepseek-review` to force re-run).
+- **Context injection** — Context Canvas PRs receive domain invariants (for example `MatrixGroup.source` is `"auto"` only) and test-file mock excerpts so reviewers do not confuse test-only UI with production UI.
+- **CI-aware triage** — when `build-check-test` passed, unverified test-failure `fail` is downgraded to `hold` with an automated note.
+- **CodeRabbit** — treat rate-limit / draft-skip as weak evidence; do not block merge on comment alone.
+
+Per-finding triage steps: see **DeepSeek-specific triage** above and [docs/GITHUB_AGENT_OUTPUT.md](../../docs/GITHUB_AGENT_OUTPUT.md).
+
 ## Re-review comment pattern
 
 Required when requesting `@deepseek-review` (see `docs/GITHUB_AGENT_COMMANDS.md`):
@@ -83,4 +161,9 @@ Required when requesting `@deepseek-review` (see `docs/GITHUB_AGENT_COMMANDS.md`
 
 ## Merge gate
 
-See `docs/PR_REVIEW_DEPLOY_LOOP.md` — all `actionable now` items addressed, CI green, no unresolved P0/P1 with current-code evidence.
+See `docs/PR_REVIEW_DEPLOY_LOOP.md` — merge only when:
+
+1. **Every inline PR comment** has `adopt` | `dismiss` | `defer` | `stale` | `no_signal` in the worklog disposition table.
+2. All `adopt` items are on head SHA.
+3. CI green.
+4. No unresolved P0/P1 with current-code evidence.

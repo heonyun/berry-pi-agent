@@ -13,13 +13,19 @@ Run after a Qwen implementation worker ticket completes. Orchestrator verifies; 
 
 - [ ] Read changed hunks; confirm behavior matches ticket acceptance criteria
 - [ ] Check helpers **called** by the change — open definition if not in worker diff
-- [ ] Preserve existing invariants (`INVARIANT` / `RELATED` comments when editing context-canvas)
-- [ ] Do not add WHAT comments; use tags per `COMMENT_CONVENTIONS.md` only when needed
+- [ ] Preserve existing invariants (`INVARIANT` / `RELATED` comments when editing)
+- [ ] Do not add WHAT comments; use tags per [agent-code-comments.md](./agent-code-comments.md) only when needed
 
-### 2a. Context Matrix / context-canvas (when scope touches `apps/context-canvas/`)
+### 2a. Tagged comments (`apps/`, `scripts/`, `outputs/`)
 
-- [ ] Worker read `apps/context-canvas/COMMENT_CONVENTIONS.md` before editing
+- [ ] Worker read [agent-code-comments.md](./agent-code-comments.md) and paste [templates/worker-comment-tags.md](./templates/worker-comment-tags.md) into implementation tickets
 - [ ] Non-obvious hunks have tagged comments (`INVARIANT`, `CONTRACT`, `RISK`, `RELATED`, etc.) — max ~2 tags per file; no mass retrofit
+- [ ] Context-canvas examples: [apps/context-canvas/COMMENT_CONVENTIONS.md](../../apps/context-canvas/COMMENT_CONVENTIONS.md)
+
+## 2b. Comment tag lint (orchestrator, before §3)
+
+- [ ] `pwsh scripts/Test-AgentCommentTags.ps1 -IssueNumber <N>` — M+ hard_fail; XS/S warn only
+- [ ] Disposition row: comment tags adopt / N/A (trivial hunk) + evidence
 
 ## 3. Tests (once)
 
@@ -42,6 +48,7 @@ Record in worker ticket disposition file when a Qwen ticket ran; template shape 
 - [ ] **Repo worklog** `doc/working-log/YYYY-MM-DD-<topic>.md` with frontmatter (required for non-trivial work)
 - [ ] **Obsidian DailyNote** summary + link to repo worklog (`worklog-writer` skill)
 - [ ] UI issues: visual AC check vs issue mockup noted in worklog
+- [ ] Changes on a **feature branch** (not uncommitted `main`) unless user explicitly waived — align with `harness-flow.md` implement exit
 
 ## Budget note
 
