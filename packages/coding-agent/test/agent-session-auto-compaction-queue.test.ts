@@ -179,7 +179,7 @@ describe("AgentSession auto-compaction queue resume", () => {
 
 	it("should ignore stale pre-compaction assistant usage on pre-prompt compaction checks", async () => {
 		const model = session.model!;
-		const highUsageTokens = model.contextWindow - 1_000;
+		const highUsageTokens = Math.max(1, model.contextWindow - 1_000);
 		const staleAssistantTimestamp = Date.now() - 10_000;
 		const staleAssistant: AssistantMessage = {
 			role: "assistant",
@@ -237,7 +237,7 @@ describe("AgentSession auto-compaction queue resume", () => {
 
 	it("should trigger threshold compaction for error messages using last successful usage", async () => {
 		const model = session.model!;
-		const highUsageTokens = model.contextWindow - 1_000;
+		const highUsageTokens = Math.max(1, model.contextWindow - 1_000);
 
 		// A successful assistant message with high token usage (near context limit)
 		const successfulAssistant: AssistantMessage = {
@@ -356,7 +356,7 @@ describe("AgentSession auto-compaction queue resume", () => {
 
 	it("should not trigger threshold compaction for error messages when only kept pre-compaction usage exists", async () => {
 		const model = session.model!;
-		const highUsageTokens = model.contextWindow - 1_000;
+		const highUsageTokens = Math.max(1, model.contextWindow - 1_000);
 		const preCompactionTimestamp = Date.now() - 10_000;
 
 		// A "kept" assistant message from before compaction with high usage

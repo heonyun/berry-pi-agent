@@ -166,6 +166,46 @@ describe("MatrixGrid IME overlay editor", () => {
     ).toHaveLength(1);
   });
 
+  it("clears a Latin edit-on-type DOM seed when the source cell is empty", () => {
+    renderMatrixGrid();
+
+    const TextEditor = getTextEditor(
+      dataEditorState.props?.provideEditor?.({
+        kind: GridCellKind.Text,
+        data: "",
+        displayData: "",
+        allowOverlay: true,
+        location: [0, 0],
+      }) as ProvideEditorCallbackResult<TextCell>,
+    );
+    const onChange = vi.fn();
+
+    render(
+      <TextEditor
+        isHighlighted={false}
+        onChange={onChange}
+        onFinishedEditing={vi.fn()}
+        value={{
+          kind: GridCellKind.Text,
+          data: "",
+          displayData: "",
+          allowOverlay: true,
+        }}
+        target={{ x: 0, y: 0, width: 100, height: 32 }}
+        initialValue="a"
+        forceEditMode={true}
+        theme={{} as never}
+      />,
+    );
+
+    const editor = screen.getByLabelText("Matrix cell editor") as HTMLTextAreaElement;
+    editor.value = "a";
+    fireEvent.compositionStart(editor);
+
+    expect(editor.value).toBe("");
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ data: "", displayData: "" }));
+  });
+
   it("keeps an edit-on-type seed cleared after the parent editor value updates", () => {
     renderMatrixGrid();
 

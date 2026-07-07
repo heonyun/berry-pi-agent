@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  hasMatrixEditOnTypeImeSeed,
   shouldCancelMatrixEditOnTypeForIme,
   shouldClearMatrixEditOnTypeImeSeed,
   isLikelyImeLatinSeed,
@@ -38,6 +39,14 @@ describe("shouldCancelMatrixEditOnTypeForIme", () => {
   it("flags a lone Latin letter as a likely IME seed", () => {
     expect(isLikelyImeLatinSeed("d")).toBe(true);
     expect(isLikelyImeLatinSeed("hello")).toBe(false);
+  });
+});
+
+describe("hasMatrixEditOnTypeImeSeed", () => {
+  it("detects Glide edit-on-type seed intent without depending on current cell text", () => {
+    expect(hasMatrixEditOnTypeImeSeed({ forceEditMode: true, initialValue: "a" })).toBe(true);
+    expect(hasMatrixEditOnTypeImeSeed({ forceEditMode: false, initialValue: "a" })).toBe(false);
+    expect(hasMatrixEditOnTypeImeSeed({ forceEditMode: true })).toBe(false);
   });
 });
 

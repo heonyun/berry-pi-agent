@@ -31,6 +31,7 @@ import {
   type TextCell,
 } from "@glideapps/glide-data-grid";
 import {
+  hasMatrixEditOnTypeImeSeed,
   shouldCancelMatrixEditOnTypeForIme,
   shouldClearMatrixEditOnTypeImeSeed,
 } from "../shared/matrix-ime.ts";
@@ -181,10 +182,9 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
   const originalCellDataRef = useRef(value.data);
   // INVARIANT: Glide mounts a fresh overlay per edit; consume the seed decision on first compositionstart.
   const shouldClearImeSeedRef = useRef(
-    shouldClearMatrixEditOnTypeImeSeed({
+    hasMatrixEditOnTypeImeSeed({
       forceEditMode,
       initialValue,
-      currentValue: value.data,
     }),
   );
 
