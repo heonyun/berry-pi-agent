@@ -179,6 +179,7 @@ describe("AgentSession auto-compaction queue resume", () => {
 
 	it("should ignore stale pre-compaction assistant usage on pre-prompt compaction checks", async () => {
 		const model = session.model!;
+		const highUsageTokens = Math.max(1, model.contextWindow - 1_000);
 		const staleAssistantTimestamp = Date.now() - 10_000;
 		const staleAssistant: AssistantMessage = {
 			role: "assistant",
@@ -187,11 +188,11 @@ describe("AgentSession auto-compaction queue resume", () => {
 			provider: model.provider,
 			model: model.id,
 			usage: {
-				input: 600_000,
-				output: 10_000,
+				input: highUsageTokens,
+				output: 0,
 				cacheRead: 0,
 				cacheWrite: 0,
-				totalTokens: 610_000,
+				totalTokens: highUsageTokens,
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 			},
 			stopReason: "stop",
@@ -236,6 +237,7 @@ describe("AgentSession auto-compaction queue resume", () => {
 
 	it("should trigger threshold compaction for error messages using last successful usage", async () => {
 		const model = session.model!;
+		const highUsageTokens = Math.max(1, model.contextWindow - 1_000);
 
 		// A successful assistant message with high token usage (near context limit)
 		const successfulAssistant: AssistantMessage = {
@@ -245,11 +247,11 @@ describe("AgentSession auto-compaction queue resume", () => {
 			provider: model.provider,
 			model: model.id,
 			usage: {
-				input: 180_000,
-				output: 10_000,
+				input: highUsageTokens,
+				output: 0,
 				cacheRead: 0,
 				cacheWrite: 0,
-				totalTokens: 190_000,
+				totalTokens: highUsageTokens,
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 			},
 			stopReason: "stop",
@@ -354,6 +356,7 @@ describe("AgentSession auto-compaction queue resume", () => {
 
 	it("should not trigger threshold compaction for error messages when only kept pre-compaction usage exists", async () => {
 		const model = session.model!;
+		const highUsageTokens = Math.max(1, model.contextWindow - 1_000);
 		const preCompactionTimestamp = Date.now() - 10_000;
 
 		// A "kept" assistant message from before compaction with high usage
@@ -364,11 +367,11 @@ describe("AgentSession auto-compaction queue resume", () => {
 			provider: model.provider,
 			model: model.id,
 			usage: {
-				input: 180_000,
-				output: 10_000,
+				input: highUsageTokens,
+				output: 0,
 				cacheRead: 0,
 				cacheWrite: 0,
-				totalTokens: 190_000,
+				totalTokens: highUsageTokens,
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 			},
 			stopReason: "stop",

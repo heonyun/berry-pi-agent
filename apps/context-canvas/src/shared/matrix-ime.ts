@@ -7,6 +7,12 @@ export interface MatrixImeKeyProbe {
   readonly isComposing?: boolean;
 }
 
+export interface MatrixImeSeedProbe {
+  readonly forceEditMode?: boolean;
+  readonly initialValue?: string;
+  readonly currentValue: string;
+}
+
 /**
  * CONTRACT: returns true when Glide editOnType must not seed event.key into the overlay.
  * WHY: Korean IME on Windows fires keydown with Latin physical key before compositionstart.
@@ -28,4 +34,25 @@ export function shouldCancelMatrixEditOnTypeForIme(probe: MatrixImeKeyProbe): bo
 /** True when a lone Latin letter is likely an IME physical-key seed, not intentional ASCII input. */
 export function isLikelyImeLatinSeed(value: string): boolean {
   return value.length === 1 && /^[a-z]$/i.test(value);
+}
+
+/**
+ * CONTRACT: detects Glide edit-on-type seed intent before the textarea DOM value is available.
+ * WHY: empty cells can still receive the Latin seed in the overlay DOM at compositionstart (#133).
+ */
+export function hasMatrixEditOnTypeImeSeed(
+  probe: Pick<MatrixImeSeedProbe, "forceEditMode" | "initialValue">,
+): boolean {
+  return probe.forceEditMode === true && probe.initialValue !== undefined && isLikelyImeLatinSeed(probe.initialValue);
+}
+
+/**
+ * CONTRACT: clears only Glide's edit-on-type seed, never an existing single-letter cell value.
+ * WHY: `initialValue` is Glide's keyboard seed; `currentValue` alone cannot distinguish intent (#133).
+ */
+export function shouldClearMatrixEditOnTypeImeSeed(probe: MatrixImeSeedProbe): boolean {
+  return (
+    hasMatrixEditOnTypeImeSeed(probe) &&
+    probe.currentValue === probe.initialValue
+  );
 }

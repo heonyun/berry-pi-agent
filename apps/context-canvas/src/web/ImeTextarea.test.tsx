@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { createRef } from "react";
+import { createRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ImeTextarea } from "./ImeTextarea.tsx";
 
@@ -72,6 +72,31 @@ describe("ImeTextarea", () => {
     expect(textarea.value).toBe("안녕");
     expect(onValueChange).toHaveBeenCalledTimes(1);
     expect(onValueChange).toHaveBeenCalledWith("안녕");
+  });
+
+  // RELATED: issue-133 — parent IME guards can clear seeded DOM text during compositionstart.
+  it("keeps compositionstart DOM mutations in sync with the local draft", () => {
+    function StatefulTextarea() {
+      const [value, setValue] = useState("a");
+      return (
+        <ImeTextarea
+          value={value}
+          onValueChange={vi.fn()}
+          onCompositionStart={(event) => {
+            event.currentTarget.value = "";
+            setValue("");
+          }}
+          aria-label="prompt"
+        />
+      );
+    }
+
+    render(<StatefulTextarea />);
+
+    const textarea = screen.getByLabelText("prompt") as HTMLTextAreaElement;
+    fireEvent.compositionStart(textarea);
+
+    expect(textarea.value).toBe("");
   });
 
   it("clears the configured starter text on focus without committing immediately", () => {
