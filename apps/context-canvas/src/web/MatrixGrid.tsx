@@ -30,7 +30,10 @@ import {
   type SelectionRange,
   type TextCell,
 } from "@glideapps/glide-data-grid";
-import { shouldCancelMatrixEditOnTypeForIme, isLikelyImeLatinSeed } from "../shared/matrix-ime.ts";
+import {
+  shouldCancelMatrixEditOnTypeForIme,
+  shouldClearMatrixEditOnTypeImeSeed,
+} from "../shared/matrix-ime.ts";
 import "@glideapps/glide-data-grid/dist/index.css";
 import { getColumnHeader, type MatrixDocument, type MatrixGroup } from "../shared/domain.ts";
 import { getMatrixColumnWidth } from "../shared/matrix-column-width.ts";
@@ -169,11 +172,20 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
   onFinishedEditing,
   validatedSelection,
   value,
+  initialValue,
+  forceEditMode,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const finishedRef = useRef(false);
   const hasFocusedRef = useRef(false);
-  const initialValueRef = useRef(value.data);
+  const originalCellDataRef = useRef(value.data);
+  const shouldClearImeSeedRef = useRef(
+    shouldClearMatrixEditOnTypeImeSeed({
+      forceEditMode,
+      initialValue,
+      currentValue: value.data,
+    }),
+  );
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -181,7 +193,7 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
       return;
     }
     hasFocusedRef.current = true;
-    const length = initialValueRef.current.length;
+    const length = originalCellDataRef.current.length;
     textarea.focus();
     textarea.setSelectionRange(isHighlighted ? 0 : length, length);
   }, [isHighlighted, value.readonly]);
@@ -226,14 +238,24 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
 
   const handleCompositionStart = useCallback(
     (event: ReactCompositionEvent<HTMLTextAreaElement>) => {
-      // WHY: Glide editOnType can seed a Latin key before compositionstart on Windows IME (#93).
-      if (isLikelyImeLatinSeed(event.currentTarget.value)) {
+      // INVARIANT: only clear Glide's edit-on-type seed, not intentional one-letter content (#133).
+      if (
+        shouldClearImeSeedRef.current &&
+        shouldClearMatrixEditOnTypeImeSeed({
+          forceEditMode,
+          initialValue,
+          currentValue: event.currentTarget.value,
+        })
+      ) {
+        shouldClearImeSeedRef.current = false;
         event.currentTarget.value = "";
         event.currentTarget.setSelectionRange(0, 0);
         handleLocalChange("");
+        return;
       }
+      shouldClearImeSeedRef.current = false;
     },
-    [handleLocalChange],
+    [forceEditMode, handleLocalChange, initialValue],
   );
 
   const handleKeyDown = useCallback(

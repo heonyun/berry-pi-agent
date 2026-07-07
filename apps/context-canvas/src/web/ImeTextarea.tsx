@@ -88,6 +88,12 @@ export const ImeTextarea = memo(forwardRef<HTMLTextAreaElement, ImeTextareaProps
       focusedRef.current = true;
       blurDuringCompositionRef.current = false;
       onCompositionStart?.(event);
+      // INVARIANT: parent IME guards may mutate the DOM value before composition locks prop sync.
+      if (event.currentTarget.value !== draftRef.current) {
+        const next = event.currentTarget.value;
+        setDraft(next);
+        draftRef.current = next;
+      }
     },
     [onCompositionStart],
   );

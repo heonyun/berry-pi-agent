@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import {
   GridCellKind,
   type DataEditorProps,
@@ -115,6 +116,134 @@ describe("MatrixGrid IME overlay editor", () => {
       expect.objectContaining({ data: "안녕", displayData: "안녕" }),
       undefined,
     );
+  });
+
+  // RELATED: issue-133 — locks Glide edit-on-type IME seed behavior against one-letter cells.
+  it("clears a Latin edit-on-type seed when IME composition starts", () => {
+    renderMatrixGrid();
+
+    const TextEditor = getTextEditor(
+      dataEditorState.props?.provideEditor?.({
+        kind: GridCellKind.Text,
+        data: "",
+        displayData: "",
+        allowOverlay: true,
+        location: [0, 0],
+      }) as ProvideEditorCallbackResult<TextCell>,
+    );
+    const onChange = vi.fn();
+
+    render(
+      <TextEditor
+        isHighlighted={false}
+        onChange={onChange}
+        onFinishedEditing={vi.fn()}
+        value={{
+          kind: GridCellKind.Text,
+          data: "a",
+          displayData: "a",
+          allowOverlay: true,
+        }}
+        target={{ x: 0, y: 0, width: 100, height: 32 }}
+        initialValue="a"
+        forceEditMode={true}
+        theme={{} as never}
+      />,
+    );
+
+    const editor = screen.getByLabelText("Matrix cell editor") as HTMLTextAreaElement;
+    fireEvent.compositionStart(editor);
+
+    expect(editor.value).toBe("");
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ data: "", displayData: "" }));
+
+    fireEvent.change(editor, { target: { value: "a" } });
+    fireEvent.compositionStart(editor);
+
+    expect(editor.value).toBe("a");
+    expect(
+      onChange.mock.calls.filter(([cell]) => cell.data === "" && cell.displayData === ""),
+    ).toHaveLength(1);
+  });
+
+  it("keeps an edit-on-type seed cleared after the parent editor value updates", () => {
+    renderMatrixGrid();
+
+    const TextEditor = getTextEditor(
+      dataEditorState.props?.provideEditor?.({
+        kind: GridCellKind.Text,
+        data: "",
+        displayData: "",
+        allowOverlay: true,
+        location: [0, 0],
+      }) as ProvideEditorCallbackResult<TextCell>,
+    );
+
+    function StatefulEditor() {
+      const [cell, setCell] = useState<TextCell>({
+        kind: GridCellKind.Text,
+        data: "a",
+        displayData: "a",
+        allowOverlay: true,
+      });
+      return (
+        <TextEditor
+          isHighlighted={false}
+          onChange={setCell}
+          onFinishedEditing={vi.fn()}
+          value={cell}
+          target={{ x: 0, y: 0, width: 100, height: 32 }}
+          initialValue="a"
+          forceEditMode={true}
+          theme={{} as never}
+        />
+      );
+    }
+
+    render(<StatefulEditor />);
+
+    const editor = screen.getByLabelText("Matrix cell editor") as HTMLTextAreaElement;
+    fireEvent.compositionStart(editor);
+
+    expect(editor.value).toBe("");
+  });
+
+  it("keeps intentional single-letter cell text when IME composition starts", () => {
+    renderMatrixGrid();
+
+    const TextEditor = getTextEditor(
+      dataEditorState.props?.provideEditor?.({
+        kind: GridCellKind.Text,
+        data: "a",
+        displayData: "a",
+        allowOverlay: true,
+        location: [0, 0],
+      }) as ProvideEditorCallbackResult<TextCell>,
+    );
+    const onChange = vi.fn();
+
+    render(
+      <TextEditor
+        isHighlighted={false}
+        onChange={onChange}
+        onFinishedEditing={vi.fn()}
+        value={{
+          kind: GridCellKind.Text,
+          data: "a",
+          displayData: "a",
+          allowOverlay: true,
+        }}
+        target={{ x: 0, y: 0, width: 100, height: 32 }}
+        forceEditMode={false}
+        theme={{} as never}
+      />,
+    );
+
+    const editor = screen.getByLabelText("Matrix cell editor") as HTMLTextAreaElement;
+    fireEvent.compositionStart(editor);
+
+    expect(editor.value).toBe("a");
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("cancels the text editor without saving again on blur", () => {
