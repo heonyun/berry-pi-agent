@@ -179,6 +179,7 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
   const finishedRef = useRef(false);
   const hasFocusedRef = useRef(false);
   const originalCellDataRef = useRef(value.data);
+  // INVARIANT: Glide mounts a fresh overlay per edit; consume the seed decision on first compositionstart.
   const shouldClearImeSeedRef = useRef(
     shouldClearMatrixEditOnTypeImeSeed({
       forceEditMode,

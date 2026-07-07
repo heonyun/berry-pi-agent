@@ -61,4 +61,23 @@ describe("shouldClearMatrixEditOnTypeImeSeed", () => {
       }),
     ).toBe(false);
   });
+
+  it("keeps text when Glide did not provide an initial edit-on-type seed", () => {
+    expect(
+      shouldClearMatrixEditOnTypeImeSeed({
+        forceEditMode: true,
+        currentValue: "a",
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps text when the current editor value no longer matches the seed", () => {
+    expect(
+      shouldClearMatrixEditOnTypeImeSeed({
+        forceEditMode: true,
+        initialValue: "a",
+        currentValue: "ab",
+      }),
+    ).toBe(false);
+  });
 });

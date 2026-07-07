@@ -8,7 +8,7 @@ export interface MatrixImeKeyProbe {
 }
 
 export interface MatrixImeSeedProbe {
-  readonly forceEditMode: boolean;
+  readonly forceEditMode?: boolean;
   readonly initialValue?: string;
   readonly currentValue: string;
 }
@@ -42,7 +42,7 @@ export function isLikelyImeLatinSeed(value: string): boolean {
  */
 export function shouldClearMatrixEditOnTypeImeSeed(probe: MatrixImeSeedProbe): boolean {
   return (
-    probe.forceEditMode &&
+    probe.forceEditMode === true &&
     probe.initialValue !== undefined &&
     isLikelyImeLatinSeed(probe.initialValue) &&
     probe.currentValue === probe.initialValue
