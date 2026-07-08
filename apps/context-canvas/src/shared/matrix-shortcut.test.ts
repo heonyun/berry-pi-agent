@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  matrixUndoRedoShortcutAction,
   matrixShortcutBlockedStatus,
   matrixShortcutDirection,
+  shouldHandleMatrixUndoRedoShortcut,
   shouldHandleMatrixShortcut,
 } from "./matrix-shortcut.ts";
 
@@ -112,5 +114,97 @@ describe("matrixShortcutBlockedStatus", () => {
 
   it("returns null outside matrix shell", () => {
     expect(matrixShortcutBlockedStatus(document.body)).toBeNull();
+  });
+});
+
+describe("matrixUndoRedoShortcutAction", () => {
+  it("maps standard undo and redo shortcuts", () => {
+    expect(
+      matrixUndoRedoShortcutAction({
+        key: "z",
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        isComposing: false,
+      }),
+    ).toBe("undo");
+    expect(
+      matrixUndoRedoShortcutAction({
+        key: "y",
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        isComposing: false,
+      }),
+    ).toBe("redo");
+    expect(
+      matrixUndoRedoShortcutAction({
+        key: "Z",
+        ctrlKey: false,
+        metaKey: true,
+        altKey: false,
+        shiftKey: true,
+        isComposing: false,
+      }),
+    ).toBe("redo");
+  });
+
+  it("ignores composing, Alt-modified, and plain key presses", () => {
+    expect(
+      matrixUndoRedoShortcutAction({
+        key: "z",
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        isComposing: true,
+      }),
+    ).toBeNull();
+    expect(
+      matrixUndoRedoShortcutAction({
+        key: "z",
+        ctrlKey: true,
+        metaKey: false,
+        altKey: true,
+        shiftKey: false,
+        isComposing: false,
+      }),
+    ).toBeNull();
+    expect(
+      matrixUndoRedoShortcutAction({
+        key: "z",
+        ctrlKey: false,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        isComposing: false,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("shouldHandleMatrixUndoRedoShortcut", () => {
+  it("allows matrix grid focus but blocks active text editors", () => {
+    const shell = el(`
+      <div data-testid="matrix-shell">
+        <div data-testid="matrix-grid"><canvas data-testid="data-grid-canvas"></canvas></div>
+        <aside data-testid="matrix-detail-pane"><textarea></textarea></aside>
+        <button type="button">Matrix action</button>
+        <input data-testid="matrix-group-label-input" />
+      </div>
+    `);
+    expect(
+      shouldHandleMatrixUndoRedoShortcut(shell.querySelector('[data-testid="data-grid-canvas"]')),
+    ).toBe(true);
+    expect(shouldHandleMatrixUndoRedoShortcut(shell.querySelector("textarea"))).toBe(false);
+    expect(
+      shouldHandleMatrixUndoRedoShortcut(shell.querySelector('[data-testid="matrix-group-label-input"]')),
+    ).toBe(false);
+    expect(shouldHandleMatrixUndoRedoShortcut(shell.querySelector("button"))).toBe(true);
+    expect(shouldHandleMatrixUndoRedoShortcut(el(`<textarea class="gdg-input"></textarea>`))).toBe(
+      false,
+    );
   });
 });
