@@ -7,7 +7,10 @@ export interface MatrixShortcutKeyProbe {
   readonly metaKey: boolean;
   readonly altKey: boolean;
   readonly shiftKey: boolean;
+  readonly isComposing?: boolean;
 }
+
+export type MatrixUndoRedoShortcutAction = "undo" | "redo";
 
 /**
  * CONTRACT: returns inferred target direction for matrix AI shortcut, or null when not a shortcut key.
@@ -18,6 +21,22 @@ export function matrixShortcutDirection(probe: MatrixShortcutKeyProbe): MatrixTa
     return null;
   }
   return probe.shiftKey ? "right" : "below";
+}
+
+export function matrixUndoRedoShortcutAction(
+  probe: MatrixShortcutKeyProbe,
+): MatrixUndoRedoShortcutAction | null {
+  if (probe.isComposing || probe.altKey || (!probe.ctrlKey && !probe.metaKey)) {
+    return null;
+  }
+  const key = probe.key.toLowerCase();
+  if (key === "z") {
+    return probe.shiftKey ? "redo" : "undo";
+  }
+  if (key === "y" && !probe.shiftKey) {
+    return "redo";
+  }
+  return null;
 }
 
 function isMatrixShellElement(target: Element): boolean {
@@ -53,6 +72,19 @@ export function shouldHandleMatrixShortcut(target: EventTarget | null): boolean 
     return false;
   }
   return Boolean(target.closest('[data-testid="matrix-grid"]'));
+}
+
+export function shouldHandleMatrixUndoRedoShortcut(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+  if (target.closest(".gdg-input")) {
+    return false;
+  }
+  if (target.closest("textarea, input, [contenteditable]:not([contenteditable='false'])")) {
+    return false;
+  }
+  return isMatrixShellElement(target);
 }
 
 /**

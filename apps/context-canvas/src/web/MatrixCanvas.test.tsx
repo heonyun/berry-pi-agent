@@ -44,6 +44,9 @@ vi.mock("./MatrixGrid.tsx", () => ({
     onCellsEdited,
     onSelectionChange,
     onGroupLabelClick,
+    onGroupLabelOffsetChange,
+    onGroupLabelDraftChange,
+    onGroupLabelSave,
   }: {
     document: MatrixDocument;
     groups: readonly MatrixGroup[];
@@ -56,10 +59,21 @@ vi.mock("./MatrixGrid.tsx", () => ({
       group: MatrixGroup,
       options: { readonly isDoubleClick: boolean },
     ) => void;
+    onGroupLabelOffsetChange: (
+      group: MatrixGroup,
+      offset: { readonly x: number; readonly y: number },
+    ) => void;
+    onGroupLabelDraftChange: (label: string) => void;
+    onGroupLabelSave: () => void;
   }) => (
     <div data-testid="matrix-grid">
       <output data-testid="cell-a1">{document.sheet.cells.get(cellKey(0, 0))?.body ?? ""}</output>
+      <output data-testid="cell-b1">{document.sheet.cells.get(cellKey(0, 1))?.body ?? ""}</output>
       <output data-testid="cell-b2">{document.sheet.cells.get(cellKey(1, 1))?.body ?? ""}</output>
+      <output data-testid="group-count">{groups.length}</output>
+      <output data-testid="first-group-offset">
+        {groups[0]?.labelOffset ? `${groups[0].labelOffset.x},${groups[0].labelOffset.y}` : ""}
+      </output>
       <button type="button" onClick={() => onCellEdited(0, 0, "=")}>
         edit equals
       </button>
@@ -122,6 +136,45 @@ vi.mock("./MatrixGrid.tsx", () => ({
       >
         create group
       </button>
+      <button
+        type="button"
+        onClick={() =>
+          onCellsEdited([
+            { row: 0, col: 0, body: "Alpha" },
+            { row: 0, col: 1, body: "Beta" },
+          ])
+        }
+      >
+        create A1 group
+      </button>
+      {groups[0] && (
+        <>
+          <button
+            type="button"
+            onClick={() => onGroupLabelOffsetChange(groups[0]!, { x: 12, y: 8 })}
+          >
+            move first group
+          </button>
+          <button
+            type="button"
+            onClick={() => onGroupLabelClick(groups[0]!, { isDoubleClick: true })}
+          >
+            start group rename
+          </button>
+          <button
+            type="button"
+            onClick={() => onGroupLabelDraftChange("Renamed group")}
+          >
+            change group rename draft
+          </button>
+          <button
+            type="button"
+            onClick={() => onGroupLabelSave()}
+          >
+            save group rename
+          </button>
+        </>
+      )}
       {groups.map((group) => (
         <button
           key={group.id}
@@ -134,6 +187,81 @@ vi.mock("./MatrixGrid.tsx", () => ({
     </div>
   ),
 }));
+
+function pressUndo(target: Element): void {
+  fireEvent.keyDown(target, {
+    key: "z",
+    ctrlKey: true,
+  });
+}
+
+function pressRedo(target: Element): void {
+  fireEvent.keyDown(target, {
+    key: "y",
+    ctrlKey: true,
+  });
+}
+
+function createRestorableHistoryEntry(
+  options: {
+    readonly truncated?: boolean;
+    readonly restoredFrontmatter?: string;
+  } = {},
+) {
+  return createHistoryEntry({
+    intent: options.truncated ? "Truncated saved run" : "Restore saved run",
+    contextRanges: [
+      {
+        label: "B1:C2",
+        range: { startRow: 0, startCol: 1, endRow: 1, endCol: 2 },
+        groupId: "history-group",
+      },
+    ],
+    targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+    targetRangeLabel: "A1",
+    patchesApplied: 1,
+    snapshot: {
+      schemaVersion: 1,
+      sheet: {
+        id: "history-sheet",
+        name: "History Sheet",
+        rows: 20,
+        cols: 50,
+      },
+      cells: options.truncated
+        ? []
+        : [
+            {
+              row: 0,
+              col: 0,
+              cell: {
+                value: "restored",
+                body: "Restored A1",
+                frontmatter: options.restoredFrontmatter ?? "",
+                provenance: "ai",
+              },
+            },
+          ],
+      groups: options.truncated
+        ? []
+        : [
+            {
+              id: "history-group",
+              label: "Restored Group",
+              range: { startRow: 0, startCol: 1, endRow: 1, endCol: 2 },
+              source: "auto",
+            },
+          ],
+      maxSerializedBytes: MATRIX_SNAPSHOT_MAX_BYTES,
+      serializedBytes: 256,
+      truncated: options.truncated ?? false,
+    },
+  });
+}
+
+function saveRestorableHistory(): void {
+  saveMatrixHistory([createRestorableHistoryEntry()]);
+}
 
 describe("MatrixCanvas reference edit mode", () => {
   afterEach(() => {
@@ -244,6 +372,161 @@ describe("MatrixCanvas reference edit mode", () => {
     expect(screen.getByTestId("cell-a1").textContent).toBe("=");
     expect(screen.getByTestId("cell-b2").textContent).toBe("Beta");
     expect(screen.getByText("2 cells updated")).toBeTruthy();
+  });
+});
+
+// RELATED: issue-135 — Matrix/Grid-only edit undo stack behavior.
+describe("MatrixCanvas edit undo/redo", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    vi.mocked(runMatrix).mockImplementation(defaultRunMatrixResponse);
+  });
+
+  it("undoes and redoes a completed cell edit from grid focus", () => {
+    render(<MatrixCanvas />);
+    const grid = screen.getByTestId("matrix-grid");
+
+    fireEvent.click(screen.getByText("edit text"));
+    expect(screen.getByTestId("cell-a1").textContent).toBe("hello");
+
+    pressUndo(grid);
+    expect(screen.getByTestId("cell-a1").textContent).toBe("");
+
+    pressRedo(grid);
+    expect(screen.getByTestId("cell-a1").textContent).toBe("hello");
+  });
+
+  it("treats a bulk edit as one undo entry", () => {
+    render(<MatrixCanvas />);
+    const grid = screen.getByTestId("matrix-grid");
+
+    fireEvent.click(screen.getByText("create group"));
+    expect(screen.getByTestId("cell-b2").textContent).toBe("Beta");
+    expect(screen.getByTestId("group-count").textContent).toBe("1");
+
+    pressUndo(grid);
+
+    expect(screen.getByTestId("cell-b2").textContent).toBe("");
+    expect(screen.getByTestId("group-count").textContent).toBe("0");
+  });
+
+  it("keeps undo out of active text editors", () => {
+    render(<MatrixCanvas />);
+    const grid = screen.getByTestId("matrix-grid");
+
+    fireEvent.click(screen.getByText("edit text"));
+    fireEvent.click(screen.getByText("replay A1"));
+    const textarea = screen.getByTestId("side-panel-textarea");
+
+    pressUndo(textarea);
+    expect(screen.getByTestId("cell-a1").textContent).toBe("hello");
+
+    pressUndo(grid);
+    expect(screen.getByTestId("cell-a1").textContent).toBe("");
+  });
+
+  it("records detail pane body and frontmatter save as one undo entry", () => {
+    render(<MatrixCanvas />);
+    const grid = screen.getByTestId("matrix-grid");
+
+    fireEvent.click(screen.getByText("edit text"));
+    fireEvent.click(screen.getByText("replay A1"));
+    fireEvent.change(screen.getByTestId("side-panel-textarea"), {
+      target: { value: "detail body" },
+    });
+    fireEvent.change(screen.getByTestId("side-panel-frontmatter"), {
+      target: { value: "status: draft" },
+    });
+    fireEvent.click(screen.getByTestId("side-panel-save"));
+    expect(screen.getByTestId("cell-a1").textContent).toBe("detail body");
+
+    pressUndo(grid);
+    expect(screen.getByTestId("cell-a1").textContent).toBe("hello");
+
+    pressRedo(grid);
+    expect(screen.getByTestId("cell-a1").textContent).toBe("detail body");
+  });
+
+  it("undoes group rename, move, and dismiss operations", () => {
+    render(<MatrixCanvas />);
+    const grid = screen.getByTestId("matrix-grid");
+
+    fireEvent.click(screen.getByText("create group"));
+    expect(screen.getByText("group label Alpha")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("start group rename"));
+    fireEvent.click(screen.getByText("change group rename draft"));
+    fireEvent.click(screen.getByText("save group rename"));
+    expect(screen.getByText("group label Renamed group")).toBeTruthy();
+    pressUndo(grid);
+    expect(screen.getByText("group label Alpha")).toBeTruthy();
+
+    fireEvent.click(screen.getByText("move first group"));
+    expect(screen.getByTestId("first-group-offset").textContent).toBe("12,8");
+    fireEvent.click(screen.getByText("replay A1"));
+    expect(screen.getByTestId("side-panel-textarea")).toBeTruthy();
+    pressUndo(grid);
+    expect(screen.getByTestId("first-group-offset").textContent).toBe("");
+    expect(screen.getByTestId("side-panel-textarea")).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText("Hide Alpha"));
+    expect(screen.getByTestId("group-count").textContent).toBe("0");
+    pressUndo(grid);
+    expect(screen.getByText("group label Alpha")).toBeTruthy();
+  });
+
+  it("undoes AI application without removing Recent Activity", async () => {
+    render(<MatrixCanvas />);
+    const grid = screen.getByTestId("matrix-grid");
+
+    fireEvent.click(screen.getByText("pick B1:C2"));
+    fireEvent.change(screen.getByTestId("matrix-composer-input"), {
+      target: { value: "Write test data" },
+    });
+    fireEvent.click(screen.getByTestId("matrix-set-target"));
+    fireEvent.click(screen.getByTestId("matrix-run"));
+
+    await screen.findByText(/Run applied:/);
+    expect(screen.getByTestId("cell-b1").textContent).toBe("Hello, World!");
+    expect(screen.getAllByTestId(/^history-entry-/)).toHaveLength(1);
+
+    pressUndo(grid);
+    expect(screen.getByTestId("cell-b1").textContent).toBe("");
+    expect(screen.getAllByTestId(/^history-entry-/)).toHaveLength(1);
+  });
+
+  it("returns from Recent Activity preview before undoing the live document", () => {
+    saveMatrixHistory([createRestorableHistoryEntry()]);
+    render(<MatrixCanvas />);
+    const grid = screen.getByTestId("matrix-grid");
+
+    fireEvent.click(screen.getByText("edit text"));
+    fireEvent.click(screen.getByTestId(/^history-entry-/));
+    expect(screen.getByTestId("cell-a1").textContent).toBe("Restored A1");
+
+    pressUndo(grid);
+
+    expect(screen.getByTestId("cell-a1").textContent).toBe("");
+    expect(screen.queryByTestId("history-return-current")).toBeNull();
+  });
+
+  it("does not copy preview metadata into a live bulk edit", () => {
+    saveMatrixHistory([createRestorableHistoryEntry({ restoredFrontmatter: "status: preview" })]);
+    render(<MatrixCanvas />);
+
+    fireEvent.click(screen.getByTestId(/^history-entry-/));
+    expect(screen.getByTestId("cell-a1").textContent).toBe("Restored A1");
+
+    fireEvent.click(screen.getByText("create A1 group"));
+    expect(screen.getByTestId("cell-a1").textContent).toBe("Alpha");
+
+    fireEvent.click(screen.getByText("replay A1"));
+    expect((screen.getByTestId("side-panel-frontmatter") as HTMLTextAreaElement).value).toBe("");
   });
 });
 
@@ -380,62 +663,6 @@ describe("MatrixCanvas history snapshot restore", () => {
     localStorage.clear();
     vi.clearAllMocks();
   });
-
-  function createRestorableHistoryEntry(options: { readonly truncated?: boolean } = {}) {
-    return createHistoryEntry({
-      intent: options.truncated ? "Truncated saved run" : "Restore saved run",
-      contextRanges: [
-        {
-          label: "B1:C2",
-          range: { startRow: 0, startCol: 1, endRow: 1, endCol: 2 },
-          groupId: "history-group",
-        },
-      ],
-      targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
-      targetRangeLabel: "A1",
-      patchesApplied: 1,
-      snapshot: {
-        schemaVersion: 1,
-        sheet: {
-          id: "history-sheet",
-          name: "History Sheet",
-          rows: 20,
-          cols: 50,
-        },
-        cells: options.truncated
-          ? []
-          : [
-              {
-                row: 0,
-                col: 0,
-                cell: {
-                  value: "restored",
-                  body: "Restored A1",
-                  frontmatter: "",
-                  provenance: "ai",
-                },
-              },
-            ],
-        groups: options.truncated
-          ? []
-          : [
-              {
-                id: "history-group",
-                label: "Restored Group",
-                range: { startRow: 0, startCol: 1, endRow: 1, endCol: 2 },
-                source: "auto",
-              },
-            ],
-        maxSerializedBytes: MATRIX_SNAPSHOT_MAX_BYTES,
-        serializedBytes: 256,
-        truncated: options.truncated ?? false,
-      },
-    });
-  }
-
-  function saveRestorableHistory(): void {
-    saveMatrixHistory([createRestorableHistoryEntry()]);
-  }
 
   it("restores cells and groups when a snapshot history entry is selected", () => {
     saveRestorableHistory();

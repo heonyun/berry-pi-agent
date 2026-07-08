@@ -51,10 +51,21 @@ import {
   summarizePatches,
   truncatePreview,
 } from "./matrix-history.ts";
+import {
+  createMatrixEditHistoryEntry,
+  createMatrixEditHistoryState,
+  pushMatrixEditHistoryEntry,
+  redoMatrixEditHistory,
+  undoMatrixEditHistory,
+  type MatrixEditCellRef,
+  type MatrixEditOperationType,
+} from "./matrix-edit-history.ts";
 import { scheduleMatrixBundleExport } from "./export-matrix-bundle.ts";
 import {
   matrixShortcutBlockedStatus,
   matrixShortcutDirection,
+  matrixUndoRedoShortcutAction,
+  shouldHandleMatrixUndoRedoShortcut,
   shouldHandleMatrixShortcut,
 } from "../shared/matrix-shortcut.ts";
 
@@ -260,6 +271,7 @@ export function MatrixCanvas(): ReactElement {
   const [restoredHistoryId, setRestoredHistoryId] = useState<string | null>(null);
   const restoreSourceRef = useRef<RestoreSourceState | null>(null);
   const historyEntriesRef = useRef(historyEntries);
+  const editHistoryRef = useRef(createMatrixEditHistoryState());
   const storedGroupLabelOffsetsRef = useRef(loadMatrixGroupLabelOffsets());
   const activeMatrixRunsRef = useRef(0);
 
@@ -303,6 +315,125 @@ export function MatrixCanvas(): ReactElement {
     }
     return result;
   }, []);
+
+  const dispatchRecorded = useCallback(
+    (
+      command: MatrixCommand,
+      options: {
+        readonly operationType: MatrixEditOperationType;
+        readonly label: string;
+        readonly affectedCells: readonly MatrixEditCellRef[];
+      },
+    ) => {
+      restoreCurrentDocumentFromPreview();
+      const beforeDocument = docRef.current;
+      const result = applyMatrixCommand(beforeDocument, command);
+      docRef.current = result.document;
+      setDocument(result.document);
+      const entry = createMatrixEditHistoryEntry({
+        operationType: options.operationType,
+        label: options.label,
+        beforeDocument,
+        afterDocument: result.document,
+        affectedCells: options.affectedCells,
+      });
+      editHistoryRef.current = pushMatrixEditHistoryEntry(editHistoryRef.current, entry);
+      if (result.meta.message) {
+        setStatus(result.meta.message);
+      }
+      return result;
+    },
+    [restoreCurrentDocumentFromPreview],
+  );
+
+  const dispatchRecordedBatch = useCallback(
+    (
+      commands: readonly MatrixCommand[],
+      options: {
+        readonly operationType: MatrixEditOperationType;
+        readonly label: string;
+        readonly affectedCells: readonly MatrixEditCellRef[];
+        readonly status?: string;
+      },
+    ) => {
+      restoreCurrentDocumentFromPreview();
+      const beforeDocument = docRef.current;
+      let current = beforeDocument;
+      let lastResult: ReturnType<typeof applyMatrixCommand> = {
+        document: current,
+        meta: { updatedCells: 0 },
+      };
+      for (const command of commands) {
+        lastResult = applyMatrixCommand(current, command);
+        current = lastResult.document;
+      }
+      docRef.current = current;
+      setDocument(current);
+      const entry = createMatrixEditHistoryEntry({
+        operationType: options.operationType,
+        label: options.label,
+        beforeDocument,
+        afterDocument: current,
+        affectedCells: options.affectedCells,
+      });
+      editHistoryRef.current = pushMatrixEditHistoryEntry(editHistoryRef.current, entry);
+      if (options.status) {
+        setStatus(options.status);
+      } else if (lastResult.meta.message) {
+        setStatus(lastResult.meta.message);
+      }
+      return lastResult;
+    },
+    [restoreCurrentDocumentFromPreview],
+  );
+
+  const applyEditHistoryAction = useCallback(
+    (action: "undo" | "redo") => {
+      if (activeMatrixRunsRef.current > 0) {
+        setStatus("Wait for matrix run to finish before undo");
+        return;
+      }
+      restoreCurrentDocumentFromPreview();
+      const result =
+        action === "undo"
+          ? undoMatrixEditHistory(docRef.current, editHistoryRef.current)
+          : redoMatrixEditHistory(docRef.current, editHistoryRef.current);
+      editHistoryRef.current = result.state;
+      if (!result.entry) {
+        setStatus(action === "undo" ? "Nothing to undo" : "Nothing to redo");
+        return;
+      }
+      docRef.current = result.document;
+      setDocument(result.document);
+      setSelectedHistory(null);
+      setRestoredHistoryId(null);
+      if (selection) {
+        const activeCell = result.document.sheet.cells.get(
+          cellKey(selection.activeRow, selection.activeCol),
+        );
+        setDetailCell({
+          row: selection.activeRow,
+          col: selection.activeCol,
+          body: activeCell?.body ?? "",
+        });
+        setDetailFrontmatter(activeCell?.frontmatter ?? "");
+      } else if (result.entry.operationType === "cells.edit" || result.entry.operationType === "ai.apply") {
+        setDetailCell(null);
+        setDetailFrontmatter("");
+      }
+      saveMatrixGroupLabelOffsets(result.document.groups);
+      storedGroupLabelOffsetsRef.current = new Map(
+        [...result.document.groups.entries()]
+          .filter((entry): entry is [string, MatrixGroup & { readonly labelOffset: NonNullable<MatrixGroup["labelOffset"]> }] =>
+            Boolean(entry[1].labelOffset),
+          )
+          .map(([id, storedGroup]) => [id, storedGroup.labelOffset]),
+      );
+      scheduleMatrixBundleExport(result.document, historyEntriesRef.current);
+      setStatus(`${action === "undo" ? "Undo" : "Redo"}: ${result.entry.label}`);
+    },
+    [restoreCurrentDocumentFromPreview, selection],
+  );
 
   const beginMatrixRun = useCallback(() => {
     activeMatrixRunsRef.current += 1;
@@ -363,7 +494,14 @@ export function MatrixCanvas(): ReactElement {
           parsed.command,
           target,
         );
-        const result = dispatch({ type: "apply_ai_command", command: boundCommand });
+        const result = dispatchRecorded(
+          { type: "apply_ai_command", command: boundCommand },
+          {
+            operationType: "ai.apply",
+            label: "Cell reference applied",
+            affectedCells: boundCommand.patches.map((patch) => ({ row: patch.row, col: patch.col })),
+          },
+        );
 
         const historyEntry = createHistoryEntry({
           intent: CELL_REFERENCE_PROMPT,
@@ -395,7 +533,7 @@ export function MatrixCanvas(): ReactElement {
         finishMatrixRun();
       }
     },
-    [beginMatrixRun, dispatch, finishMatrixRun],
+    [beginMatrixRun, dispatchRecorded, finishMatrixRun],
   );
 
   const groupOffsetRestoreKey = useMemo(
@@ -443,7 +581,14 @@ export function MatrixCanvas(): ReactElement {
       const contextDocument = docRef.current;
       const originFrontmatter =
         docRef.current.sheet.cells.get(cellKey(referenceEdit.row, referenceEdit.col))?.frontmatter ?? "";
-      dispatch({ type: "update_cell_body", row: referenceEdit.row, col: referenceEdit.col, body });
+      dispatchRecorded(
+        { type: "update_cell_body", row: referenceEdit.row, col: referenceEdit.col, body },
+        {
+          operationType: "cells.edit",
+          label: `Cell ${formatColumnLabel(referenceEdit.col)}${referenceEdit.row + 1} updated`,
+          affectedCells: [{ row: referenceEdit.row, col: referenceEdit.col }],
+        },
+      );
       setDetailCell({ row: referenceEdit.row, col: referenceEdit.col, body });
       setDetailFrontmatter(originFrontmatter);
       setReferenceEdit(null);
@@ -460,7 +605,7 @@ export function MatrixCanvas(): ReactElement {
       }
       return true;
     },
-    [dispatch, referenceEdit, runCellReferenceFormula],
+    [dispatchRecorded, referenceEdit, runCellReferenceFormula],
   );
 
   const handleSelectionChange = useCallback(
@@ -669,11 +814,12 @@ export function MatrixCanvas(): ReactElement {
 
   const handleStartColumnLabelEdit = useCallback(
     (col: number) => {
+      restoreCurrentDocumentFromPreview();
       setEditingColumn(col);
       setColumnLabelDraft(getColumnCustomLabel(docRef.current, col));
       setStatus(`Editing column ${formatColumnLabel(col)} label`);
     },
-    [],
+    [restoreCurrentDocumentFromPreview],
   );
 
   const handleColumnHeaderClick = useCallback(
@@ -694,6 +840,7 @@ export function MatrixCanvas(): ReactElement {
     if (editingColumn === null) {
       return;
     }
+    restoreCurrentDocumentFromPreview();
     dispatch({
       type: "set_column_custom_label",
       col: editingColumn,
@@ -701,7 +848,7 @@ export function MatrixCanvas(): ReactElement {
     });
     setEditingColumn(null);
     setColumnLabelDraft("");
-  }, [columnLabelDraft, dispatch, editingColumn]);
+  }, [columnLabelDraft, dispatch, editingColumn, restoreCurrentDocumentFromPreview]);
 
   const handleStartGroupLabelEdit = useCallback((group: MatrixGroup) => {
     setEditingGroupId(group.id);
@@ -713,19 +860,27 @@ export function MatrixCanvas(): ReactElement {
     if (!editingGroupId) {
       return;
     }
-    dispatch({
-      type: "set_group_label",
-      id: editingGroupId,
-      label: groupLabelDraft,
-    });
+    dispatchRecorded(
+      {
+        type: "set_group_label",
+        id: editingGroupId,
+        label: groupLabelDraft,
+      },
+      {
+        operationType: "group.rename",
+        label: "Group label renamed",
+        affectedCells: [],
+      },
+    );
     setEditingGroupId(null);
     setGroupLabelDraft("");
-  }, [dispatch, editingGroupId, groupLabelDraft]);
+  }, [dispatchRecorded, editingGroupId, groupLabelDraft]);
 
   const handleClearColumnLabel = useCallback(() => {
     if (editingColumn === null) {
       return;
     }
+    restoreCurrentDocumentFromPreview();
     dispatch({
       type: "set_column_custom_label",
       col: editingColumn,
@@ -733,7 +888,7 @@ export function MatrixCanvas(): ReactElement {
     });
     setEditingColumn(null);
     setColumnLabelDraft("");
-  }, [dispatch, editingColumn]);
+  }, [dispatch, editingColumn, restoreCurrentDocumentFromPreview]);
 
   const handleSaveNamedRange = useCallback(() => {
     if (!selectionRange || !selectionLabel) {
@@ -745,12 +900,13 @@ export function MatrixCanvas(): ReactElement {
       setStatus("Range name must be slug-safe (a-z, 0-9, _, -)");
       return;
     }
+    restoreCurrentDocumentFromPreview();
     dispatch({
       type: "set_named_range",
       namedRange: { name, range: selectionRange },
     });
     setRangeNameInput("");
-  }, [dispatch, rangeNameInput, selectionLabel, selectionRange]);
+  }, [dispatch, rangeNameInput, restoreCurrentDocumentFromPreview, selectionLabel, selectionRange]);
 
   const runWithTarget = useCallback(
     async (runTargetRange: RangeRefDTO, runContextChips: readonly ContextChip[]) => {
@@ -791,7 +947,14 @@ export function MatrixCanvas(): ReactElement {
           parsed.command,
           runTargetRange,
         );
-        const result = dispatch({ type: "apply_ai_command", command: boundCommand });
+        const result = dispatchRecorded(
+          { type: "apply_ai_command", command: boundCommand },
+          {
+            operationType: "ai.apply",
+            label: "AI result applied",
+            affectedCells: boundCommand.patches.map((patch) => ({ row: patch.row, col: patch.col })),
+          },
+        );
 
         const historyEntry = createHistoryEntry({
           intent: prompt.trim(),
@@ -827,7 +990,7 @@ export function MatrixCanvas(): ReactElement {
         finishMatrixRun();
       }
     },
-    [beginMatrixRun, dispatch, finishMatrixRun, prompt],
+    [beginMatrixRun, dispatchRecorded, finishMatrixRun, prompt],
   );
 
   const handleRun = useCallback(async () => {
@@ -926,10 +1089,25 @@ export function MatrixCanvas(): ReactElement {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.isComposing) {
+      if (event.repeat) {
         return;
       }
-      if (event.repeat) {
+      const undoRedoAction = matrixUndoRedoShortcutAction({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+        isComposing: event.isComposing,
+      });
+      if (undoRedoAction) {
+        if (shouldHandleMatrixUndoRedoShortcut(event.target)) {
+          event.preventDefault();
+          applyEditHistoryAction(undoRedoAction);
+        }
+        return;
+      }
+      if (event.isComposing) {
         return;
       }
       const direction = matrixShortcutDirection(event);
@@ -950,18 +1128,26 @@ export function MatrixCanvas(): ReactElement {
     };
     window.document.addEventListener("keydown", onKeyDown, { capture: true });
     return () => window.document.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, []);
+  }, [applyEditHistoryAction]);
 
   const handleDetailSave = useCallback(
     (row: number, col: number, body: string, frontmatter: string) => {
-      dispatch({ type: "update_cell_body", row, col, body });
-      dispatch({ type: "update_cell_frontmatter", row, col, frontmatter });
+      dispatchRecordedBatch(
+        [
+          { type: "update_cell_body", row, col, body },
+          { type: "update_cell_frontmatter", row, col, frontmatter },
+        ],
+        {
+          operationType: "cells.edit",
+          label: `Cell ${formatColumnLabel(col)}${row + 1} updated`,
+          affectedCells: [{ row, col }],
+          status: `Cell ${formatColumnLabel(col)}${row + 1} updated`,
+        },
+      );
       setDetailCell({ row, col, body });
       setDetailFrontmatter(frontmatter);
-      const label = `${formatColumnLabel(col)}${row + 1}`;
-      setStatus(`Cell ${label} updated`);
     },
-    [dispatch],
+    [dispatchRecordedBatch],
   );
 
   const handleCellClick = useCallback(
@@ -974,9 +1160,17 @@ export function MatrixCanvas(): ReactElement {
 
   const handleCellEdited = useCallback(
     (row: number, col: number, body: string) => {
+      restoreCurrentDocumentFromPreview();
       const contextDocument = docRef.current;
       const reference = resolveCellReferenceFormula(contextDocument, body);
-      dispatch({ type: "update_cell_body", row, col, body });
+      dispatchRecorded(
+        { type: "update_cell_body", row, col, body },
+        {
+          operationType: "cells.edit",
+          label: `Cell ${formatColumnLabel(col)}${row + 1} updated`,
+          affectedCells: [{ row, col }],
+        },
+      );
       setDetailCell({ row, col, body });
       const label = `${formatColumnLabel(col)}${row + 1}`;
       // CONTRACT: only a bare "=" opens #103 reference picking; typed formulas execute in #104.
@@ -994,7 +1188,7 @@ export function MatrixCanvas(): ReactElement {
       }
       setStatus(`Cell ${label} updated`);
     },
-    [dispatch, referenceEdit, runCellReferenceFormula],
+    [dispatchRecorded, referenceEdit, restoreCurrentDocumentFromPreview, runCellReferenceFormula],
   );
 
   const handleCellsEdited = useCallback(
@@ -1003,6 +1197,7 @@ export function MatrixCanvas(): ReactElement {
         return;
       }
 
+      restoreCurrentDocumentFromPreview();
       const patches: WritePatch[] = edits.map((edit) => {
         const existing = docRef.current.sheet.cells.get(cellKey(edit.row, edit.col));
         return {
@@ -1014,7 +1209,14 @@ export function MatrixCanvas(): ReactElement {
           ...(existing?.provenance ? { provenance: existing.provenance } : {}),
         };
       });
-      dispatch({ type: "apply_patches", patches });
+      dispatchRecorded(
+        { type: "apply_patches", patches },
+        {
+          operationType: "cells.edit",
+          label: edits.length === 1 ? "Cell updated" : `${edits.length} cells updated`,
+          affectedCells: edits.map((edit) => ({ row: edit.row, col: edit.col })),
+        },
+      );
       if (referenceEdit) {
         setReferenceEdit(null);
       }
@@ -1027,7 +1229,7 @@ export function MatrixCanvas(): ReactElement {
       const label = `${formatColumnLabel(detailEdit.col)}${detailEdit.row + 1}`;
       setStatus(edits.length === 1 ? `Cell ${label} updated` : `${edits.length} cells updated`);
     },
-    [dispatch, referenceEdit, selection],
+    [dispatchRecorded, referenceEdit, restoreCurrentDocumentFromPreview, selection],
   );
 
   const handleQuickSummarize = useCallback(() => {
@@ -1167,25 +1369,34 @@ export function MatrixCanvas(): ReactElement {
 
   const handleColumnWidthChange = useCallback(
     (col: number, width: number) => {
+      restoreCurrentDocumentFromPreview();
       const result = dispatch({ type: "set_column_width", col, width });
       saveMatrixColumnWidths(result.document.columnWidths);
       scheduleMatrixBundleExport(result.document, historyEntries);
     },
-    [dispatch, historyEntries],
+    [dispatch, historyEntries, restoreCurrentDocumentFromPreview],
   );
 
   const handleRowHeightChange = useCallback(
     (row: number, height: number) => {
+      restoreCurrentDocumentFromPreview();
       const result = dispatch({ type: "set_row_height", row, height });
       saveMatrixRowHeights(result.document.rowHeights);
       scheduleMatrixBundleExport(result.document, historyEntries);
     },
-    [dispatch, historyEntries],
+    [dispatch, historyEntries, restoreCurrentDocumentFromPreview],
   );
 
   const handleGroupLabelOffsetChange = useCallback(
     (group: MatrixGroup, offset: { readonly x: number; readonly y: number }) => {
-      const result = dispatch({ type: "set_group_label_offset", id: group.id, offset });
+      const result = dispatchRecorded(
+        { type: "set_group_label_offset", id: group.id, offset },
+        {
+          operationType: "group.move",
+          label: `Group label moved: ${group.label}`,
+          affectedCells: [],
+        },
+      );
       saveMatrixGroupLabelOffsets(result.document.groups);
       storedGroupLabelOffsetsRef.current = new Map(
         [...result.document.groups.entries()]
@@ -1196,14 +1407,25 @@ export function MatrixCanvas(): ReactElement {
       );
       scheduleMatrixBundleExport(result.document, historyEntries);
     },
-    [dispatch, historyEntries],
+    [dispatchRecorded, historyEntries],
   );
 
   const handleGroupDismiss = useCallback(
     (group: MatrixGroup) => {
-      dispatch({ type: "dismiss_group", id: group.id });
+      const result = dispatchRecorded(
+        { type: "dismiss_group", id: group.id },
+        {
+          operationType: "group.dismiss",
+          label: `Group hidden: ${group.label}`,
+          affectedCells: [],
+        },
+      );
+      saveMatrixGroupLabelOffsets(result.document.groups);
+      const nextStoredOffsets = new Map(storedGroupLabelOffsetsRef.current);
+      nextStoredOffsets.delete(group.id);
+      storedGroupLabelOffsetsRef.current = nextStoredOffsets;
     },
-    [dispatch],
+    [dispatchRecorded],
   );
 
   return (

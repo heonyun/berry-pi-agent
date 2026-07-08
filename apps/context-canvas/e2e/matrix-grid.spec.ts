@@ -16,6 +16,7 @@ import {
   clickColumnHeader,
   doubleClickColumnHeader,
   dragFirstGroupLabel,
+  expectDetailMarkdownBody,
   firstGroupLabelPositionInGrid,
   resizeMatrixRow,
   resizeMatrixColumn,
@@ -90,6 +91,39 @@ test.describe("Feature: Excel-like matrix cell editing", () => {
 
     await expectCellCommitted(page, "A1");
     await expectCellStored(page, "A1", "hello");
+  });
+
+  test("Scenario: Undo and redo a completed cell edit", async ({ page }) => {
+    // RELATED: issue-135 — browser coverage for session undo/redo from grid focus.
+    await clickMatrixCell(page, "A1");
+    await typeDirectlyInGrid(page, "A1", "hello");
+    await commitGridEdit(page, "Enter");
+    await expectCellStored(page, "A1", "hello");
+
+    await page.getByTestId("data-grid-canvas").focus();
+    await page.keyboard.press("Control+Z");
+    await expect(page.getByTestId("matrix-status-bar")).toContainText("Undo: Cell updated");
+
+    await page.getByTestId("data-grid-canvas").focus();
+    await page.keyboard.press("Control+Shift+Z");
+    await expect(page.getByTestId("matrix-status-bar")).toContainText("Redo: Cell updated");
+    await focusMatrixCell(page, "B1");
+    await clickMatrixCell(page, "A1");
+    await expectDetailMarkdownBody(page, "hello");
+  });
+
+  test("Scenario: Undo clears a completed cell edit", async ({ page }) => {
+    // RELATED: issue-135 — asserts undo state without consuming the redo stack.
+    await clickMatrixCell(page, "A1");
+    await typeDirectlyInGrid(page, "A1", "hello");
+    await commitGridEdit(page, "Enter");
+    await expectCellStored(page, "A1", "hello");
+
+    await page.getByTestId("data-grid-canvas").focus();
+    await page.keyboard.press("Control+Z");
+
+    await clickMatrixCell(page, "A1");
+    await expectDetailMarkdownBody(page, "");
   });
 
   test("Scenario: Enter commits and moves down", async ({ page }) => {
