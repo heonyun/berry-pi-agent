@@ -10,6 +10,10 @@ body:
 
         `harness_flow` = workflow stage (plan / implement / review). **Not** the deployment environment.
 
+        Writer prompt / CLI paste: `doc/orchestrator/issue-agent-prompts.md` § Writer · `docs/GITHUB_AGENT_COMMANDS.md` § New issue body.
+        Mode sizing: `doc/orchestrator/issue-process-modes.md` · `docs/TASK_CLASSIFIER.md`.
+        After create: `pwsh scripts/Test-IssueContractGate.ps1 -IssueNumber <N>` (required fields). Recommended: Behavioral Intent, Non-goals, Regression Risks, breadcrumbs.
+
   - type: dropdown
     id: harness_flow
     attributes:
@@ -39,31 +43,53 @@ body:
     id: process_mode
     attributes:
       label: Process mode
-      description: Procedure intensity (see doc/orchestrator/issue-process-modes.md)
+      description: Procedure intensity (see doc/orchestrator/issue-process-modes.md). XS/S skip skeleton/BDD in body — derive from mode.
       options:
         - XS
         - S
         - M
         - L
         - XL
+    validations:
+      required: true
 
   - type: textarea
     id: problem
     attributes:
       label: Problem
       description: Why this is needed
+    validations:
+      required: true
 
   - type: textarea
     id: behavioral_intent
     attributes:
       label: Behavioral Intent
       description: What the user should experience
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: One sentence outcome
+    validations:
+      required: true
 
   - type: textarea
     id: acceptance_criteria
     attributes:
       label: Acceptance Criteria
       description: Testable completion conditions
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Non-goals / Out of scope
+      description: Areas explicitly excluded
 
   - type: textarea
     id: regression_risks
@@ -76,14 +102,6 @@ body:
     attributes:
       label: Appetite (optional)
       description: Time/scope budget hint — not a merge gate
-
-  - type: textarea
-    id: goal
-    attributes:
-      label: Goal
-      description: One sentence outcome
-    validations:
-      required: true
 
   - type: textarea
     id: affected
@@ -101,12 +119,6 @@ body:
       label: Task record path (optional)
       description: Obsidian or doc/orchestrator/task-record-template mirror
       placeholder: Projects/berry-pi-agent/tasks/T-000/00-index.md
-
-  - type: textarea
-    id: out_of_scope
-    attributes:
-      label: Out of scope
-      description: Areas explicitly excluded
 
   - type: textarea
     id: verification

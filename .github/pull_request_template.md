@@ -32,3 +32,28 @@
 ## Not in this PR
 
 <!-- Unrelated work kept out -->
+
+## Evidence (optional — M+)
+
+<!-- Cite Issue #N; do not repeat issue body -->
+
+Problem:
+-
+
+Decision:
+-
+
+Change:
+-
+
+Evaluator:
+-
+
+Acceptance:
+-
+
+Risk:
+-
+
+Follow-up:
+-

@@ -114,6 +114,13 @@ assert_contains "${footer}" "<!-- pi-agent:workflow:deepseek-pr-review -->" "foo
 assert_contains "${footer}" "<!-- pi-agent:review-head:abc123def -->" "footer review head marker"
 assert_contains "${footer}" "workflow: deepseek-pr-review" "footer workflow id"
 
+draft_footer="$(agent_footer "deepseek-pr-review" "deepseek-v4-flash" "abc123def" "draft")"
+assert_contains "${draft_footer}" "<!-- pi-agent:review-mode:draft -->" "footer draft mode marker"
+assert_contains "${draft_footer}" "mode: draft" "footer draft mode label"
+
+ready_footer="$(agent_footer "deepseek-pr-review" "deepseek-v4-flash" "abc123def" "ready")"
+assert_contains "${ready_footer}" "<!-- pi-agent:review-mode:ready -->" "footer ready mode marker"
+
 sections="$(agent_output_sections_prompt)"
 assert_contains "${sections}" "## Conclusion" "output sections prompt"
 assert_contains "${sections}" "## Commands to rerun" "rerun section prompt"
@@ -236,6 +243,31 @@ else
   pass_count=$((pass_count + 1))
   echo "PASS: pr system prompt excludes variable content"
 fi
+
+pr_draft_system="$(agent_pr_review_system_prompt "draft")"
+assert_contains "${pr_draft_system}" "early draft-PR review assistant" "pr draft system persona"
+assert_contains "${pr_draft_system}" "Always review draft PRs" "pr draft must review"
+assert_contains "${pr_draft_system}" "Draft early review — not a merge gate" "pr draft summary banner rule"
+assert_contains "${pr_draft_system}" "Direction fit" "pr draft direction priority"
+assert_contains "${pr_draft_system}" "Do not fail solely because CI is pending" "pr draft no CI-pending fail"
+if [[ "${pr_draft_system}" == *"strict diff review assistant"* ]]; then
+  fail_count=$((fail_count + 1))
+  echo "FAIL: draft system prompt must not use ready-mode persona" >&2
+else
+  pass_count=$((pass_count + 1))
+  echo "PASS: draft system prompt uses draft persona"
+fi
+if [[ "${pr_draft_system}" == *"Diff:"* ]]; then
+  fail_count=$((fail_count + 1))
+  echo "FAIL: draft pr system prompt must not contain diff placeholder" >&2
+else
+  pass_count=$((pass_count + 1))
+  echo "PASS: draft pr system prompt excludes variable content"
+fi
+
+draft_instructions="$(agent_pr_draft_review_instructions)"
+assert_contains "${draft_instructions}" "Acceptance-criteria gaps" "draft AC gap priority"
+assert_contains "${draft_instructions}" "Prefer Conclusion \"hold\"" "draft prefer hold"
 
 if command -v jq >/dev/null 2>&1; then
   usage_fixture="$(mktemp)"

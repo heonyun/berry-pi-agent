@@ -1103,6 +1103,7 @@ export function MatrixCanvas(): ReactElement {
       contextChips,
       contextChipsWithSelection,
       isRunning,
+      prompt,
       runWithTarget,
       selectionLabel,
       selectionRange,

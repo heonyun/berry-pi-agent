@@ -18,11 +18,12 @@ pwsh scripts/Invoke-HarnessPhaseContext.ps1 -Phase plan
 
 1. **Phase** — Set `harness_flow`, read that section in [harness-flow.md](doc/orchestrator/harness-flow.md) only (or `pwsh scripts/Invoke-HarnessPhaseContext.ps1 -Phase <phase>`).
 2. **Issue-first** — When an Issue drives the session: `gh issue view <N>` → Harness block (`harness_flow`, `task_class`, `process_mode`) → one `drill_down` file. Session start: [phase-peer-review.md](doc/orchestrator/phase-peer-review.md) § Session start.
-3. **Harness block on Issue/PR** — Confirm `process_mode` gates: `pwsh scripts/Test-ProcessModeGating.ps1 -IssueNumber <N>`. Runbook: [issue-process-modes.md](doc/orchestrator/issue-process-modes.md).
-4. **`harness_flow: implement` entry** — Before coding: [issue-agent-prompts.md](doc/orchestrator/issue-agent-prompts.md) § Implement gates + [issue-review-reception](doc/orchestrator/templates/issue-review-reception.md) (M+).
-5. **Task record** — If the user gives a task-record path: read `00-index.md` → current phase `exit.md` / `verdict.md` → linked evidence only. No automatic task discovery.
-6. **No task record** — Classify with [docs/TASK_CLASSIFIER.md](docs/TASK_CLASSIFIER.md) (`task_class` + `process_mode`) before Reasonix, Qwen, Cursor, or PR loop.
-7. **Obsidian paths** — Resolve via [.orchestrator/workstation.local.md](.orchestrator/workstation.local.md) when explicitly provided.
+3. **New Issue (`plan`)** — Agent Task only (`.github/ISSUE_TEMPLATE/agent-task.yml` / Writer in [issue-agent-prompts.md](doc/orchestrator/issue-agent-prompts.md)); after create: `pwsh scripts/Test-IssueContractGate.ps1 -IssueNumber <N>`.
+4. **Harness block on Issue/PR** — Confirm `process_mode` gates: `pwsh scripts/Test-ProcessModeGating.ps1 -IssueNumber <N>`. Runbook: [issue-process-modes.md](doc/orchestrator/issue-process-modes.md).
+5. **`harness_flow: implement` entry** — Before coding: [issue-agent-prompts.md](doc/orchestrator/issue-agent-prompts.md) § Implement gates + [issue-review-reception](doc/orchestrator/templates/issue-review-reception.md) (M+).
+6. **Task record** — If the user gives a task-record path: read `00-index.md` → current phase `exit.md` / `verdict.md` → linked evidence only. No automatic task discovery.
+7. **No task record** — Classify with [docs/TASK_CLASSIFIER.md](docs/TASK_CLASSIFIER.md) (`task_class` + `process_mode`) before Reasonix, Qwen, Cursor, or PR loop.
+8. **Obsidian paths** — Resolve via [.orchestrator/workstation.local.md](.orchestrator/workstation.local.md) when explicitly provided.
 
 ## Global boundaries (always)
 
@@ -58,6 +59,7 @@ pwsh scripts/Invoke-HarnessPhaseContext.ps1 -Phase plan
 | plan/implement exit peer review (PEPR) | [phase-peer-review.md](doc/orchestrator/phase-peer-review.md), `scripts/Invoke-HarnessPhasePeerReview.ps1`, `scripts/Test-PeerReviewOutput.ps1` |
 | Issue `process_mode` / escalation | [issue-process-modes.md](doc/orchestrator/issue-process-modes.md), `scripts/Test-ProcessModeGating.ps1` |
 | Issue writer/reviewer/implementer prompts | [issue-agent-prompts.md](doc/orchestrator/issue-agent-prompts.md) |
+| Issue body contract (after create / plan exit) | `scripts/Test-IssueContractGate.ps1` |
 | 업무일지 / worklog | Obsidian `DailyNote/업무일지 기록 규칙.md`, `worklog-writer` skill; detail in **tracked** [doc/working-log/](doc/working-log/README.md) |
 
 Do not preload later-phase docs. Example: `plan` session does not load PR loop until `harness_flow` advances to `review`.

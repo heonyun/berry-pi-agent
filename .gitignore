@@ -48,6 +48,7 @@ collect.sh
 /reasonix-runs/
 /qwen-runs/
 /agy-runs/
+/chatgpt-mcp-runs/
 /cursor-runs/
 cache/
 

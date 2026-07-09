@@ -17,6 +17,33 @@ One-line definition for agents:
 
 > `harness_flow` = what kind of work this session does (plan / implement / review). It is not the live server or deployment target.
 
+### Harness layers (control plane vs trace)
+
+| Layer | Where | Holds |
+| --- | --- | --- |
+| **Base harness** | `AGENTS.md`, this file, `docs/TASK_CLASSIFIER.md` | Stable rules — no task-specific context |
+| **Task pack** | GitHub Issue + Harness block | Mission, evaluator, acceptance for one task |
+| **Runtime trace** | commit, diff, test log, PR comment, worklog, `peer-runs/` | Execution evidence — prefer over chat replay |
+
+### Anti-bloat (harness docs)
+
+1. Do not repeat Issue / plan / skeleton / PR body — link paths or `#N`.
+2. Reference existing tests, commits, docs — no paste of full logs or issue text.
+3. Prefer diff + evaluator output over long natural-language summaries.
+4. No new harness doc per task; harness = **control plane**, not context dump.
+5. New rules → [workflow-improvement-log.md](./workflow-improvement-log.md) candidate row before promotion.
+
+### Document length (guidelines)
+
+| Artifact | Guideline |
+| --- | --- |
+| Issue body | problem + AC centered; avoid paste of prior chat |
+| Task pack (= Issue contract) | ~20–40 lines equivalent |
+| Plan notes (M+) | 5–10 lines |
+| Contract skeleton | 1 page; L/XL only |
+| RejectLog | 5 fields; one block per failed attempt |
+| PR evidence block | optional; ~10 lines |
+
 ## Session start read order
 
 When an Issue or PR body contains a **Harness** block:
@@ -80,14 +107,17 @@ drill_down: <path>
 
 **Goal:** Classify, Scout, skeleton, register Issue. Load `TASK_CLASSIFIER`, `REASONIX` (if needed). Drop PR loop and merge gate from session attention.
 
+**New Issue:** Agent Task only (`.github/ISSUE_TEMPLATE/agent-task.yml` / [issue-agent-prompts.md](./issue-agent-prompts.md) § Writer). After create: `Test-IssueContractGate.ps1` (required fields). Recommended fields are Writer-only — not gated.
+
 ### Exit before implement
 
 - [ ] `task_class` and `process_mode` (XS/S/M/L/XL) recorded; mismatch noted if any
 - [ ] Scope and affected paths listed; contract sections (Problem, AC, Non-goals) for M+
 - [ ] Issue opened or task record path set (if used)
+- [ ] `Test-IssueContractGate.ps1 -IssueNumber <N>` PASS (all modes)
 - [ ] Scout run at most once; key files identified
 - [ ] Phase peer review per [issue-process-modes.md](./issue-process-modes.md) (`Invoke-HarnessPhasePeerReview.ps1 -Phase plan`); `Test-PeerReviewOutput` PASS or documented `-Force` bypass
-- [ ] M+: Issue contract gate (`Test-IssueContractGate.ps1`)
+- [ ] DeepSeek `hold` / `Test-AgyIssueReviewSuggested` suggest=true → local agy (Cursor PEPR pre-step or Codex chain); document `-SkipSuggestedAgy` / `-Force` skip in worklog
 - [ ] XS: self-critique 3 lines in worklog; S: test command planned
 - [ ] L/XL: contract skeleton recorded or agy-skeleton link
 - [ ] Peer disposition in worklog when peer ran
@@ -104,6 +134,25 @@ drill_down: <path>
 - [ ] No unresolved BLOCKER (`adopt` or user `defer` on BLOCKER rows)
 - [ ] Implement gates satisfied ([issue-agent-prompts.md](./issue-agent-prompts.md) § Implement gates)
 - [ ] `process_mode` gates: S+ test plan; L+ contract skeleton on record
+- [ ] **Repository memory read** (before new harness prose):
+  1. Related Issue / PR if available (`gh issue view`, `gh pr view`)
+  2. `git log --oneline -- <affected-paths>`
+  3. `git diff main...HEAD` (or base branch)
+  4. Existing tests and docs for target area
+  5. Summarize **missing decisions only** — do not duplicate repo context
+
+### Agent loop (implement)
+
+```text
+Read task pack (Issue) → read repository memory → minimal candidate change
+→ run evaluator → check acceptance predicate
+→ pass: commit / PR with evidence
+→ fail: RejectLog (worklog or PR comment); repair from evaluator output; do not expand harness
+→ if implement_failure_count >= 2: write failure-advisory-brief → Test-FailureAdvisoryBrief → agy/Cursor with -BriefPath → then PEPR
+→ stop when acceptance predicate satisfied
+```
+
+RejectLog format: see [issue-agent-prompts.md](./issue-agent-prompts.md) § RejectLog. Full guide: [docs/GIT_AGENT_MEMORY.md](../../docs/GIT_AGENT_MEMORY.md). Failure≥2 brief: [templates/failure-advisory-brief.md](./templates/failure-advisory-brief.md).
 
 ### Exit before review
 
@@ -117,6 +166,7 @@ drill_down: <path>
 - [ ] Changes on a **feature branch** (not uncommitted `main`) unless user explicitly waived
 - [ ] PR opened or branch ready
 - [ ] Phase peer review per process_mode / failure ≥ 2 (`Invoke-HarnessPhasePeerReview.ps1 -Phase implement`); `Test-PeerReviewOutput` PASS or documented `-Force` bypass
+- [ ] failure_count ≥ 2 → `Test-FailureAdvisoryBrief` PASS + agy/Cursor advisory with `-BriefPath` (no free-form question) before or via PEPR; `-Force` bypass needs worklog `failure_advisory_bypass`
 - [ ] `verification_verdict`: pass | pass_with_gaps | fail in worklog/signals
 - [ ] failure_count ≥ 3 → mode escalation applied or dismissed with evidence
 - [ ] Issue updated with PR link / `Closes #N` when PR exists

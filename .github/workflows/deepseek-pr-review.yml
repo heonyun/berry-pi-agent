@@ -2,6 +2,7 @@
 # Secret: DEEPSEEK_V4 (API key). Variable: DEEPSEEK_V4 (model, e.g. deepseek-v4-flash).
 # DEEPSEEK_REASONING_EFFORT default max (thinking enabled; set off to disable).
 # PR review posts one upserted comment per head SHA; duplicate synchronize events skip the API call.
+# Draft PRs get an early WIP review (mode=draft). ready_for_review forces a ready-mode re-run.
 
 name: DeepSeek PR Review
 
@@ -11,6 +12,7 @@ on:
       - opened
       - reopened
       - synchronize
+      - ready_for_review
   issue_comment:
     types:
       - created
@@ -110,6 +112,8 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title || github.event.issue.title }}
           PR_BODY: ${{ github.event.pull_request.body || github.event.issue.body }}
           ADDITIONAL_CONTEXT: ${{ needs.dispatch.outputs.additional_context }}
+          EVENT_ACTION: ${{ github.event.action }}
+          PR_IS_DRAFT: ${{ github.event.pull_request.draft || false }}
         run: |
           chmod +x .github/scripts/deepseek-pr-comment.sh
           .github/scripts/deepseek-pr-comment.sh \
