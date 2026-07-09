@@ -34,7 +34,7 @@ The main review concern was the nested `MatrixImeTextEditorWithShortcut` wrapper
 
 ## Review disposition
 
-| # | Reviewer | Path | Finding | Decision | Evidence |
+| # | Reviewer | Source | Finding | Decision | Evidence |
 | --- | --- | --- | --- | --- | --- |
 | 1 | gemini-code-assist[bot] | `apps/context-canvas/src/web/MatrixGrid.tsx:836` | Nested wrapper component can remount the editor and break IME state. | adopt | `63e666ce` |
 | 2 | gemini-code-assist[bot] | `apps/context-canvas/src/web/MatrixGrid.tsx:848` | Use the stable top-level `MatrixImeTextEditor` directly in `provideEditor`. | adopt | `63e666ce` |

@@ -63,7 +63,7 @@ Use this in the repo worklog (`## Review disposition`) and/or PR triage comment:
 | `gemini-code-assist[bot]` | inline `path:line` | one-line summary | `adopt` \| `dismiss` \| `defer` \| `stale` | commit SHA, `path:line`, or test name |
 | `coderabbitai[bot]` | inline / nitpick | … | … | … |
 | `github-actions` (DeepSeek) | PR comment P1… | … | … | … |
-| `chatgpt-codex-connector` | review skipped | no findings | `stale` | usage-limit message URL |
+| `chatgpt-codex-connector` | review skipped | no findings | `no_signal` | usage-limit message URL |
 
 **Decision meanings:** `adopt` = fixed in this PR · `dismiss` = false positive · `defer` = follow-up issue · `stale` = N/A or already on head SHA.
 

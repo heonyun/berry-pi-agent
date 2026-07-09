@@ -24,7 +24,7 @@ Run after a Qwen implementation worker ticket completes. Orchestrator verifies; 
 
 ## 2b. Comment tag lint (orchestrator, before §3)
 
-- [ ] `pwsh scripts/Test-AgentCommentTags.ps1 -IssueNumber <N>` — M+ hard_fail; XS/S warn only
+- [ ] `pwsh scripts/Test-AgentCommentTags.ps1 -IssueNumber <N>` — M+: PASS or documented `-Force` bypass; XS/S: review `comment_tags_warn` if any
 - [ ] Disposition row: comment tags adopt / N/A (trivial hunk) + evidence
 
 ## 3. Tests (once)

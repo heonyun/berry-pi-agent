@@ -126,7 +126,7 @@ drill_down: <path>
 
 ## implement
 
-**Goal:** Implement, worker ticket, local verify. Load `QWEN.md` (worker), product `AGENTS.md`, `COMMENT_CONVENTIONS.md`. Drop full issue-planning bot text and Scout raw when conclusions are in worklog.
+**Goal:** Implement, worker ticket, local verify. Load `QWEN.md` (worker), product `AGENTS.md`, `agent-code-comments.md`. Drop full issue-planning bot text and Scout raw when conclusions are in worklog.
 
 ### Entry before coding
 

@@ -17,7 +17,7 @@ Optional navigation; **not** wired into AGENTS.md yet.
 
 | Doc | When |
 | --- | --- |
-| [harness-flow.md](./harness-flow.md) | Every session — `## plan` / `## implement` / `## review` (also via `Invoke-HarnessPhaseContext.ps1`) |
+| [harness-flow.md](./harness-flow.md) | Every session — current phase section only (`Invoke-HarnessPhaseContext.ps1 -Phase <phase>`) |
 | [workflow-improvement-log.md](./workflow-improvement-log.md) | Before proposing new process rules |
 | [pr-review-triage.md](./pr-review-triage.md) | `review` phase, open PR |
 | [subagent-mini-ticket-template.md](./subagent-mini-ticket-template.md) | Codex → DeepSeek subagent prompt |
