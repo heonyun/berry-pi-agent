@@ -451,7 +451,7 @@ describe("MatrixGrid IME overlay editor", () => {
     expect(dispatchEventSpy).toHaveBeenCalledTimes(1);
     const dispatched = dispatchEventSpy.mock.calls[0]?.[0] as CustomEvent<{
       readonly direction: "below" | "right";
-      readonly selectionRange: unknown;
+      readonly prompt: string;
     }>;
     expect(dispatched.type).toBe("matrix-commit-run");
     expect(dispatched.detail.direction).toBe("below");
@@ -503,7 +503,7 @@ describe("MatrixGrid IME overlay editor", () => {
     expect(dispatchEventSpy).toHaveBeenCalledTimes(1);
     const dispatched = dispatchEventSpy.mock.calls[0]?.[0] as CustomEvent<{
       readonly direction: "below" | "right";
-      readonly selectionRange: unknown;
+      readonly prompt: string;
     }>;
     expect(dispatched.type).toBe("matrix-commit-run");
     expect(dispatched.detail.direction).toBe("right");

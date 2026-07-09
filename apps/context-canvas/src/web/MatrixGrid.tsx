@@ -35,9 +35,8 @@ import {
   shouldCancelMatrixEditOnTypeForIme,
   shouldClearMatrixEditOnTypeImeSeed,
 } from "../shared/matrix-ime.ts";
-import type { MatrixTargetDirection } from "../shared/matrix-target-inference.ts";
 import "@glideapps/glide-data-grid/dist/index.css";
-import { getColumnHeader, type MatrixDocument, type MatrixGroup, type RangeRefDTO } from "../shared/domain.ts";
+import { getColumnHeader, type MatrixDocument, type MatrixGroup } from "../shared/domain.ts";
 import { getMatrixColumnWidth } from "../shared/matrix-column-width.ts";
 import { clampMatrixRowHeight, getMatrixRowHeight } from "../shared/matrix-row-height.ts";
 import {
@@ -157,24 +156,7 @@ const MATRIX_IME_EDITOR_STYLE: CSSProperties = {
   padding: "3px 8.5px",
 };
 
-function selectionToRangeRef(selection: MatrixGridSelectionState): RangeRefDTO {
-  return {
-    startRow: selection.startRow,
-    startCol: selection.startCol,
-    endRow: selection.endRow,
-    endCol: selection.endCol,
-  };
-}
-
-type MatrixImeTextEditorProps = Parameters<ProvideEditorComponent<TextCell>>[0] & {
-  readonly onShortcutRun?: (direction: MatrixTargetDirection, prompt: string) => void;
-};
-
-interface MatrixInlineEditShortcut {
-  readonly direction: MatrixTargetDirection;
-  readonly selectionRange: RangeRefDTO | null;
-  readonly prompt?: string;
-}
+type MatrixImeTextEditorProps = Parameters<ProvideEditorComponent<TextCell>>[0];
 
 function applyValidatedSelection(
   textarea: HTMLTextAreaElement | null,
@@ -195,7 +177,6 @@ const MatrixImeTextEditor = ({
   value,
   initialValue,
   forceEditMode,
-  onShortcutRun,
 }: MatrixImeTextEditorProps): ReactElement => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const finishedRef = useRef(false);
@@ -305,7 +286,14 @@ const MatrixImeTextEditor = ({
         event.stopPropagation();
         const nextValue = event.currentTarget.value;
         finishEditing(updateValue(nextValue));
-        onShortcutRun?.(event.shiftKey ? "right" : "below", nextValue);
+        window.document.dispatchEvent(
+          new CustomEvent("matrix-commit-run", {
+            detail: {
+              direction: event.shiftKey ? "right" : "below",
+              prompt: nextValue,
+            },
+          }),
+        );
         return;
       }
       if (
@@ -322,7 +310,7 @@ const MatrixImeTextEditor = ({
         finishEditing(updateValue(event.currentTarget.value), [0, 1]);
       }
     },
-    [finishEditing, onShortcutRun, updateValue],
+    [finishEditing, updateValue],
   );
 
   return (
@@ -393,11 +381,6 @@ export function MatrixGrid({
     ty: 0,
   });
   const skipNextGroupLabelBlurSave = useRef(false);
-  const selectionRangeSnapshot = useMemo(
-    () => (selection ? selectionToRangeRef(selection) : null),
-    [selection],
-  );
-
   const columns = useMemo(
     () =>
       Array.from({ length: config.cols }, (_, i) => ({
@@ -424,21 +407,6 @@ export function MatrixGrid({
         ? rowResizeDrag.currentHeight
         : getMatrixRowHeight(document, row),
     [document, rowResizeDrag],
-  );
-
-  const handleInlineShortcutRun = useCallback(
-    (direction: MatrixTargetDirection, prompt?: string) => {
-      window.document.dispatchEvent(
-        new CustomEvent("matrix-commit-run", {
-          detail: {
-            direction,
-            selectionRange: selectionRangeSnapshot,
-            prompt,
-          } satisfies MatrixInlineEditShortcut,
-        }),
-      );
-    },
-    [selectionRangeSnapshot],
   );
 
   const cellContent = useMemo(() => getCellContent(document), [document]);
@@ -830,11 +798,6 @@ export function MatrixGrid({
     [],
   );
 
-  const MatrixImeTextEditorWithShortcut = useCallback<ProvideEditorComponent<TextCell>>(
-    (props) => <MatrixImeTextEditor {...props} onShortcutRun={handleInlineShortcutRun} />,
-    [handleInlineShortcutRun],
-  );
-
   const provideEditor = useCallback<ProvideEditorCallback<TextCell>>((cell) => {
     if (cell.kind !== GridCellKind.Text) {
       return undefined;
@@ -842,10 +805,10 @@ export function MatrixGrid({
     return {
       // CONTRACT: replacing Glide's GrowingEntry must preserve `.gdg-input`
       // so matrix shortcut guards still recognize an active overlay editor.
-      editor: MatrixImeTextEditorWithShortcut,
+      editor: MatrixImeTextEditor,
       disablePadding: cell.allowWrapping === true,
     };
-  }, [MatrixImeTextEditorWithShortcut]);
+  }, []);
 
   const handleGridKeyDown = useCallback((event: GridKeyEventArgs) => {
     const native = event.rawEvent?.nativeEvent;

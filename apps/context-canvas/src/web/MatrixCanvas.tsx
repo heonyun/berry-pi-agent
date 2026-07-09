@@ -1055,9 +1055,13 @@ export function MatrixCanvas(): ReactElement {
         setStatus("Enter a prompt before running");
         return;
       }
-      const selectionRange = shortcut.selectionRange;
-      const selectionLabel =
-        shortcut.selectionLabel ?? (selectionRange ? rangeLabelForSelection(docRef.current, selectionRange) : null);
+      const activeSelectionRange = shortcut.selectionRange ?? selectionRange;
+      const activeSelectionLabel =
+        shortcut.selectionLabel ??
+        selectionLabel ??
+        (activeSelectionRange
+          ? rangeLabelForSelection(docRef.current, activeSelectionRange)
+          : null);
       if (targetRange) {
         if (shortcut.direction === "right") {
           setStatus("Target already set");
@@ -1066,12 +1070,12 @@ export function MatrixCanvas(): ReactElement {
         void runWithTarget(targetRange, contextChips, trimmedPrompt);
         return;
       }
-      if (!selectionRange || !selectionLabel) {
+      if (!activeSelectionRange || !activeSelectionLabel) {
         setStatus("Select a range before running");
         return;
       }
 
-      const inferred = inferMatrixTargetRange(selectionRange, shortcut.direction, {
+      const inferred = inferMatrixTargetRange(activeSelectionRange, shortcut.direction, {
         rows: docRef.current.sheet.rows,
         cols: docRef.current.sheet.cols,
       });
@@ -1086,8 +1090,8 @@ export function MatrixCanvas(): ReactElement {
 
       const nextContext = contextChipsWithSelection(
         contextChips,
-        selectionRange,
-        selectionLabel,
+        activeSelectionRange,
+        activeSelectionLabel,
       );
       if (nextContext.added) {
         setContextChips([...nextContext.chips]);
@@ -1095,7 +1099,15 @@ export function MatrixCanvas(): ReactElement {
       setTargetRange(inferred.targetRange);
       void runWithTarget(inferred.targetRange, nextContext.chips, trimmedPrompt);
     },
-    [contextChips, contextChipsWithSelection, isRunning, runWithTarget, targetRange],
+    [
+      contextChips,
+      contextChipsWithSelection,
+      isRunning,
+      runWithTarget,
+      selectionLabel,
+      selectionRange,
+      targetRange,
+    ],
   );
 
   const handleMatrixShortcutRun = useCallback(
