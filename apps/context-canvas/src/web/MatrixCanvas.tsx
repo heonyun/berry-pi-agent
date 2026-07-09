@@ -216,6 +216,13 @@ interface RestoreSourceState {
   readonly targetRange: RangeRefDTO | null;
 }
 
+interface MatrixInlineEditShortcut {
+  readonly direction: MatrixTargetDirection;
+  readonly selectionRange: RangeRefDTO | null;
+  readonly selectionLabel?: string | null;
+  readonly prompt?: string;
+}
+
 function rangeRefToSelection(range: RangeRefDTO): MatrixGridSelectionState {
   return {
     startRow: range.startRow,
@@ -909,8 +916,13 @@ export function MatrixCanvas(): ReactElement {
   }, [dispatch, rangeNameInput, restoreCurrentDocumentFromPreview, selectionLabel, selectionRange]);
 
   const runWithTarget = useCallback(
-    async (runTargetRange: RangeRefDTO, runContextChips: readonly ContextChip[]) => {
-      if (!prompt.trim()) {
+    async (
+      runTargetRange: RangeRefDTO,
+      runContextChips: readonly ContextChip[],
+      runPrompt = prompt.trim(),
+    ) => {
+      const trimmedPrompt = runPrompt.trim();
+      if (!trimmedPrompt) {
         setStatus("Enter a prompt before running");
         return;
       }
@@ -929,10 +941,10 @@ export function MatrixCanvas(): ReactElement {
           docRef.current,
           contextRanges,
           runTargetRange,
-          prompt.trim(),
+          trimmedPrompt,
         );
         const response = await runMatrix({
-          prompt: prompt.trim(),
+          prompt: trimmedPrompt,
           targetRange: runTargetRange,
           compiled,
         });
@@ -957,7 +969,7 @@ export function MatrixCanvas(): ReactElement {
         );
 
         const historyEntry = createHistoryEntry({
-          intent: prompt.trim(),
+          intent: trimmedPrompt,
           contextRanges: runContextChips.map((chip) => ({
             label: chip.label,
             range: chip.range,
@@ -1012,37 +1024,46 @@ export function MatrixCanvas(): ReactElement {
   const contextChipsWithSelection = useCallback(
     (
       baseChips: readonly ContextChip[],
+      selectionRangeOverride: RangeRefDTO | null = selectionRange,
+      selectionLabelOverride: string | null = selectionLabel,
     ): { readonly chips: readonly ContextChip[]; readonly added: boolean } => {
-      if (!selectionRange || !selectionLabel) {
+      if (!selectionRangeOverride || !selectionLabelOverride) {
         return { chips: baseChips, added: false };
       }
-      const duplicate = baseChips.some((chip) => rangesEqual(chip.range, selectionRange));
+      const duplicate = baseChips.some((chip) => rangesEqual(chip.range, selectionRangeOverride));
       if (duplicate) {
         return { chips: baseChips, added: false };
       }
       return {
-        chips: [...baseChips, { id: nextChipId(), label: selectionLabel, range: selectionRange }],
+        chips: [
+          ...baseChips,
+          { id: nextChipId(), label: selectionLabelOverride, range: selectionRangeOverride },
+        ],
         added: true,
       };
     },
     [selectionLabel, selectionRange],
   );
 
-  const handleMatrixShortcutRun = useCallback(
-    (direction: MatrixTargetDirection) => {
+  const runMatrixShortcut = useCallback(
+    (shortcut: MatrixInlineEditShortcut) => {
       if (isRunning) {
         return;
       }
-      if (!prompt.trim()) {
+      const trimmedPrompt = prompt.trim() || shortcut.prompt?.trim() || "";
+      if (!trimmedPrompt) {
         setStatus("Enter a prompt before running");
         return;
       }
+      const selectionRange = shortcut.selectionRange;
+      const selectionLabel =
+        shortcut.selectionLabel ?? (selectionRange ? rangeLabelForSelection(docRef.current, selectionRange) : null);
       if (targetRange) {
-        if (direction === "right") {
+        if (shortcut.direction === "right") {
           setStatus("Target already set");
           return;
         }
-        void runWithTarget(targetRange, contextChips);
+        void runWithTarget(targetRange, contextChips, trimmedPrompt);
         return;
       }
       if (!selectionRange || !selectionLabel) {
@@ -1050,7 +1071,7 @@ export function MatrixCanvas(): ReactElement {
         return;
       }
 
-      const inferred = inferMatrixTargetRange(selectionRange, direction, {
+      const inferred = inferMatrixTargetRange(selectionRange, shortcut.direction, {
         rows: docRef.current.sheet.rows,
         cols: docRef.current.sheet.cols,
       });
@@ -1063,29 +1084,49 @@ export function MatrixCanvas(): ReactElement {
         return;
       }
 
-      const nextContext = contextChipsWithSelection(contextChips);
+      const nextContext = contextChipsWithSelection(
+        contextChips,
+        selectionRange,
+        selectionLabel,
+      );
       if (nextContext.added) {
         setContextChips([...nextContext.chips]);
       }
-      const inferredLabel = rangeLabelForSelection(docRef.current, inferred.targetRange);
       setTargetRange(inferred.targetRange);
-      void runWithTarget(inferred.targetRange, nextContext.chips);
+      void runWithTarget(inferred.targetRange, nextContext.chips, trimmedPrompt);
     },
-    [
-      contextChips,
-      contextChipsWithSelection,
-      isRunning,
-      prompt,
-      runWithTarget,
-      selectionLabel,
-      selectionRange,
-      targetRange,
-    ],
+    [contextChips, contextChipsWithSelection, isRunning, runWithTarget, targetRange],
+  );
+
+  const handleMatrixShortcutRun = useCallback(
+    (direction: MatrixTargetDirection, promptOverride?: string) => {
+      runMatrixShortcut({
+        direction,
+        selectionRange,
+        selectionLabel,
+        prompt: promptOverride ?? prompt,
+      });
+    },
+    [prompt, runMatrixShortcut, selectionLabel, selectionRange],
   );
   const handleMatrixShortcutRunRef = useRef(handleMatrixShortcutRun);
   handleMatrixShortcutRunRef.current = handleMatrixShortcutRun;
+  const runMatrixShortcutRef = useRef(runMatrixShortcut);
+  runMatrixShortcutRef.current = runMatrixShortcut;
   const setStatusRef = useRef(setStatus);
   setStatusRef.current = setStatus;
+
+  useEffect(() => {
+    const onCommitRun = (event: Event) => {
+      const customEvent = event as CustomEvent<MatrixInlineEditShortcut>;
+      if (!customEvent.detail) {
+        return;
+      }
+      runMatrixShortcutRef.current(customEvent.detail);
+    };
+    window.document.addEventListener("matrix-commit-run", onCommitRun);
+    return () => window.document.removeEventListener("matrix-commit-run", onCommitRun);
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

@@ -29,6 +29,7 @@ vi.mock("@glideapps/glide-data-grid", async (importOriginal) => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   dataEditorState.props = null;
 });
 
@@ -406,7 +407,8 @@ describe("MatrixGrid IME overlay editor", () => {
     expect(onFinishedEditing).not.toHaveBeenCalled();
   });
 
-  it("does not confirm the text editor on Ctrl+Enter", () => {
+  it("confirms the text editor on Ctrl+Enter and emits a below shortcut", () => {
+    const dispatchEventSpy = vi.spyOn(document, "dispatchEvent");
     renderMatrixGrid();
 
     const TextEditor = getTextEditor(
@@ -438,9 +440,73 @@ describe("MatrixGrid IME overlay editor", () => {
     );
 
     const editor = screen.getByLabelText("Matrix cell editor");
+    fireEvent.change(editor, { target: { value: "confirmed" } });
     const event = fireEvent.keyDown(editor, { key: "Enter", ctrlKey: true });
 
-    expect(onFinishedEditing).not.toHaveBeenCalled();
+    expect(onFinishedEditing).toHaveBeenCalledTimes(1);
+    expect(onFinishedEditing).toHaveBeenCalledWith(
+      expect.objectContaining({ data: "confirmed", displayData: "confirmed" }),
+      undefined,
+    );
+    expect(dispatchEventSpy).toHaveBeenCalledTimes(1);
+    const dispatched = dispatchEventSpy.mock.calls[0]?.[0] as CustomEvent<{
+      readonly direction: "below" | "right";
+      readonly selectionRange: unknown;
+    }>;
+    expect(dispatched.type).toBe("matrix-commit-run");
+    expect(dispatched.detail.direction).toBe("below");
+    expect(dispatched.detail.prompt).toBe("confirmed");
     expect(event).toBe(false);
+  });
+
+  it("confirms the text editor on Ctrl+Shift+Enter and emits a right shortcut", () => {
+    const dispatchEventSpy = vi.spyOn(document, "dispatchEvent");
+    renderMatrixGrid();
+
+    const TextEditor = getTextEditor(
+      dataEditorState.props?.provideEditor?.({
+        kind: GridCellKind.Text,
+        data: "",
+        displayData: "",
+        allowOverlay: true,
+        location: [0, 0],
+      }) as ProvideEditorCallbackResult<TextCell>,
+    );
+    const onFinishedEditing = vi.fn();
+
+    render(
+      <TextEditor
+        isHighlighted={false}
+        onChange={vi.fn()}
+        onFinishedEditing={onFinishedEditing}
+        value={{
+          kind: GridCellKind.Text,
+          data: "",
+          displayData: "",
+          allowOverlay: true,
+        }}
+        target={{ x: 0, y: 0, width: 100, height: 32 }}
+        forceEditMode={false}
+        theme={{} as never}
+      />,
+    );
+
+    const editor = screen.getByLabelText("Matrix cell editor");
+    fireEvent.change(editor, { target: { value: "confirmed right" } });
+    fireEvent.keyDown(editor, { key: "Enter", ctrlKey: true, shiftKey: true });
+
+    expect(onFinishedEditing).toHaveBeenCalledTimes(1);
+    expect(onFinishedEditing).toHaveBeenCalledWith(
+      expect.objectContaining({ data: "confirmed right", displayData: "confirmed right" }),
+      undefined,
+    );
+    expect(dispatchEventSpy).toHaveBeenCalledTimes(1);
+    const dispatched = dispatchEventSpy.mock.calls[0]?.[0] as CustomEvent<{
+      readonly direction: "below" | "right";
+      readonly selectionRange: unknown;
+    }>;
+    expect(dispatched.type).toBe("matrix-commit-run");
+    expect(dispatched.detail.direction).toBe("right");
+    expect(dispatched.detail.prompt).toBe("confirmed right");
   });
 });
