@@ -84,6 +84,16 @@ Treat `Conclusion: pass` on issue planning comments as a **weak signal** — not
 ## PR review expectations
 
 `deepseek-pr-review` should focus on actionable diff findings, not summaries.
+
+### Ready vs draft mode
+
+| PR state | Mode marker | Lens |
+| --- | --- | --- |
+| Ready (or undrafted) | `<!-- pi-agent:review-mode:ready -->` | Strict merge-gate review |
+| Draft | `<!-- pi-agent:review-mode:draft -->` | Early WIP review — direction, evidenced bugs, AC gaps |
+
+Draft mode still posts a full structured review. Prefer `hold` for unfinished work; use `fail` only for clear P0/P1 bugs proven in the current diff. Do not treat pending CI, thin docs, or polish TODOs as merge blockers while draft.
+
 Useful PR review output includes:
 
 - severity for each actionable finding (`P0`, `P1`, `P2`, or `P3`),

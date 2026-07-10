@@ -10,6 +10,10 @@ body:
 
         `harness_flow` = workflow stage (plan / implement / review). **Not** the deployment environment.
 
+        Writer prompt / CLI paste: `doc/orchestrator/issue-agent-prompts.md` § Writer · `docs/GITHUB_AGENT_COMMANDS.md` § New issue body.
+        Mode sizing: `doc/orchestrator/issue-process-modes.md` · `docs/TASK_CLASSIFIER.md`.
+        After create: `pwsh scripts/Test-IssueContractGate.ps1 -IssueNumber <N>` (required fields). Recommended: Behavioral Intent, Non-goals, Regression Risks, breadcrumbs.
+
   - type: dropdown
     id: harness_flow
     attributes:
@@ -35,6 +39,36 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: process_mode
+    attributes:
+      label: Process mode
+      description: Procedure intensity (see doc/orchestrator/issue-process-modes.md). XS/S skip skeleton/BDD in body — derive from mode.
+      options:
+        - XS
+        - S
+        - M
+        - L
+        - XL
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Why this is needed
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavioral_intent
+    attributes:
+      label: Behavioral Intent
+      description: What the user should experience
+    validations:
+      required: true
+
   - type: textarea
     id: goal
     attributes:
@@ -42,6 +76,32 @@ body:
       description: One sentence outcome
     validations:
       required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Acceptance Criteria
+      description: Testable completion conditions
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Non-goals / Out of scope
+      description: Areas explicitly excluded
+
+  - type: textarea
+    id: regression_risks
+    attributes:
+      label: Regression Risks
+      description: Existing behavior that could break
+
+  - type: textarea
+    id: appetite
+    attributes:
+      label: Appetite (optional)
+      description: Time/scope budget hint — not a merge gate
 
   - type: textarea
     id: affected
@@ -61,12 +121,6 @@ body:
       placeholder: Projects/berry-pi-agent/tasks/T-000/00-index.md
 
   - type: textarea
-    id: out_of_scope
-    attributes:
-      label: Out of scope
-      description: Areas explicitly excluded
-
-  - type: textarea
     id: verification
     attributes:
       label: Verification
@@ -84,4 +138,14 @@ body:
       description: next_action and drill_down for the next agent session
       placeholder: |
         next_action: Implement skeleton in App.tsx
-        drill_down: doc/working-log/2026-06-24-topic.md
+        drill_down: peer-runs/issue-<N>/peer-review-plan.md
+
+  - type: textarea
+    id: peer_review_hint
+    attributes:
+      label: Peer review hint (optional)
+      description: PEPR notes — orchestrator runs Invoke-HarnessPhasePeerReview.ps1 at phase exit
+      placeholder: |
+        plan peer: agy Opus (Codex) or codex CLI (Cursor)
+        implement peer: per process_mode; failure >= 2 for M+
+        prompts: doc/orchestrator/issue-agent-prompts.md

@@ -8,13 +8,21 @@ agent_footer() {
   local workflow_id="${1:?workflow id required}"
   local model="${2:-deepseek-v4-flash}"
   local head_sha="${3:-}"
+  local review_mode="${4:-}"
   echo ""
   echo "---"
   echo "${AGENT_MARKER_PREFIX}${workflow_id} -->"
   if [[ -n "${head_sha}" ]]; then
     echo "<!-- pi-agent:review-head:${head_sha} -->"
   fi
-  echo "_Automated note via DeepSeek (${model}) · workflow: ${workflow_id}_"
+  if [[ -n "${review_mode}" ]]; then
+    echo "<!-- pi-agent:review-mode:${review_mode} -->"
+  fi
+  if [[ "${review_mode}" == "draft" ]]; then
+    echo "_Automated draft review via DeepSeek (${model}) · workflow: ${workflow_id} · mode: draft_"
+  else
+    echo "_Automated note via DeepSeek (${model}) · workflow: ${workflow_id}_"
+  fi
 }
 
 agent_output_sections_prompt() {
@@ -168,6 +176,63 @@ P2/P3 or missing-test items as numbered findings.
 EOF
 }
 
+# Draft-PR early review: still evidence-based, but optimized for WIP direction checks.
+agent_pr_draft_review_instructions() {
+  cat <<'EOF'
+Act as an early draft-PR reviewer. The PR is still a draft / WIP — leave a
+useful review now, but do not treat polish or incomplete follow-ups as merge
+blockers.
+
+Review only the provided PR diff and PR context. Do not invent repository facts
+outside the diff. If a risk requires non-diff context, mark it as "needs
+verification" instead of stating it as fact.
+
+Draft-mode priorities (in order):
+1. Direction fit — does the change address the PR goal / linked issue intent?
+2. Correctness traps already visible in the diff (wrong condition, silent early
+   return, state not committed before side effects, broken shortcut/IME paths).
+3. Acceptance-criteria gaps — behavior claimed in the PR body but missing or
+   contradicted in the diff or tests.
+4. High-value missing tests for the new behavior (empty-input, IME/composing,
+   keyboard shortcut, race/order). Put nice-to-have coverage under Suggested
+   next steps, not Findings.
+5. Security/privacy or data-loss risks if already evidenced in the diff.
+
+Draft-mode rules:
+- Always review draft PRs. Do not refuse or skip because the PR is a draft.
+- Start Summary with one short line: "Draft early review — not a merge gate."
+- Prefer Conclusion "hold" when the direction is useful but unfinished or
+  verification is incomplete. Use "fail" only for clear correctness/security
+  bugs already proven in the current diff (P0/P1 with blocker:yes).
+- Do not fail solely because CI is pending, the PR is draft, docs are thin,
+  naming is imperfect, or follow-up TODOs remain.
+- Do not demand merge-ready completeness (changelog, full e2e matrix, polish)
+  unless the gap creates a real bug or AC miss evidenced in the diff.
+- Every actionable finding must include severity (P0/P1/P2/P3), Evidence citing
+  current diff/file/line or quoted fragment, Why, and Fix. No evidence → move
+  to Suggested next steps / needs verification.
+- On re-review, treat earlier comments as stale until the current diff still
+  proves the issue. Do not repeat stale findings.
+- Unified diff lines that start with a space are unchanged context — read them
+  before claiming a guard/helper is missing.
+- If only a call site changed and the helper body is outside the Diff section,
+  use evidence:heuristic and blocker:no unless the diff contradicts the claim.
+- When "Surrounding file context" or "Test harness context" is present, read it
+  before claiming missing UI/guards/helpers.
+- When Repository domain invariants are provided, treat them as authoritative.
+- Do not claim you ran tests. Suggest only concrete commands supported by the
+  PR context; otherwise say to inspect package.json.
+- Use "hold (truncated)" when the diff was truncated and findings depend on
+  unseen hunks. Never "fail" on files absent from the provided Diff section.
+- Findings must be problems, risks, or AC/verification gaps only — no praise
+  lists. When Conclusion is "pass", Findings must be "None."
+
+If the draft looks directionally sound with no actionable bugs, Conclusion may
+be "pass" with Findings "None." and remaining WIP items under Suggested next
+steps only.
+EOF
+}
+
 # Context Canvas domain contracts injected into PR reviews when the diff touches that app.
 agent_pr_domain_invariants_prompt() {
   cat <<'EOF'
@@ -204,11 +269,14 @@ agent_pr_touches_context_canvas() {
 }
 
 # Exit 0 when an automated review for this head SHA was already posted (skip re-run).
+# Optional 5th arg review_mode (ready|draft): if the latest comment for this head
+# used a different mode, do not skip so draft→ready (or forced mode change) re-runs.
 agent_pr_should_skip_duplicate_review() {
   local repo="${1:?repo required}"
   local pr_number="${2:?pr number required}"
   local head_sha="${3:?head sha required}"
   local workflow_id="${4:-deepseek-pr-review}"
+  local review_mode="${5:-}"
   local marker="${AGENT_MARKER_PREFIX}${workflow_id} -->"
   local head_marker="<!-- pi-agent:review-head:${head_sha} -->"
   local comments body
@@ -222,7 +290,19 @@ agent_pr_should_skip_duplicate_review() {
     [.[] | select(.body | contains($m))] | last | .body // empty
   ' 2>/dev/null || true)"
 
-  [[ -n "${body}" ]] && [[ "${body}" == *"${head_marker}"* ]]
+  if [[ -z "${body}" ]] || [[ "${body}" != *"${head_marker}"* ]]; then
+    return 1
+  fi
+
+  if [[ -n "${review_mode}" ]]; then
+    local mode_marker="<!-- pi-agent:review-mode:${review_mode} -->"
+    if [[ "${body}" != *"${mode_marker}"* ]]; then
+      # Same head, different mode (e.g. draft comment then ready_for_review) → re-run.
+      return 1
+    fi
+  fi
+
+  return 0
 }
 
 # Find the latest issue comment id for a workflow marker (prints id or empty).
@@ -354,14 +434,26 @@ EOF
 }
 
 # Stable system prompt for PR diff review.
+# Optional arg: review_mode = ready|draft (default ready).
 agent_pr_review_system_prompt() {
-  cat <<EOF
+  local review_mode="${1:-ready}"
+  if [[ "${review_mode}" == "draft" ]]; then
+    cat <<EOF
+You are an early draft-PR review assistant for berry-pi-agent. Review draft PRs with a WIP lens: catch direction mistakes, evidenced bugs, and AC gaps, while avoiding merge-gate nitpicks. Do not claim you ran tests. Prefer concise Korean when the PR text is Korean.
+
+$(agent_pr_draft_review_instructions)
+
+$(agent_output_sections_prompt)
+EOF
+  else
+    cat <<EOF
 You are a strict diff review assistant for berry-pi-agent. Lead with actionable bugs and risks grounded in the provided diff. Do not claim you ran tests. Prefer concise Korean when the PR text is Korean.
 
 $(agent_pr_review_instructions)
 
 $(agent_output_sections_prompt)
 EOF
+  fi
 }
 
 # Stable system prompt for CI failure analysis.

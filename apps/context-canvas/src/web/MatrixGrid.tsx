@@ -156,6 +156,8 @@ const MATRIX_IME_EDITOR_STYLE: CSSProperties = {
   padding: "3px 8.5px",
 };
 
+type MatrixImeTextEditorProps = Parameters<ProvideEditorComponent<TextCell>>[0];
+
 function applyValidatedSelection(
   textarea: HTMLTextAreaElement | null,
   range: SelectionRange | undefined,
@@ -167,7 +169,7 @@ function applyValidatedSelection(
   textarea.setSelectionRange(start, end);
 }
 
-const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
+const MatrixImeTextEditor = ({
   isHighlighted,
   onChange,
   onFinishedEditing,
@@ -175,7 +177,7 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
   value,
   initialValue,
   forceEditMode,
-}) => {
+}: MatrixImeTextEditorProps): ReactElement => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const finishedRef = useRef(false);
   const hasFocusedRef = useRef(false);
@@ -270,16 +272,28 @@ const MatrixImeTextEditor: ProvideEditorComponent<TextCell> = ({
       ) {
         return;
       }
+      if (event.repeat) {
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
         finishEditing(undefined);
         return;
       }
-      // WHY: Ctrl+Enter is reserved for matrix AI shortcuts; the overlay must not commit first.
-      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.altKey) {
         event.preventDefault();
         event.stopPropagation();
+        const nextValue = event.currentTarget.value;
+        finishEditing(updateValue(nextValue));
+        window.document.dispatchEvent(
+          new CustomEvent("matrix-commit-run", {
+            detail: {
+              direction: event.shiftKey ? "right" : "below",
+              prompt: nextValue,
+            },
+          }),
+        );
         return;
       }
       if (
@@ -358,6 +372,7 @@ export function MatrixGrid({
   const [rowResizeDrag, setRowResizeDrag] = useState<RowResizeDrag | null>(null);
   const [groupLabelDrag, setGroupLabelDrag] = useState<GroupLabelDrag | null>(null);
   const groupLabelDragRef = useRef<GroupLabelDrag | null>(null);
+  const pendingPositionUpdateRef = useRef<number | null>(null);
   const suppressNextGroupLabelClick = useRef(false);
   const visibleRowsRef = useRef<MatrixVisibleRows>({
     x: 0,
@@ -367,7 +382,6 @@ export function MatrixGrid({
     ty: 0,
   });
   const skipNextGroupLabelBlurSave = useRef(false);
-
   const columns = useMemo(
     () =>
       Array.from({ length: config.cols }, (_, i) => ({
@@ -448,6 +462,13 @@ export function MatrixGrid({
       const left = Math.max(4, Math.min(maxLeft, bounds.x - containerBounds.x + 4 + offsetX));
       const top = Math.max(2, Math.min(maxTop, bounds.y - containerBounds.y - 12 + offsetY));
       if (
+        !Number.isFinite(left) ||
+        !Number.isFinite(top) ||
+        !Number.isFinite(maxWidth) ||
+        !Number.isFinite(boundaryLeft) ||
+        !Number.isFinite(boundaryTop) ||
+        !Number.isFinite(boundaryWidth) ||
+        !Number.isFinite(boundaryHeight) ||
         boundaryLeft > containerBounds.width ||
         boundaryTop > containerBounds.height ||
         boundaryRight < 0 ||
@@ -508,6 +529,12 @@ export function MatrixGrid({
           const right = left + bounds.width;
           const bottom = top + bounds.height;
           if (
+            !Number.isFinite(left) ||
+            !Number.isFinite(top) ||
+            !Number.isFinite(right) ||
+            !Number.isFinite(bottom) ||
+            !Number.isFinite(bounds.width) ||
+            !Number.isFinite(bounds.height) ||
             left > containerBounds.width ||
             top > containerBounds.height ||
             right < 0 ||
@@ -666,6 +693,13 @@ export function MatrixGrid({
     (range, _tx, ty) => {
       visibleRowsRef.current = { x: range.x, y: range.y, width: range.width, height: range.height, ty };
       updateGroupLabelPositions();
+      if (pendingPositionUpdateRef.current !== null) {
+        window.clearTimeout(pendingPositionUpdateRef.current);
+      }
+      pendingPositionUpdateRef.current = window.setTimeout(() => {
+        pendingPositionUpdateRef.current = null;
+        updateGroupLabelPositions();
+      }, 0);
     },
     [updateGroupLabelPositions],
   );
@@ -698,7 +732,21 @@ export function MatrixGrid({
 
   useLayoutEffect(() => {
     updateGroupLabelPositions();
+    if (typeof window.requestAnimationFrame !== "function") {
+      return undefined;
+    }
+    const frameId = window.requestAnimationFrame(updateGroupLabelPositions);
+    return () => window.cancelAnimationFrame(frameId);
   }, [updateGroupLabelPositions]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingPositionUpdateRef.current !== null) {
+        window.clearTimeout(pendingPositionUpdateRef.current);
+        pendingPositionUpdateRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;

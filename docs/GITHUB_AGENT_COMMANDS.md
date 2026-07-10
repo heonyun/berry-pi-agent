@@ -28,10 +28,15 @@ Do not interpret upstream auto-close text as a DeepSeek refusal. It is maintaine
 
 | Layer | Role |
 | --- | --- |
-| **GitHub Issue/PR** | Public collaboration ledger for humans and Codex |
+| **GitHub Issue** | **Primary ledger**: goal, `harness_flow`, peer review comments (`phase-peer-review`), `implement_failure_count`, `next_action`, `drill_down` |
+| **GitHub PR** | implement/review output; link from Issue (`Closes #N`) |
+| **Repo worklog** | Verification, disposition tables; Issue `drill_down` points here or `peer-runs/issue-<N>/` |
+| **Git diff / log** | **Supplementary memory** — [GIT_AGENT_MEMORY.md](../docs/GIT_AGENT_MEMORY.md) |
+| **Git commit** | Accepted checkpoint after acceptance predicate passes |
+| **Commit message / PR comment** | Compressed decision + verification evidence |
 | **Actions bots** | Low-cost plan/review/CI-explain comments only; no code commits |
-| **`.orchestrator/`** | Local raw handoff; not pushed by default |
-| **Codex** | Parses bot output, implements fixes, commits, merge |
+| **`.orchestrator/`** | Local raw handoff (`signals.json` failure count mirror); not pushed by default |
+| **Codex** | Parses bot output, implements fixes, commits, merge; records PEPR disposition |
 
 When reading bot comments, use the five sections in `GITHUB_AGENT_OUTPUT.md`. Treat `Conclusion` and `Findings` as hints. Prefer `Commands to rerun` for local verification. Ignore comments with `<!-- pi-agent:workflow:` when deciding whether to post a new mention — those are bot output, not user requests.
 
@@ -47,8 +52,8 @@ Reasonix, Qwen, and Cursor workers must not post `@deepseek*` mentions or run `g
 | `/deepseek ...` on issue comment | `deepseek-issue-assistant` | Follow-up pre-implementation review reply without mentioning an external account |
 | `@deepseek ...` or `@github-actions ...` on issue comment | `deepseek-issue-assistant` | Backward-compatible follow-up trigger |
 | Manual `workflow_dispatch` with issue number | `deepseek-issue-assistant` | Pre-implementation review comment on demand |
-| PR opened/reopened/synchronize (same-repo) | `deepseek-pr-review` | Post strict diff review comment |
-| `@deepseek-review ...` on PR comment | `deepseek-pr-review` | Strict diff review with extra context |
+| PR opened/reopened/synchronize/ready_for_review (same-repo) | `deepseek-pr-review` | Post diff review comment (draft → early WIP mode; ready → merge-gate mode) |
+| `@deepseek-review ...` on PR comment | `deepseek-pr-review` | Diff review with extra context (mode follows current draft/ready state) |
 | CI Verify failure on PR | `ci-failure-explain` | Post failure analysis comment |
 | `lgtm` / `lgtmi` on issue comment (maintainer) | `approve-contributor` | Update contributor approval |
 
@@ -60,6 +65,7 @@ Reasonix, Qwen, and Cursor workers must not post `@deepseek*` mentions or run `g
 - Automatic issue planning also runs when the issue body contains `<!-- pi-agent:created-by:antigravity -->` (Antigravity-delegated issues, including bot-opened issues).
 - Ineligible issues are skipped **silently** (no DeepSeek call, no decline comment).
 - PR review and CI explain run only for same-repository PR heads (not fork PRs).
+- Draft PRs are reviewed in **draft mode** (early WIP lens). Marking ready (`ready_for_review`) forces a **ready-mode** re-run even on the same head SHA.
 - Bot comments and comments containing `<!-- pi-agent:workflow:` are ignored to prevent loops.
 
 ## Output format
@@ -80,34 +86,50 @@ praise, broad style notes, or invented package-manager commands are low-value.
 
 Structured mentions help the bot cite files, scope work, and avoid truncation noise.
 
-### New issue body (Harness block — matches `.github/ISSUE_TEMPLATE/agent-task.yml`)
+### New issue body (Harness — matches `.github/ISSUE_TEMPLATE/agent-task.yml`)
+
+Prefer the **Agent Task** GitHub form (`.github/ISSUE_TEMPLATE/agent-task.yml`). For `gh issue create` / agent Writer paste, use this body. Full Writer prompt: [issue-agent-prompts.md](../doc/orchestrator/issue-agent-prompts.md) § Writer. Mode sizing: [issue-process-modes.md](../doc/orchestrator/issue-process-modes.md).
+
+**Required (gated by `Test-IssueContractGate.ps1`):** Harness `harness_flow` + `task_class` + `process_mode` · Goal or Problem · Verification · (M+) Problem + Acceptance Criteria + Affected · (L/XL) skeleton path.
+**Recommended (not gated):** Behavioral Intent · Non-goals · Regression Risks · `next_action` / `drill_down`.
 
 ```md
+## Problem
+Why this is needed.
+
+## Behavioral Intent
+What the user should experience.
+
 ## Goal
 One sentence outcome.
 
+## Acceptance Criteria
+- Testable completion condition
+
+## Non-goals / Out of scope
+Explicit exclusions.
+
+## Regression Risks
+Existing behavior that could break.
+
 ## Affected
-- apps/context-canvas/src/server/index.ts
+- apps/context-canvas/src/web/App.tsx
+
+## Verification
+- [ ] npm run test --workspace=@berry-pi/context-canvas
+- [ ] npm run typecheck --workspace=@berry-pi/context-canvas
 
 ## Harness
 | Field | Value |
 | --- | --- |
 | harness_flow | plan |
 | task_class | standard |
-| next_action | Open PR with skeleton |
-| drill_down | doc/working-log/YYYY-MM-DD-topic.md |
-
-## Repro / expected vs actual
-(steps or symptoms)
-
-## Out of scope
-(unrelated areas)
-
-## Verification
-- [ ] npm run test --workspace=@berry-pi/context-canvas
+| process_mode | M |
+| next_action | One line for the next agent session |
+| drill_down | peer-runs/issue-<N>/ or doc/working-log/YYYY-MM-DD-topic.md |
 ```
 
-Trusted authors and Antigravity-marked issues receive automatic planning review on open.
+Do not require skeleton/BDD/TDD in the body for XS/S — derive from `process_mode`. After create: `pwsh scripts/Test-IssueContractGate.ps1 -IssueNumber <N>`. Trusted authors and Antigravity-marked issues receive automatic planning review on open.
 
 ### Issue follow-up (`/deepseek` preferred)
 
@@ -121,6 +143,72 @@ Trusted authors and Antigravity-marked issues receive automatic planning review 
 ```
 
 `/deepseek` avoids notifying unrelated accounts. `@deepseek` and `@github-actions` remain supported aliases.
+
+### Local agy second opinion (`/agy` — not a GitHub Action)
+
+Antigravity (`agy`) runs **only on a local workstation** with `agy-bridge`. A `/agy` comment does **not** auto-run in the cloud; it signals Cursor/Codex to run:
+
+```powershell
+pwsh -NoProfile -File scripts/Invoke-AgyIssueReview.ps1 -IssueNumber <N> -PostComment
+```
+
+Check whether agy is recommended before offering:
+
+```powershell
+pwsh -NoProfile -File scripts/Test-AgyIssueReviewSuggested.ps1 -IssueNumber <N>
+```
+
+**When to use agy vs DeepSeek**
+
+| Use DeepSeek (GitHub) | Use agy (local) |
+| --- | --- |
+| Issue open/reopen 1st pass | 2nd opinion after DeepSeek `hold` |
+| No local machine | Verify Affected paths, types, commits in repo |
+| Standard planning triage | `task_class: complex` + codebase grounding |
+
+**Request template**
+
+```md
+/agy second-opinion
+- focus: dependency verification | Glide overlay types | missing tests
+- out of scope: implementation
+```
+
+**Contract-bearing skeleton**
+
+```md
+/agy skeleton
+- kind: contract-bearing
+- focus: domain types + Zod validation + red unit tests
+- out of scope: UI, full reducer logic
+```
+
+Run locally:
+
+```powershell
+pwsh -NoProfile -File scripts/Invoke-AgyIssueReview.ps1 `
+  -IssueNumber 105 -ReviewKind contract-bearing-skeleton -PostComment
+```
+
+Posted comments use workflow `agy-skeleton-assistant`. See `agy-runs/skeleton-pilot-summary.md`.
+
+### Local harness PEPR (`/harness review` — not a GitHub Action)
+
+Signals the orchestrator to run phase exit peer review locally (same pattern as `/agy`):
+
+```powershell
+pwsh -NoProfile -File scripts/Invoke-HarnessPhasePeerReview.ps1 -IssueNumber <N> -Phase plan -DryRun
+pwsh -NoProfile -File scripts/Invoke-HarnessPhasePeerReview.ps1 -IssueNumber <N> -Phase implement -PostComment
+```
+
+Process mode gates: `scripts/Test-ProcessModeGating.ps1 -IssueNumber <N>`. Runbook: `doc/orchestrator/issue-process-modes.md`.
+
+```md
+/harness review
+- phase: plan | implement
+- process_mode: XS | S | M | L | XL
+- focus: reception table | escalation | verification gaps
+```
 
 ### PR description (Harness block — matches `.github/pull_request_template.md`)
 

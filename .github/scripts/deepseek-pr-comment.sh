@@ -13,22 +13,42 @@ MODEL="${DEEPSEEK_MODEL:-deepseek-v4-flash}"
 REPO="${GITHUB_REPOSITORY:?}"
 WORKFLOW_ID="deepseek-pr-review"
 MAX_DIFF_CHARS="${MAX_DIFF_CHARS:-60000}"
-SYSTEM_CONTENT="$(agent_pr_review_system_prompt)"
+
+pr_meta_json="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '{sha: .head.sha, draft: .draft}' 2>/dev/null || echo '{}')"
+head_sha="$(jq -r '.sha // empty' <<<"${pr_meta_json}")"
+# Prefer live PR API draft flag. PR_IS_DRAFT is only a fallback (e.g. API miss).
+is_draft="$(jq -r 'if .draft == true then "true" else empty end' <<<"${pr_meta_json}")"
+if [[ -z "${is_draft}" ]]; then
+  case "${PR_IS_DRAFT:-}" in
+    true|True|TRUE) is_draft="true" ;;
+    *) is_draft="false" ;;
+  esac
+fi
+
+review_mode="ready"
+if [[ "${is_draft}" == "true" ]]; then
+  review_mode="draft"
+fi
+
+SYSTEM_CONTENT="$(agent_pr_review_system_prompt "${review_mode}")"
 
 if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
   echo "DEEPSEEK_API_KEY is not set" >&2
   exit 1
 fi
 
-head_sha="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}" --jq '.head.sha' 2>/dev/null || true)"
 force_rerun=0
 if [[ -n "${EXTRA}" ]]; then
   force_rerun=1
 fi
+# ready_for_review / explicit mode change must re-run even on the same head SHA.
+if [[ "${EVENT_ACTION:-}" == "ready_for_review" ]]; then
+  force_rerun=1
+fi
 
 if [[ "${force_rerun}" -eq 0 ]] && [[ -n "${head_sha}" ]] &&
-  agent_pr_should_skip_duplicate_review "${REPO}" "${PR_NUMBER}" "${head_sha}" "${WORKFLOW_ID}"; then
-  echo "Skipping duplicate DeepSeek PR review for head ${head_sha}"
+  agent_pr_should_skip_duplicate_review "${REPO}" "${PR_NUMBER}" "${head_sha}" "${WORKFLOW_ID}" "${review_mode}"; then
+  echo "Skipping duplicate DeepSeek PR review for head ${head_sha} (mode=${review_mode})"
   exit 0
 fi
 
@@ -68,10 +88,28 @@ if agent_ci_build_check_passed "${ci_checks}"; then
   ci_build_passed=1
 fi
 
+draft_banner=""
+if [[ "${review_mode}" == "draft" ]]; then
+  draft_banner="$(cat <<'EOF'
+PR state: draft (WIP)
+Review mode: draft early review — leave actionable direction/correctness feedback now.
+Do not refuse to review because this is a draft. Prefer hold over fail for unfinished work.
+EOF
+)"
+else
+  draft_banner="$(cat <<'EOF'
+PR state: ready for review
+Review mode: merge-gate diff review.
+EOF
+)"
+fi
+
 user_content="$(cat <<EOF
 Repository: ${REPO}
 Pull request #${PR_NUMBER}: ${TITLE}
 PR head: ${head_sha:-unknown}
+
+${draft_banner}
 
 PR body:
 ${BODY}
@@ -126,7 +164,7 @@ comment_body="$(agent_post_process_review_comment "${comment_body}" "${diff_trun
 
 {
   echo "${comment_body}"
-  agent_footer "${WORKFLOW_ID}" "${MODEL}" "${head_sha}"
+  agent_footer "${WORKFLOW_ID}" "${MODEL}" "${head_sha}" "${review_mode}"
 } > "${response_file}"
 
 agent_pr_upsert_review_comment "${REPO}" "${PR_NUMBER}" "$(cat "${response_file}")" "${WORKFLOW_ID}"

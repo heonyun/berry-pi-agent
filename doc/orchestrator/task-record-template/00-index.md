@@ -32,9 +32,11 @@ One sentence outcome.
 
 | harness_flow | Record file | Exit when |
 | --- | --- | --- |
-| plan | `phases/plan-exit.md` | Issue ready, scope clear |
-| implement | `phases/implement-exit.md` | PR ready, verify green |
-| review | `phases/review-exit.md` | Merged or round closed |
+| plan | `phases/plan-exit.md` or `10-planning/exit.md` | Issue ready, scope clear |
+| implement | `phases/implement-exit.md` or `20-build/exit.md` | PR ready, verify green |
+| review | `phases/review-exit.md` or `30-review/verdict.md` | Merged or round closed |
+
+Phase sections: [harness-flow.md](../harness-flow.md) (`plan` / `implement` / `review`).
 
 See [harness-flow.md](../harness-flow.md) for exit checklists.
 

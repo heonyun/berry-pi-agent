@@ -11,6 +11,8 @@ summary: How to run plan-router eval pilots and when to promote to TASK_CLASSIFI
 
 # Plan method router — pilot protocol
 
+> **Superseded for daily use** by `harness_flow` + [issue-process-modes.md](./issue-process-modes.md). This file is historical pilot material only; do not rely on any plan-method-router link from it.
+
 Runs under `.orchestrator/harness-pilot/runs/` (local). Tracked procedure only.
 
 ## Goal
@@ -27,7 +29,7 @@ Validate **Spec Compressor + Method Router** before promoting from `candidate_on
 ## Per-run checklist
 
 1. Record Harness breadcrumbs: `harness_flow: plan`, `task_class`, `plan_intent`, `next_action`, `drill_down`
-2. Apply [plan-method-router.md](./plan-method-router.md) — record which methods ran (0–N)
+2. Record which pilot methods ran (0–N) against the current `harness_flow` and issue-process-modes notes
 3. Run Premortem if `task_class` ≥ `standard`
 4. Produce Spec Compressor output → `worker-ticket.md` per [worker-ticket-template.md](./worker-ticket-template.md)
 5. Score against rubric below
@@ -50,12 +52,11 @@ When **both** case types have scored `helped` at least once (2+ total helped acr
 1. **TASK_CLASSIFIER.md** — add Session Checklist items (before implementation):
    - `plan_intent` recorded when `harness_flow: plan` and task is non-trivial
    - Spec Compressor output at `drill_down` before Qwen implementation ticket
-2. **AGENTS.md** — add one conditional route row:
-   - `harness_flow: plan` and non-trivial scope → `doc/orchestrator/plan-method-router.md`
+2. **AGENTS.md** — keep daily use on `harness_flow` + `issue-process-modes`; no live route from this historical pilot doc
 3. **QWEN.md** — confirm Worker Ticket example references `worker-ticket-template.md`
-4. Set `plan-method-router-v0` row in workflow-improvement-log to `promoted`
+4. Keep the row in workflow-improvement-log as historical context only
 
-Until gate passes, keep `candidate_only` and load plan-method-router only when explicitly piloting or user requests.
+Until gate passes, keep `candidate_only` and use the historical pilot notes only when explicitly piloting or user requests.
 
 ## Desk pilot (documentation-only)
 

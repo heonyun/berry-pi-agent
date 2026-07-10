@@ -95,9 +95,9 @@ export function matrixShortcutBlockedStatus(target: EventTarget | null): string 
   if (!(target instanceof Element)) {
     return null;
   }
-  // WHY: Glide mounts its overlay editor in a body-level portal, outside matrix-shell.
   if (target.closest(".gdg-input")) {
-    return "Finish cell edit before Ctrl+Enter";
+    // WHY: the active Glide overlay editor now handles commit-then-run inline.
+    return null;
   }
   if (!isMatrixShellElement(target)) {
     return null;

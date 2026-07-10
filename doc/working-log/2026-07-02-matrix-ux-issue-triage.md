@@ -19,8 +19,11 @@ keywords:
   - Korean IME
   - matrix-ime
   - Qwen worker
-summary: "Registered Matrix UX #93-#106; merged I01-I05 (#107,#109,#110,#111,#113); next up is I06 #98 group corner-dot boundaries."
-updated: 2026-07-02
+summary: "Matrix UX #93-#106; I01-I10 done through PR #116-#117; #102 closed satisfied-by-#117; next I11 #103."
+updated: 2026-07-03
+harness_flow: plan
+next_action: "Implement I11 #103 cell = reference edit mode from origin/main"
+drill_down: doc/working-log/2026-07-03-issue-102-satisfaction-check.md
 author: cursor-orchestrator
 canonical_repo: heonyun/berry-pi-agent
 ---
@@ -29,10 +32,32 @@ canonical_repo: heonyun/berry-pi-agent
 
 ## TL;DR
 
-- Registered **14 Matrix UX issues** (#93–#106) from user request + cell-resize investigation.
-- Merged **I01-I05**: PR #107, #109, #110, #111, #113.
-- Latest: **I05 #97 row height resize** shipped via PR #113; issue #97 closed.
-- Next: **I06 #98 group corner-dot boundaries**.
+- Registered **14 Matrix UX issues** (#93–#106).
+- **I01–I10** complete through PR #115–#117; **#102** closed as satisfied by #117 (no code PR).
+- **Next: I11 #103** — cell `=` reference edit mode.
+
+## Issue progress (2026-07-03)
+
+| ID | # | PR | Status |
+|----|---|-----|--------|
+| I01 | 93 | #107 | merged |
+| I02 | 94 | #109 | merged |
+| I03 | 95 | #110 | merged |
+| I04 | 96 | #111 | merged |
+| I05 | 97 | #113 | merged |
+| I06 | 98 | #114 | merged |
+| I07 | 99 | #115 | merged |
+| I08 | 100 | #116 | merged |
+| I09 | 101 | #117 | merged |
+| I10 | 102 | — | **closed** (satisfied by #117) |
+| I11–I14 | 103–106 | — | pending |
+| I01b | 108 | — | open (IME phase 2) |
+
+## Next Actions
+
+1. **I11 #103** — `=` reference edit mode from `origin/main`.
+2. Optional: localStorage offset migration (design review follow-up).
+3. #108 overlay ImeTextarea when scheduled.
 
 ## Issue map (I01–I14 → GitHub)
 

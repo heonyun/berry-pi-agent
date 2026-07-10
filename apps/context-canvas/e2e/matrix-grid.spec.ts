@@ -312,57 +312,120 @@ test.describe("Feature: Matrix clipboard", () => {
   });
 });
 
+/**
+ * Feature: Message input then AI shortcut (user-critical path)
+ *
+ * After typing a prompt, the user expects:
+ *   1. Ctrl+Enter            → infer target BELOW selection, add context, run AI
+ *   2. Ctrl+Shift+Enter      → infer target RIGHT of selection, run AI
+ *
+ * These two scenarios are the smoke gate before manual QA.
+ * Edge cases (explicit target, inline edit, OOB) live in the same Feature below.
+ *
+ * ```gherkin
+ * Feature: Matrix AI shortcuts after message input
+ *   As a matrix user
+ *   I want Ctrl+Enter / Ctrl+Shift+Enter to place and run the AI answer
+ *   So that I do not need to set target manually for the common case
+ *
+ *   Scenario: Ctrl+Enter runs AI below the selection
+ *     Given a 2x2 filled range A1:B2 is selected
+ *     And the AI prompt field contains a message
+ *     When I press Ctrl+Enter
+ *     Then the run targets A3:B4 (below)
+ *     And the selection is added as context
+ *     And the status bar shows Run applied
+ *
+ *   Scenario: Ctrl+Shift+Enter runs AI to the right of the selection
+ *     Given a 2x2 filled range A1:B2 is selected
+ *     And the AI prompt field contains a message
+ *     When I press Ctrl+Shift+Enter
+ *     Then the run targets C1:D2 (right)
+ *     And the status bar shows Run applied
+ * ```
+ */
 test.describe("Feature: Matrix inferred target shortcuts", () => {
   test.beforeEach(async ({ page }) => {
     await prepareMatrixGrid(page);
   });
 
-  test("Scenario: Ctrl+Enter infers a below target, adds context, and runs", async ({ page }) => {
+  test("Scenario: Ctrl+Enter runs AI below the selection after message input", async ({
+    page,
+  }) => {
     const requests = await mockMatrixRun(page);
-    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
-    await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
-    const composerInput = page.getByTestId("matrix-composer-input");
-    await composerInput.fill("answer below");
-    await composerInput.focus();
-    await page.keyboard.press("Control+Enter");
 
-    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Run applied/i, {
-      timeout: 60000,
+    await test.step("Given a 2x2 filled range A1:B2 is selected", async () => {
+      await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+      await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
+      await expectSelectionSummary(page, "A1:B2", "2×2");
     });
-    expect(requests).toHaveLength(1);
-    expect(requests[0]?.targetRange).toEqual({
-      startRow: 2,
-      startCol: 0,
-      endRow: 3,
-      endCol: 1,
+
+    await test.step("And the AI prompt field contains a message", async () => {
+      const composerInput = page.getByTestId("matrix-composer-input");
+      await composerInput.fill("answer below");
+      await composerInput.focus();
+      await expect(composerInput).toHaveValue("answer below");
     });
-    expect(requests[0]?.compiled.targetRangeLabel).toBe("A3:B4");
-    expect(requests[0]?.compiled.contextRangeLabels).toContain("A1:B2 (A1:B2)");
-    await expect(page.getByTestId("target-range-chip")).toContainText("A3:B4");
-    await expect(page.getByTestId("context-chip-A1:B2")).toBeVisible();
+
+    await test.step("When I press Ctrl+Enter", async () => {
+      await page.keyboard.press("Control+Enter");
+    });
+
+    await test.step("Then the run targets A3:B4 below, adds context, and applies", async () => {
+      await expect(page.getByTestId("matrix-status-bar")).toContainText(/Run applied/i, {
+        timeout: 60000,
+      });
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.prompt).toBe("answer below");
+      expect(requests[0]?.targetRange).toEqual({
+        startRow: 2,
+        startCol: 0,
+        endRow: 3,
+        endCol: 1,
+      });
+      expect(requests[0]?.compiled.targetRangeLabel).toBe("A3:B4");
+      expect(requests[0]?.compiled.contextRangeLabels).toContain("A1:B2 (A1:B2)");
+      await expect(page.getByTestId("target-range-chip")).toContainText("A3:B4");
+      await expect(page.getByTestId("context-chip-A1:B2")).toBeVisible();
+    });
   });
 
-  test("Scenario: Ctrl+Shift+Enter infers a right target and runs", async ({ page }) => {
+  test("Scenario: Ctrl+Shift+Enter runs AI to the right after message input", async ({
+    page,
+  }) => {
     const requests = await mockMatrixRun(page);
-    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
-    await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
-    await page.getByTestId("matrix-composer-input").fill("answer right");
 
-    await page.getByTestId("data-grid-canvas").focus();
-    await page.keyboard.press("Control+Shift+Enter");
+    await test.step("Given a 2x2 filled range A1:B2 is selected", async () => {
+      await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
+      await selectRangeByKeyboard(page, "A1", ["ArrowRight", "ArrowDown"]);
+      await expectSelectionSummary(page, "A1:B2", "2×2");
+    });
 
-    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Run applied/i, {
-      timeout: 60000,
+    await test.step("And the AI prompt field contains a message", async () => {
+      await page.getByTestId("matrix-composer-input").fill("answer right");
+      await expect(page.getByTestId("matrix-composer-input")).toHaveValue("answer right");
     });
-    expect(requests).toHaveLength(1);
-    expect(requests[0]?.targetRange).toEqual({
-      startRow: 0,
-      startCol: 2,
-      endRow: 1,
-      endCol: 3,
+
+    await test.step("When I press Ctrl+Shift+Enter", async () => {
+      await page.getByTestId("data-grid-canvas").focus();
+      await page.keyboard.press("Control+Shift+Enter");
     });
-    expect(requests[0]?.compiled.targetRangeLabel).toBe("C1:D2");
-    await expect(page.getByTestId("target-range-chip")).toContainText("C1:D2");
+
+    await test.step("Then the run targets C1:D2 to the right and applies", async () => {
+      await expect(page.getByTestId("matrix-status-bar")).toContainText(/Run applied/i, {
+        timeout: 60000,
+      });
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.prompt).toBe("answer right");
+      expect(requests[0]?.targetRange).toEqual({
+        startRow: 0,
+        startCol: 2,
+        endRow: 1,
+        endCol: 3,
+      });
+      expect(requests[0]?.compiled.targetRangeLabel).toBe("C1:D2");
+      await expect(page.getByTestId("target-range-chip")).toContainText("C1:D2");
+    });
   });
 
   test("Scenario: Ctrl+Shift+Enter respects an existing explicit target", async ({ page }) => {
@@ -419,18 +482,132 @@ test.describe("Feature: Matrix inferred target shortcuts", () => {
     expect(requests).toHaveLength(1);
   });
 
-  test("Scenario: Ctrl+Enter shows status while glide cell overlay is open", async ({ page }) => {
+  /**
+   * Feature: Matrix inline edit commit-then-run shortcuts
+   *
+   * After typing directly into a cell, the user expects:
+   *   1. Ctrl+Enter       → commit inline edit, infer the target below, and run AI
+   *   2. Ctrl+Shift+Enter  → commit inline edit, infer the target to the right, and run AI
+   *
+   * ```gherkin
+   * Feature: Matrix inline edit commit-then-run shortcuts
+   *   As a matrix user
+   *   I want inline edits to commit before Ctrl+Enter or Ctrl+Shift+Enter runs AI
+   *   So that the edited cell is preserved, the edit text is used as the message, and the shortcut still resolves the right target
+   *
+   *   Scenario: Ctrl+Enter commits an inline edit and runs below
+   *     Given a 2x2 filled matrix is selected
+   *     And the AI prompt field is empty
+   *     When I edit A1 inline and press Ctrl+Enter
+   *     Then the edit is committed
+   *     And the run targets A2
+   *     And the request uses the edited cell text as the message
+   *
+   *   Scenario: Ctrl+Shift+Enter commits an inline edit and runs right
+   *     Given a 2x2 filled matrix is selected
+   *     And the AI prompt field is empty
+   *     When I edit A1 inline and press Ctrl+Shift+Enter
+   *     Then the edit is committed
+   *     And the run targets B1
+   *     And the request uses the edited cell text as the message
+   * ```
+   */
+  test("Scenario: Ctrl+Enter commits an inline edit and runs below", async ({ page }) => {
     const requests = await mockMatrixRun(page);
-    await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
-    await focusMatrixCell(page, "A1");
-    await page.keyboard.press("F2");
-    const overlayInput = page.locator(".gdg-input");
-    await overlayInput.waitFor({ state: "visible" });
-    await overlayInput.focus();
-    await page.keyboard.press("Control+Enter");
 
-    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Finish cell edit/i);
-    expect(requests).toHaveLength(0);
+    await test.step("Given a 2x2 filled matrix is selected", async () => {
+      await fill2x2Matrix(page, { a1: "seed", b1: "q2", a2: "q3", b2: "q4" });
+      await focusMatrixCell(page, "A1");
+    });
+
+    await test.step("And the AI prompt field is empty", async () => {
+      const composerInput = page.getByTestId("matrix-composer-input");
+      await composerInput.fill("");
+      await expect(composerInput).toHaveValue("");
+    });
+
+    await test.step("And I return focus to A1 in the grid", async () => {
+      await focusMatrixCell(page, "A1");
+    });
+
+    await test.step("When I edit A1 inline and press Ctrl+Enter", async () => {
+      await page.keyboard.press("F2");
+      const overlayInput = page.locator(".gdg-input");
+      await overlayInput.waitFor({ state: "visible" });
+      await overlayInput.fill("edited below");
+      await overlayInput.press("Control+Enter");
+    });
+
+    await test.step("Then the edit is committed and the run targets A2", async () => {
+      await expect(page.getByTestId("matrix-status-bar")).toContainText(/Run applied/i, {
+        timeout: 60000,
+      });
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.prompt).toBe("edited below");
+      expect(requests[0]?.targetRange).toEqual({
+        startRow: 1,
+        startCol: 0,
+        endRow: 1,
+        endCol: 0,
+      });
+      expect(requests[0]?.compiled.contextRangeLabels).toContain("A1:A1 (A1:A1)");
+      expect(requests[0]?.compiled.contextText).toContain("edited below");
+      await expect(page.getByTestId("target-range-chip")).toContainText("A2");
+      await page.getByTestId("history-detail-close").click();
+      await expect(page.getByTestId("matrix-detail-pane")).toBeVisible();
+      await clickMatrixCell(page, "A1");
+      await expectDetailMarkdownBody(page, "edited below");
+      await expectCellStored(page, "A2", "Shortcut result");
+    });
+  });
+
+  test("Scenario: Ctrl+Shift+Enter commits an inline edit and runs right", async ({ page }) => {
+    const requests = await mockMatrixRun(page);
+
+    await test.step("Given a 2x2 filled matrix is selected", async () => {
+      await fill2x2Matrix(page, { a1: "seed", b1: "q2", a2: "q3", b2: "q4" });
+      await focusMatrixCell(page, "A1");
+    });
+
+    await test.step("And the AI prompt field is empty", async () => {
+      const composerInput = page.getByTestId("matrix-composer-input");
+      await composerInput.fill("");
+      await expect(composerInput).toHaveValue("");
+    });
+
+    await test.step("And I return focus to A1 in the grid", async () => {
+      await focusMatrixCell(page, "A1");
+    });
+
+    await test.step("When I edit A1 inline and press Ctrl+Shift+Enter", async () => {
+      await page.keyboard.press("F2");
+      const overlayInput = page.locator(".gdg-input");
+      await overlayInput.waitFor({ state: "visible" });
+      await overlayInput.fill("edited right");
+      await overlayInput.press("Control+Shift+Enter");
+    });
+
+    await test.step("Then the edit is committed and the run targets B1", async () => {
+      await expect(page.getByTestId("matrix-status-bar")).toContainText(/Run applied/i, {
+        timeout: 60000,
+      });
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.prompt).toBe("edited right");
+      expect(requests[0]?.targetRange).toEqual({
+        startRow: 0,
+        startCol: 1,
+        endRow: 0,
+        endCol: 1,
+      });
+      expect(requests[0]?.compiled.contextRangeLabels).toContain("A1:A1 (A1:A1)");
+      expect(requests[0]?.compiled.contextText).toContain("edited right");
+      await expect(page.getByTestId("target-range-chip")).toContainText("B1");
+      await page.getByTestId("history-detail-close").click();
+      await expect(page.getByTestId("matrix-detail-pane")).toBeVisible();
+      await clickMatrixCell(page, "A1");
+      await expectDetailMarkdownBody(page, "edited right");
+      await expectCellStored(page, "B1", "Shortcut result");
+    });
   });
 
   test("Scenario: Repeated shortcut keydown does not run again", async ({ page }) => {

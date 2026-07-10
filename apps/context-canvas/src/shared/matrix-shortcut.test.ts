@@ -95,21 +95,19 @@ describe("shouldHandleMatrixShortcut", () => {
 });
 
 describe("matrixShortcutBlockedStatus", () => {
-  it("explains overlay edit block inside matrix shell", () => {
+  it("does not block the inline glide editor overlay", () => {
     const shell = el(`
       <div data-testid="matrix-shell">
         <div data-testid="matrix-grid"><input class="gdg-input" /></div>
       </div>
     `);
-    expect(matrixShortcutBlockedStatus(shell.querySelector(".gdg-input"))).toMatch(
-      /Finish cell edit/i,
-    );
+    expect(matrixShortcutBlockedStatus(shell.querySelector(".gdg-input"))).toBeNull();
   });
 
-  it("explains portal-mounted overlay edit block outside matrix shell", () => {
+  it("does not block the portal-mounted overlay editor either", () => {
     const overlay = el(`<textarea class="gdg-input"></textarea>`);
 
-    expect(matrixShortcutBlockedStatus(overlay)).toMatch(/Finish cell edit/i);
+    expect(matrixShortcutBlockedStatus(overlay)).toBeNull();
   });
 
   it("returns null outside matrix shell", () => {
