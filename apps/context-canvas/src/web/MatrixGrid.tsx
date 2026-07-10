@@ -372,6 +372,7 @@ export function MatrixGrid({
   const [rowResizeDrag, setRowResizeDrag] = useState<RowResizeDrag | null>(null);
   const [groupLabelDrag, setGroupLabelDrag] = useState<GroupLabelDrag | null>(null);
   const groupLabelDragRef = useRef<GroupLabelDrag | null>(null);
+  const pendingPositionUpdateRef = useRef<number | null>(null);
   const suppressNextGroupLabelClick = useRef(false);
   const visibleRowsRef = useRef<MatrixVisibleRows>({
     x: 0,
@@ -692,7 +693,13 @@ export function MatrixGrid({
     (range, _tx, ty) => {
       visibleRowsRef.current = { x: range.x, y: range.y, width: range.width, height: range.height, ty };
       updateGroupLabelPositions();
-      window.setTimeout(updateGroupLabelPositions, 0);
+      if (pendingPositionUpdateRef.current !== null) {
+        window.clearTimeout(pendingPositionUpdateRef.current);
+      }
+      pendingPositionUpdateRef.current = window.setTimeout(() => {
+        pendingPositionUpdateRef.current = null;
+        updateGroupLabelPositions();
+      }, 0);
     },
     [updateGroupLabelPositions],
   );
@@ -731,6 +738,15 @@ export function MatrixGrid({
     const frameId = window.requestAnimationFrame(updateGroupLabelPositions);
     return () => window.cancelAnimationFrame(frameId);
   }, [updateGroupLabelPositions]);
+
+  useEffect(() => {
+    return () => {
+      if (pendingPositionUpdateRef.current !== null) {
+        window.clearTimeout(pendingPositionUpdateRef.current);
+        pendingPositionUpdateRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;

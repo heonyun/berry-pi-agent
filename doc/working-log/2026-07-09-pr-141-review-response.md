@@ -58,6 +58,7 @@ The main review concern was the nested `MatrixImeTextEditorWithShortcut` wrapper
 - Cursor CLI was invoked through the repository wrapper but timed out without a terminal result event; its output is incomplete and was not used as authority.
 - Decision: adopt the finite-coordinate guards and deferred position recalculation in `MatrixGrid.tsx`, with a regression test for non-finite `getBounds()` output.
 - The follow-up Codex P3 finding for `Ctrl/Cmd+Alt+Enter` was adopted: inline commit-and-run now rejects Alt-modified Enter, covered by `MatrixGrid.test.tsx`, with focused unit and inline shortcut E2E verification.
+- Follow-up review findings adopted: removed the duplicate `acceptance_criteria.validations` YAML key, made the failure-advisory gate fail explicitly when `gh issue view` fails, and cancel deferred Matrix overlay recalculation on reschedule/unmount.
 
 ## Current state
 

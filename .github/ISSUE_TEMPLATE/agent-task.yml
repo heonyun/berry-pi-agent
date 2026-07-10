@@ -84,8 +84,6 @@ body:
       description: Testable completion conditions
     validations:
       required: true
-    validations:
-      required: true
 
   - type: textarea
     id: out_of_scope

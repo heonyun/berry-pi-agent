@@ -36,7 +36,10 @@ if ($count -lt 0) {
     }
     $null = Get-Command gh -ErrorAction Stop
     $issueJson = gh issue view $IssueNumber --repo $Repo --json body,comments | ConvertFrom-Json
-    foreach ($comment in @($issueJson.comments)) {
+    if ($LASTEXITCODE -ne 0 -or $null -eq $issueJson) {
+        throw "gh issue view failed for issue $IssueNumber in $Repo (exit code $LASTEXITCODE)."
+    }
+    foreach ($comment in $issueJson.comments) {
         if ([string]$comment.body -match 'pi-agent:implement-failure-count:(\d+)') {
             $c = [int]$Matches[1]
             if ($c -gt $count) { $count = $c }
