@@ -187,6 +187,16 @@ export function isMatrixHistoryEntry(value: unknown): value is MatrixHistoryEntr
     typeof entry.targetRangeLabel === "string" &&
     isRangeRefDTO(entry.targetRange) &&
     typeof entry.patchesApplied === "number" &&
+    (entry.outcome === undefined ||
+      entry.outcome === "success" ||
+      entry.outcome === "failure" ||
+      entry.outcome === "blocked") &&
+    (entry.errorMessage === undefined || typeof entry.errorMessage === "string") &&
+    (entry.trigger === undefined ||
+      entry.trigger === "button" ||
+      entry.trigger === "shortcut_below" ||
+      entry.trigger === "shortcut_right" ||
+      entry.trigger === "cell_reference") &&
     (entry.compiledContextPreview === undefined || typeof entry.compiledContextPreview === "string") &&
     (entry.patchesSummary === undefined || typeof entry.patchesSummary === "string")
   );

@@ -51,8 +51,12 @@ import {
   type MatrixGridSelectionState,
 } from "../adapters/matrix-grid-selection.ts";
 import { ImeTextarea } from "./ImeTextarea.tsx";
+import { shouldSuppressInlineCommitRun } from "../shared/cell-reference-formula.ts";
+import { appendMatrixSessionEvent } from "./matrix-session-log.ts";
 
 export type { MatrixGridSelectionState };
+
+const matrixGridDocumentRef: { current: MatrixDocument | null } = { current: null };
 
 export interface MatrixCellEdit {
   readonly row: number;
@@ -286,6 +290,14 @@ const MatrixImeTextEditor = ({
         event.stopPropagation();
         const nextValue = event.currentTarget.value;
         finishEditing(updateValue(nextValue));
+        const document = matrixGridDocumentRef.current;
+        if (document && shouldSuppressInlineCommitRun(document, nextValue)) {
+          return;
+        }
+        appendMatrixSessionEvent("edit_commit", {
+          direction: event.shiftKey ? "right" : "below",
+          valueLen: nextValue.length,
+        });
         window.document.dispatchEvent(
           new CustomEvent("matrix-commit-run", {
             detail: {
@@ -358,6 +370,7 @@ export function MatrixGrid({
   onGroupLabelCancel,
   onSelectionChange,
 }: MatrixGridProps): ReactElement {
+  matrixGridDocumentRef.current = document;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<DataEditorRef | null>(null);
   const config = useMemo(() => getMatrixGridConfig(document), [document]);

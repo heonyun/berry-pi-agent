@@ -1,5 +1,6 @@
 import { buildPromptRequestHeaders } from "./api.ts";
 import type { MatrixDocument, MatrixHistoryEntry } from "../shared/domain.ts";
+import { appendMatrixSessionEvent } from "./matrix-session-log.ts";
 
 export type MatrixBundleExportResult = {
   workspaceId: string;
@@ -46,8 +47,17 @@ export function scheduleMatrixBundleExport(
   document: MatrixDocument,
   history: readonly MatrixHistoryEntry[],
 ): void {
-  void exportMatrixBundle(document, history).catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`Matrix bundle export failed: ${message}`);
-  });
+  void exportMatrixBundle(document, history)
+    .then((result) => {
+      appendMatrixSessionEvent("export", {
+        outcome: "success",
+        pathsWritten: result.pathsWritten.length,
+        workspaceId: result.workspaceId,
+      });
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`Matrix bundle export failed: ${message}`);
+      appendMatrixSessionEvent("export", { outcome: "failure", error: message });
+    });
 }

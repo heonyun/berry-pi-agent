@@ -5,6 +5,7 @@ import {
   createHistoryEntry,
   createMatrixHistorySnapshot,
   formatCellCount,
+  formatHistoryOutcome,
   loadMatrixHistory,
   saveMatrixHistory,
   summarizePatches,
@@ -125,6 +126,19 @@ describe("matrix-history", () => {
   it("formats cell count label", () => {
     expect(formatCellCount(1)).toBe("1 cell updated");
     expect(formatCellCount(3)).toBe("3 cells updated");
+  });
+
+  it("formats outcome labels for history nav", () => {
+    const failure = createHistoryEntry({
+      intent: "bad",
+      contextRanges: [],
+      targetRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+      targetRangeLabel: "A1:A1",
+      patchesApplied: 0,
+      outcome: "failure",
+      errorMessage: "network",
+    });
+    expect(formatHistoryOutcome(failure)).toBe("failed: network");
   });
 
   it("truncates compiled context preview", () => {

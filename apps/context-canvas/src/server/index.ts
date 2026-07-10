@@ -27,6 +27,7 @@ import {
 } from "./security.ts";
 import { handleMatrixRun, type MatrixRunRequestBody } from "./matrix-run.ts";
 import { handleMatrixBundleExport, handleMatrixBundleLoad } from "./matrix-bundle.ts";
+import { instrumentResponseForRequestLogging } from "./request-log.ts";
 
 export { assistantMessageText, assistantRunErrorMessage, findAssistantRunError } from "./assistant-message.ts";
 
@@ -284,6 +285,7 @@ function isQABlockPromptBody(
 
 export function createContextCanvasServer(config: ContextCanvasServerConfig = serverConfig) {
   return createServer(async (req, res) => {
+    const requestLogContext = instrumentResponseForRequestLogging(req, res);
     const origin = requestOrigin(req);
     setCors(res, origin, config);
 
@@ -354,6 +356,13 @@ export function createContextCanvasServer(config: ContextCanvasServerConfig = se
     if (req.method === "POST" && req.url === "/api/matrix-run") {
       try {
         const body = await readJsonBody<MatrixRunRequestBody>(req);
+        if (requestLogContext?.extra) {
+          requestLogContext.extra.promptLen = body.prompt?.length ?? 0;
+          const target = body.targetRange;
+          if (target) {
+            requestLogContext.extra.target = `${target.startRow},${target.startCol}`;
+          }
+        }
         await handleMatrixRun(body, res, getSession);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);

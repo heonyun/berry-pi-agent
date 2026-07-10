@@ -8,7 +8,9 @@ import {
   type MatrixDocument,
   type MatrixHistoryContextRange,
   type MatrixHistoryEntry,
+  type MatrixHistoryOutcome,
   type MatrixHistorySnapshot,
+  type MatrixRunTrigger,
   type RangeRefDTO,
 } from "../shared/domain.ts";
 import { isMatrixHistoryEntry } from "../shared/matrix-validation.ts";
@@ -191,12 +193,16 @@ export interface CreateHistoryEntryInput {
   readonly targetRange: RangeRefDTO;
   readonly targetRangeLabel: string;
   readonly patchesApplied: number;
+  readonly outcome?: MatrixHistoryOutcome;
+  readonly errorMessage?: string;
+  readonly trigger?: MatrixRunTrigger;
   readonly snapshot?: MatrixHistorySnapshot;
   readonly compiledContextPreview?: string;
   readonly patchesSummary?: string;
 }
 
 export function createHistoryEntry(input: CreateHistoryEntryInput): MatrixHistoryEntry {
+  const outcome = input.outcome ?? "success";
   return {
     id: nextHistoryId(),
     timestamp: new Date().toISOString(),
@@ -206,8 +212,22 @@ export function createHistoryEntry(input: CreateHistoryEntryInput): MatrixHistor
     targetRangeLabel: input.targetRangeLabel,
     targetRange: input.targetRange,
     patchesApplied: input.patchesApplied,
+    outcome,
+    ...(input.errorMessage ? { errorMessage: input.errorMessage } : {}),
+    ...(input.trigger ? { trigger: input.trigger } : {}),
     ...(input.snapshot ? { snapshot: input.snapshot } : {}),
     ...(input.compiledContextPreview ? { compiledContextPreview: input.compiledContextPreview } : {}),
     ...(input.patchesSummary ? { patchesSummary: input.patchesSummary } : {}),
   };
+}
+
+export function formatHistoryOutcome(entry: MatrixHistoryEntry): string {
+  const outcome = entry.outcome ?? "success";
+  if (outcome === "success") {
+    return formatCellCount(entry.patchesApplied);
+  }
+  if (outcome === "failure") {
+    return `failed${entry.errorMessage ? `: ${entry.errorMessage}` : ""}`;
+  }
+  return `blocked${entry.errorMessage ? `: ${entry.errorMessage}` : ""}`;
 }
