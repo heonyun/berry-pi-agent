@@ -424,7 +424,15 @@ export interface MatrixHistoryContextRange {
   readonly groupId?: string;
 }
 
-/** Append-only record of a successful matrix AI run (Phase 4b). */
+export type MatrixHistoryOutcome = "success" | "failure" | "blocked";
+
+export type MatrixRunTrigger =
+  | "button"
+  | "shortcut_below"
+  | "shortcut_right"
+  | "cell_reference";
+
+/** Append-only record of a matrix AI run attempt (success, failure, or blocked). */
 export interface MatrixHistoryEntry {
   readonly id: string;
   readonly timestamp: string;
@@ -434,6 +442,9 @@ export interface MatrixHistoryEntry {
   readonly targetRangeLabel: string;
   readonly targetRange: RangeRefDTO;
   readonly patchesApplied: number;
+  readonly outcome?: MatrixHistoryOutcome;
+  readonly errorMessage?: string;
+  readonly trigger?: MatrixRunTrigger;
   readonly snapshot?: MatrixHistorySnapshot;
   readonly compiledContextPreview?: string;
   readonly patchesSummary?: string;

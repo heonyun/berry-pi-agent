@@ -12,6 +12,7 @@ import {
   type MatrixGroup,
   type MatrixDocument,
   type MatrixHistoryEntry,
+  type MatrixRunTrigger,
   type RangeRefDTO,
   type WritePatch,
 } from "../shared/domain.ts";
@@ -62,12 +63,19 @@ import {
 } from "./matrix-edit-history.ts";
 import { scheduleMatrixBundleExport } from "./export-matrix-bundle.ts";
 import {
+  appendMatrixSessionEvent,
+} from "./matrix-session-log.ts";
+import {
   matrixShortcutBlockedStatus,
   matrixShortcutDirection,
   matrixUndoRedoShortcutAction,
   shouldHandleMatrixUndoRedoShortcut,
   shouldHandleMatrixShortcut,
 } from "../shared/matrix-shortcut.ts";
+import {
+  resolveCellReferenceFormula,
+  type CellReferenceFormula,
+} from "../shared/cell-reference-formula.ts";
 
 function selectionToRangeRef(selection: MatrixGridSelectionState): RangeRefDTO {
   return {
@@ -87,118 +95,6 @@ function rangeLabelForSelection(document: MatrixDocument, range: RangeRefDTO): s
 
 const CELL_REFERENCE_PROMPT =
   "Answer using only the referenced matrix context. Write the answer into this formula cell.";
-
-interface CellReferenceFormula {
-  readonly label: string;
-  readonly range: RangeRefDTO;
-  readonly groupId?: string;
-}
-
-function parseColumnLabel(label: string): number | null {
-  if (!/^[A-Z]+$/.test(label)) {
-    return null;
-  }
-  let col = 0;
-  for (const char of label) {
-    col = col * 26 + (char.charCodeAt(0) - 64);
-  }
-  return col - 1;
-}
-
-function parseCellAddress(address: string): { readonly row: number; readonly col: number } | null {
-  const match = /^([A-Z]+)([1-9]\d*)$/.exec(address.trim().toUpperCase());
-  if (!match) {
-    return null;
-  }
-  const col = parseColumnLabel(match[1] ?? "");
-  const row = Number(match[2]) - 1;
-  if (col === null || !Number.isInteger(row)) {
-    return null;
-  }
-  return { row, col };
-}
-
-function parseA1Reference(token: string, document: MatrixDocument): CellReferenceFormula | null {
-  const parts = token.split(":");
-  if (parts.length > 2) {
-    return null;
-  }
-  const startToken = parts[0];
-  const endToken = parts[1] ?? startToken;
-  if (!startToken || !endToken) {
-    return null;
-  }
-  const start = parseCellAddress(startToken);
-  const end = parseCellAddress(endToken);
-  if (!start || !end) {
-    return null;
-  }
-  const range: RangeRefDTO = {
-    startRow: Math.min(start.row, end.row),
-    startCol: Math.min(start.col, end.col),
-    endRow: Math.max(start.row, end.row),
-    endCol: Math.max(start.col, end.col),
-  };
-  if (
-    range.startRow < 0 ||
-    range.startCol < 0 ||
-    range.endRow >= document.sheet.rows ||
-    range.endCol >= document.sheet.cols
-  ) {
-    return null;
-  }
-  return {
-    label: formatRangeLabel(range.startCol, range.startRow, range.endCol, range.endRow),
-    range,
-  };
-}
-
-function findNamedRangeByFormulaToken(
-  document: MatrixDocument,
-  token: string,
-): CellReferenceFormula | null {
-  const normalized = token.slice(1).trim().toLowerCase();
-  if (!normalized) {
-    return null;
-  }
-  for (const named of document.namedRanges.values()) {
-    if (named.name.trim().toLowerCase() === normalized) {
-      return { label: `@${named.name}`, range: named.range };
-    }
-  }
-  return null;
-}
-
-function resolveCellReferenceFormula(
-  document: MatrixDocument,
-  body: string,
-): CellReferenceFormula | null {
-  if (!body.startsWith("=") || body === "=") {
-    return null;
-  }
-  const token = body.slice(1).trim();
-  if (!token) {
-    return null;
-  }
-
-  const a1Reference = parseA1Reference(token, document);
-  if (a1Reference) {
-    return a1Reference;
-  }
-
-  if (token.startsWith("@")) {
-    return findNamedRangeByFormulaToken(document, token);
-  }
-
-  const matchingGroups = [...document.groups.values()].filter(
-    (group) => !group.dismissed && group.label.trim() === token,
-  );
-  if (matchingGroups.length !== 1) {
-    return null;
-  }
-  const [group] = matchingGroups;
-  return { label: group.label, range: group.range, groupId: group.id };
-}
 
 function nextChipId(): string {
   return `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -288,6 +184,17 @@ export function MatrixCanvas(): ReactElement {
     historyEntriesRef.current = historyEntries;
     saveMatrixHistory(historyEntries);
   }, [historyEntries]);
+
+  useEffect(() => {
+    appendMatrixSessionEvent("status", { message: status });
+  }, [status]);
+
+  const recordRunAttemptHistory = useCallback((entry: MatrixHistoryEntry) => {
+    const nextHistory = appendMatrixHistory(historyEntriesRef.current, entry);
+    historyEntriesRef.current = nextHistory;
+    setHistoryEntries(nextHistory);
+    scheduleMatrixBundleExport(docRef.current, nextHistory);
+  }, []);
 
   const restoreCurrentDocumentFromPreview = useCallback(
     (options: { readonly closeHistory?: boolean; readonly status?: string } = {}) => {
@@ -516,6 +423,8 @@ export function MatrixCanvas(): ReactElement {
           targetRange: target,
           targetRangeLabel: targetLabel ?? compiled.targetRangeLabel,
           patchesApplied: result.meta.updatedCells,
+          outcome: "success",
+          trigger: "cell_reference",
           compiledContextPreview: truncatePreview(compiled.contextText),
           patchesSummary: summarizePatches(boundCommand),
           snapshot: createMatrixHistorySnapshot(result.document),
@@ -920,16 +829,55 @@ export function MatrixCanvas(): ReactElement {
       runTargetRange: RangeRefDTO,
       runContextChips: readonly ContextChip[],
       runPrompt = prompt.trim(),
+      options?: { readonly trigger?: MatrixRunTrigger },
     ) => {
       const trimmedPrompt = runPrompt.trim();
+      const trigger = options?.trigger ?? "button";
+      const runTargetLabel = rangeLabelForSelection(docRef.current, runTargetRange);
+      const contextRangesForHistory = runContextChips.map((chip) => ({
+        label: chip.label,
+        range: chip.range,
+        groupId: chip.groupId,
+      }));
+
+      const recordBlockedOrFailed = (errorMessage: string, outcome: "blocked" | "failure") => {
+        recordRunAttemptHistory(
+          createHistoryEntry({
+            intent: trimmedPrompt || "(no intent)",
+            contextRanges: contextRangesForHistory,
+            targetRange: runTargetRange,
+            targetRangeLabel:
+              runTargetLabel ??
+              formatRangeLabel(
+                runTargetRange.startCol,
+                runTargetRange.startRow,
+                runTargetRange.endCol,
+                runTargetRange.endRow,
+              ),
+            patchesApplied: 0,
+            outcome,
+            errorMessage,
+            trigger,
+            patchesSummary: "No patches applied",
+          }),
+        );
+        appendMatrixSessionEvent("run_end", { outcome, errorMessage, trigger });
+      };
+
       if (!trimmedPrompt) {
-        setStatus("Enter a prompt before running");
+        const errorMessage = "Enter a prompt before running";
+        setStatus(errorMessage);
+        recordBlockedOrFailed(errorMessage, "blocked");
         return;
       }
 
-      const runTargetLabel = rangeLabelForSelection(docRef.current, runTargetRange);
       beginMatrixRun();
       setStatus("Running matrix AI...");
+      appendMatrixSessionEvent("run_start", {
+        target: runTargetLabel,
+        trigger,
+        promptLen: trimmedPrompt.length,
+      });
       try {
         const contextRanges: MatrixContextRange[] = runContextChips.map((chip) => ({
           label: chip.label,
@@ -951,7 +899,9 @@ export function MatrixCanvas(): ReactElement {
 
         const parsed = parseAiCommand(response.command);
         if (!parsed.ok) {
-          setStatus(`AI command validation failed: ${parsed.errors.message}`);
+          const errorMessage = `AI command validation failed: ${parsed.errors.message}`;
+          setStatus(errorMessage);
+          recordBlockedOrFailed(errorMessage, "failure");
           return;
         }
 
@@ -970,22 +920,17 @@ export function MatrixCanvas(): ReactElement {
 
         const historyEntry = createHistoryEntry({
           intent: trimmedPrompt,
-          contextRanges: runContextChips.map((chip) => ({
-            label: chip.label,
-            range: chip.range,
-            groupId: chip.groupId,
-          })),
+          contextRanges: contextRangesForHistory,
           targetRange: runTargetRange,
           targetRangeLabel: runTargetLabel ?? compiled.targetRangeLabel,
           patchesApplied: result.meta.updatedCells,
+          outcome: "success",
+          trigger,
           compiledContextPreview: truncatePreview(compiled.contextText),
           patchesSummary: summarizePatches(boundCommand),
           snapshot: createMatrixHistorySnapshot(result.document),
         });
-        const nextHistory = appendMatrixHistory(historyEntriesRef.current, historyEntry);
-        historyEntriesRef.current = nextHistory;
-        setHistoryEntries(nextHistory);
-        scheduleMatrixBundleExport(docRef.current, nextHistory);
+        recordRunAttemptHistory(historyEntry);
         setDetailCell(null);
         setDetailFrontmatter("");
         setSelectedHistory(historyEntry);
@@ -995,14 +940,20 @@ export function MatrixCanvas(): ReactElement {
           message += ` — ${strippedCount} patch(es) outside target range skipped`;
         }
         setStatus(message);
+        appendMatrixSessionEvent("run_end", {
+          outcome: "success",
+          trigger,
+          patches: result.meta.updatedCells,
+        });
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         setStatus(`Run failed: ${message}`);
+        recordBlockedOrFailed(message, "failure");
       } finally {
         finishMatrixRun();
       }
     },
-    [beginMatrixRun, dispatchRecorded, finishMatrixRun, prompt],
+    [beginMatrixRun, dispatchRecorded, finishMatrixRun, prompt, recordRunAttemptHistory],
   );
 
   const handleRun = useCallback(async () => {
@@ -1018,7 +969,7 @@ export function MatrixCanvas(): ReactElement {
     if (!targetRange) {
       setTargetRange(runTarget);
     }
-    await runWithTarget(runTarget, contextChips);
+    await runWithTarget(runTarget, contextChips, prompt.trim(), { trigger: "button" });
   }, [contextChips, prompt, runWithTarget, selectionRange, targetRange]);
 
   const contextChipsWithSelection = useCallback(
@@ -1047,10 +998,18 @@ export function MatrixCanvas(): ReactElement {
 
   const runMatrixShortcut = useCallback(
     (shortcut: MatrixInlineEditShortcut) => {
+      const trigger: MatrixRunTrigger =
+        shortcut.direction === "right" ? "shortcut_right" : "shortcut_below";
+      appendMatrixSessionEvent("shortcut", {
+        direction: shortcut.direction,
+        trigger,
+        source: shortcut.prompt !== undefined ? "inline-edit" : "grid",
+      });
       if (isRunning) {
         return;
       }
-      const trimmedPrompt = prompt.trim() || shortcut.prompt?.trim() || "";
+      const trimmedPrompt =
+        shortcut.prompt !== undefined ? shortcut.prompt.trim() : prompt.trim();
       if (!trimmedPrompt) {
         setStatus("Enter a prompt before running");
         return;
@@ -1064,10 +1023,29 @@ export function MatrixCanvas(): ReactElement {
           : null);
       if (targetRange) {
         if (shortcut.direction === "right") {
-          setStatus("Target already set");
+          const errorMessage = "Target already set";
+          setStatus(errorMessage);
+          recordRunAttemptHistory(
+            createHistoryEntry({
+              intent: trimmedPrompt,
+              contextRanges: contextChips.map((chip) => ({
+                label: chip.label,
+                range: chip.range,
+                groupId: chip.groupId,
+              })),
+              targetRange: targetRange,
+              targetRangeLabel: rangeLabelForSelection(docRef.current, targetRange) ?? "unknown",
+              patchesApplied: 0,
+              outcome: "blocked",
+              errorMessage,
+              trigger,
+              patchesSummary: "No patches applied",
+            }),
+          );
+          appendMatrixSessionEvent("run_end", { outcome: "blocked", errorMessage, trigger });
           return;
         }
-        void runWithTarget(targetRange, contextChips, trimmedPrompt);
+        void runWithTarget(targetRange, contextChips, trimmedPrompt, { trigger });
         return;
       }
       if (!activeSelectionRange || !activeSelectionLabel) {
@@ -1080,11 +1058,29 @@ export function MatrixCanvas(): ReactElement {
         cols: docRef.current.sheet.cols,
       });
       if (!inferred.ok) {
-        setStatus(
+        const errorMessage =
           inferred.reason === "no-room-below"
             ? "No room below selection for target"
-            : "No room right of selection for target",
+            : "No room right of selection for target";
+        setStatus(errorMessage);
+        recordRunAttemptHistory(
+          createHistoryEntry({
+            intent: trimmedPrompt,
+            contextRanges: contextChips.map((chip) => ({
+              label: chip.label,
+              range: chip.range,
+              groupId: chip.groupId,
+            })),
+            targetRange: activeSelectionRange,
+            targetRangeLabel: activeSelectionLabel,
+            patchesApplied: 0,
+            outcome: "blocked",
+            errorMessage,
+            trigger,
+            patchesSummary: "No patches applied",
+          }),
         );
+        appendMatrixSessionEvent("run_end", { outcome: "blocked", errorMessage, trigger });
         return;
       }
 
@@ -1097,13 +1093,14 @@ export function MatrixCanvas(): ReactElement {
         setContextChips([...nextContext.chips]);
       }
       setTargetRange(inferred.targetRange);
-      void runWithTarget(inferred.targetRange, nextContext.chips, trimmedPrompt);
+      void runWithTarget(inferred.targetRange, nextContext.chips, trimmedPrompt, { trigger });
     },
     [
       contextChips,
       contextChipsWithSelection,
       isRunning,
       prompt,
+      recordRunAttemptHistory,
       runWithTarget,
       selectionLabel,
       selectionRange,
@@ -1136,6 +1133,10 @@ export function MatrixCanvas(): ReactElement {
         return;
       }
       runMatrixShortcutRef.current(customEvent.detail);
+      appendMatrixSessionEvent("shortcut", {
+        source: "matrix-commit-run",
+        direction: customEvent.detail.direction,
+      });
     };
     window.document.addEventListener("matrix-commit-run", onCommitRun);
     return () => window.document.removeEventListener("matrix-commit-run", onCommitRun);
@@ -1177,6 +1178,7 @@ export function MatrixCanvas(): ReactElement {
       const blockedStatus = matrixShortcutBlockedStatus(event.target);
       if (blockedStatus) {
         event.preventDefault();
+        appendMatrixSessionEvent("shortcut", { blocked: true, reason: blockedStatus });
         setStatusRef.current(blockedStatus);
       }
     };

@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
+import fs from "node:fs";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -7,6 +8,9 @@ import { loadContextCanvasEnv } from "./load-env.mjs";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(root, "..");
+const monorepoRoot = path.resolve(appRoot, "../..");
+const devLogDir = path.join(monorepoRoot, ".orchestrator", "context-canvas-dev");
+const apiLogPath = path.join(devLogDir, "api.log");
 
 loadContextCanvasEnv(appRoot);
 
@@ -50,10 +54,11 @@ async function findAvailablePort(startPort, host) {
   throw new Error(`No available Context Canvas API port found from ${startPort} to ${startPort + 99}.`);
 }
 
-function run(command, args, name, extraEnv = {}) {
+function run(command, args, name, extraEnv = {}, options = {}) {
+  const teeLogPath = options.teeLogPath;
   const child = spawn(command, args, {
     cwd: appRoot,
-    stdio: "inherit",
+    stdio: teeLogPath ? ["inherit", "pipe", "pipe"] : "inherit",
     shell: process.platform === "win32",
     env: {
       ...process.env,
@@ -62,6 +67,19 @@ function run(command, args, name, extraEnv = {}) {
       ...extraEnv,
     },
   });
+  if (teeLogPath) {
+    fs.mkdirSync(path.dirname(teeLogPath), { recursive: true });
+    const logStream = fs.createWriteStream(teeLogPath, { flags: "a" });
+    logStream.write(`\n--- dev server start ${new Date().toISOString()} ---\n`);
+    child.stdout?.on("data", (chunk) => {
+      process.stdout.write(chunk);
+      logStream.write(chunk);
+    });
+    child.stderr?.on("data", (chunk) => {
+      process.stderr.write(chunk);
+      logStream.write(chunk);
+    });
+  }
   child.on("exit", (code, signal) => {
     if (signal) {
       console.error(`[${name}] exited via ${signal}`);
@@ -80,12 +98,20 @@ const allowedOrigins =
   Array.from(new Set([`http://${viteHost}:${vitePort}`, `http://localhost:${vitePort}`])).join(",");
 console.log(`Context Canvas dev API target: ${apiTarget}`);
 console.log(`Context Canvas dev allowed origins: ${allowedOrigins}`);
+console.log(`Context Canvas dev API log: ${apiLogPath}`);
 
-const server = run("npx", ["tsx", "src/server/index.ts"], "server", {
-  CONTEXT_CANVAS_ALLOWED_ORIGINS: allowedOrigins,
-  CONTEXT_CANVAS_BIND_HOST: bindHost,
-  CONTEXT_CANVAS_PORT: String(apiPort),
-});
+const server = run(
+  "npx",
+  ["tsx", "src/server/index.ts"],
+  "server",
+  {
+    CONTEXT_CANVAS_ALLOWED_ORIGINS: allowedOrigins,
+    CONTEXT_CANVAS_BIND_HOST: bindHost,
+    CONTEXT_CANVAS_PORT: String(apiPort),
+    CONTEXT_CANVAS_REQUEST_LOG: "1",
+  },
+  { teeLogPath: apiLogPath },
+);
 const vite = run("npx", ["vite", "--host", viteHost, "--port", String(vitePort), "--strictPort"], "vite", {
   CONTEXT_CANVAS_API_TARGET: apiTarget,
 });
