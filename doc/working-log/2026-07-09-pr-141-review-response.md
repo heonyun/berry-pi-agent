@@ -19,7 +19,7 @@ keywords:
   - commit-run
 summary: "Addressed the React wrapper review feedback for matrix inline commit-then-run shortcuts and revalidated the PR locally."
 date: 2026-07-09
-updated: 2026-07-09
+updated: 2026-07-10
 author: Codex
 canonical_repo: heonyun/berry-pi-agent
 ---
@@ -50,6 +50,13 @@ The main review concern was the nested `MatrixImeTextEditorWithShortcut` wrapper
 - `npm run test --workspace=@berry-pi/context-canvas`
 - `npm run build --workspace=@berry-pi/context-canvas`
 - `npm run e2e --workspace=@berry-pi/context-canvas -- e2e/matrix-grid.spec.ts`
+
+## Follow-up advisory
+
+- Repeated browser probes recorded the same `NaN` CSS `left` warning twice while both inline shortcuts still ran.
+- The required failure advisory brief passed for Issue #140. agy identified non-finite Glide bounds entering group-label and corner-dot overlay state; the smallest fix is to skip non-finite positions and recalculate after Glide/React layout state settles.
+- Cursor CLI was invoked through the repository wrapper but timed out without a terminal result event; its output is incomplete and was not used as authority.
+- Decision: adopt the finite-coordinate guards and deferred position recalculation in `MatrixGrid.tsx`, with a regression test for non-finite `getBounds()` output.
 
 ## Current state
 

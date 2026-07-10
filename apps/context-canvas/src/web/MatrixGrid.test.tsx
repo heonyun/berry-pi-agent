@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { useState } from "react";
+import { forwardRef, useImperativeHandle, useState } from "react";
 import {
   GridCellKind,
   type DataEditorProps,
@@ -9,20 +9,26 @@ import {
   type TextCell,
 } from "@glideapps/glide-data-grid";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createEmptyMatrixDocument } from "../shared/domain.ts";
+import { createEmptyMatrixDocument, type MatrixGroup } from "../shared/domain.ts";
 import { MatrixGrid } from "./MatrixGrid.tsx";
 
 const dataEditorState = vi.hoisted(() => ({
   props: null as DataEditorProps | null,
+  gridRef: { getBounds: vi.fn() },
 }));
 
 vi.mock("@glideapps/glide-data-grid", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@glideapps/glide-data-grid")>();
   return {
     ...actual,
-    DataEditor: vi.fn((props: DataEditorProps) => {
+    DataEditor: forwardRef((props: DataEditorProps, ref) => {
       dataEditorState.props = props;
-      return <div data-testid="mock-data-editor" />;
+      useImperativeHandle(ref, () => dataEditorState.gridRef as never, []);
+      return (
+        <div data-testid="mock-data-editor">
+          <canvas data-testid="data-grid-canvas" />
+        </div>
+      );
     }),
   };
 });
@@ -31,13 +37,18 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   dataEditorState.props = null;
+  dataEditorState.gridRef.getBounds.mockReset();
 });
 
 function renderMatrixGrid(): void {
+  renderMatrixGridWithGroups([]);
+}
+
+function renderMatrixGridWithGroups(groups: readonly MatrixGroup[]): void {
   render(
     <MatrixGrid
       document={createEmptyMatrixDocument({ withResearchTemplate: false })}
-      groups={[]}
+      groups={groups}
       selection={null}
       editingGroupId={null}
       groupLabelDraft=""
@@ -51,6 +62,37 @@ function renderMatrixGrid(): void {
     />,
   );
 }
+
+describe("MatrixGrid overlay positioning", () => {
+  it("skips overlay positions when Glide returns non-finite bounds", () => {
+    const group = {
+      id: "group-1",
+      label: "Alpha",
+      range: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+      source: "auto",
+    } as const;
+    dataEditorState.gridRef.getBounds.mockReturnValue({
+      x: Number.NaN,
+      y: Number.NaN,
+      width: 100,
+      height: 32,
+    });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute("data-testid") === "matrix-grid") {
+        return { x: 0, y: 0, width: 400, height: 400 } as DOMRect;
+      }
+      if (this.getAttribute("data-testid") === "data-grid-canvas") {
+        return { x: 0, y: 0, width: 400, height: 400 } as DOMRect;
+      }
+      return { x: 0, y: 0, width: 0, height: 0 } as DOMRect;
+    });
+
+    renderMatrixGridWithGroups([group]);
+
+    expect(screen.queryByTestId("matrix-group-outline-group-1")).toBeNull();
+    expect(screen.queryByTestId("matrix-cell-corner-dot-0-0-bottom-right")).toBeNull();
+  });
+});
 
 function getTextEditor(result: ProvideEditorCallbackResult<TextCell>) {
   expect(result).toBeTruthy();

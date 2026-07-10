@@ -461,6 +461,13 @@ export function MatrixGrid({
       const left = Math.max(4, Math.min(maxLeft, bounds.x - containerBounds.x + 4 + offsetX));
       const top = Math.max(2, Math.min(maxTop, bounds.y - containerBounds.y - 12 + offsetY));
       if (
+        !Number.isFinite(left) ||
+        !Number.isFinite(top) ||
+        !Number.isFinite(maxWidth) ||
+        !Number.isFinite(boundaryLeft) ||
+        !Number.isFinite(boundaryTop) ||
+        !Number.isFinite(boundaryWidth) ||
+        !Number.isFinite(boundaryHeight) ||
         boundaryLeft > containerBounds.width ||
         boundaryTop > containerBounds.height ||
         boundaryRight < 0 ||
@@ -521,6 +528,12 @@ export function MatrixGrid({
           const right = left + bounds.width;
           const bottom = top + bounds.height;
           if (
+            !Number.isFinite(left) ||
+            !Number.isFinite(top) ||
+            !Number.isFinite(right) ||
+            !Number.isFinite(bottom) ||
+            !Number.isFinite(bounds.width) ||
+            !Number.isFinite(bounds.height) ||
             left > containerBounds.width ||
             top > containerBounds.height ||
             right < 0 ||
@@ -679,6 +692,7 @@ export function MatrixGrid({
     (range, _tx, ty) => {
       visibleRowsRef.current = { x: range.x, y: range.y, width: range.width, height: range.height, ty };
       updateGroupLabelPositions();
+      window.setTimeout(updateGroupLabelPositions, 0);
     },
     [updateGroupLabelPositions],
   );
@@ -711,6 +725,11 @@ export function MatrixGrid({
 
   useLayoutEffect(() => {
     updateGroupLabelPositions();
+    if (typeof window.requestAnimationFrame !== "function") {
+      return undefined;
+    }
+    const frameId = window.requestAnimationFrame(updateGroupLabelPositions);
+    return () => window.cancelAnimationFrame(frameId);
   }, [updateGroupLabelPositions]);
 
   useEffect(() => {
