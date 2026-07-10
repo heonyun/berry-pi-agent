@@ -1008,8 +1008,7 @@ export function MatrixCanvas(): ReactElement {
       if (isRunning) {
         return;
       }
-      const trimmedPrompt =
-        shortcut.prompt !== undefined ? shortcut.prompt.trim() : prompt.trim();
+      const trimmedPrompt = shortcut.prompt?.trim() || prompt.trim() || "";
       if (!trimmedPrompt) {
         setStatus("Enter a prompt before running");
         return;
@@ -1133,10 +1132,6 @@ export function MatrixCanvas(): ReactElement {
         return;
       }
       runMatrixShortcutRef.current(customEvent.detail);
-      appendMatrixSessionEvent("shortcut", {
-        source: "matrix-commit-run",
-        direction: customEvent.detail.direction,
-      });
     };
     window.document.addEventListener("matrix-commit-run", onCommitRun);
     return () => window.document.removeEventListener("matrix-commit-run", onCommitRun);
