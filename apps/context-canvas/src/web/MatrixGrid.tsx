@@ -281,7 +281,7 @@ const MatrixImeTextEditor = ({
         finishEditing(undefined);
         return;
       }
-      if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.altKey) {
         event.preventDefault();
         event.stopPropagation();
         const nextValue = event.currentTarget.value;

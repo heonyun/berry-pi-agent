@@ -551,4 +551,44 @@ describe("MatrixGrid IME overlay editor", () => {
     expect(dispatched.detail.direction).toBe("right");
     expect(dispatched.detail.prompt).toBe("confirmed right");
   });
+
+  it("does not commit or run on Ctrl+Alt+Enter", () => {
+    const dispatchEventSpy = vi.spyOn(document, "dispatchEvent");
+    renderMatrixGrid();
+
+    const TextEditor = getTextEditor(
+      dataEditorState.props?.provideEditor?.({
+        kind: GridCellKind.Text,
+        data: "",
+        displayData: "",
+        allowOverlay: true,
+        location: [0, 0],
+      }) as ProvideEditorCallbackResult<TextCell>,
+    );
+    const onFinishedEditing = vi.fn();
+
+    render(
+      <TextEditor
+        isHighlighted={false}
+        onChange={vi.fn()}
+        onFinishedEditing={onFinishedEditing}
+        value={{
+          kind: GridCellKind.Text,
+          data: "",
+          displayData: "",
+          allowOverlay: true,
+        }}
+        target={{ x: 0, y: 0, width: 100, height: 32 }}
+        forceEditMode={false}
+        theme={{} as never}
+      />,
+    );
+
+    const editor = screen.getByLabelText("Matrix cell editor");
+    fireEvent.change(editor, { target: { value: "alt" } });
+    fireEvent.keyDown(editor, { key: "Enter", ctrlKey: true, altKey: true });
+
+    expect(onFinishedEditing).not.toHaveBeenCalled();
+    expect(dispatchEventSpy).not.toHaveBeenCalled();
+  });
 });
