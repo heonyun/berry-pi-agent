@@ -10,6 +10,7 @@ import {
 } from "@glideapps/glide-data-grid";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createEmptyMatrixDocument, type MatrixGroup } from "../shared/domain.ts";
+import type { MatrixInlineCommitRunRequest } from "../shared/matrix-shortcut.ts";
 import { MatrixGrid } from "./MatrixGrid.tsx";
 
 const dataEditorState = vi.hoisted(() => ({
@@ -44,7 +45,10 @@ function renderMatrixGrid(): void {
   renderMatrixGridWithGroups([]);
 }
 
-function renderMatrixGridWithGroups(groups: readonly MatrixGroup[]): void {
+function renderMatrixGridWithGroups(
+  groups: readonly MatrixGroup[],
+  onInlineCommitRun: (request: MatrixInlineCommitRunRequest) => void = vi.fn(),
+): void {
   render(
     <MatrixGrid
       document={createEmptyMatrixDocument({ withResearchTemplate: false })}
@@ -55,6 +59,7 @@ function renderMatrixGridWithGroups(groups: readonly MatrixGroup[]): void {
       onCellClick={vi.fn()}
       onCellEdited={vi.fn()}
       onCellsEdited={vi.fn()}
+      onInlineCommitRun={onInlineCommitRun}
       onGroupLabelDraftChange={vi.fn()}
       onGroupLabelSave={vi.fn()}
       onGroupLabelCancel={vi.fn()}
@@ -90,6 +95,20 @@ describe("MatrixGrid overlay positioning", () => {
     renderMatrixGridWithGroups([group]);
 
     expect(screen.queryByTestId("matrix-group-outline-group-1")).toBeNull();
+    expect(screen.queryByTestId("matrix-cell-corner-dot-0-0-bottom-right")).toBeNull();
+  });
+
+  it("clears overlay positions when the container bounds are non-finite", () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute("data-testid") === "matrix-grid") {
+        return { x: Number.NaN, y: 0, width: 400, height: 400 } as DOMRect;
+      }
+      return { x: 0, y: 0, width: 400, height: 400 } as DOMRect;
+    });
+
+    renderMatrixGrid();
+
+    expect(screen.queryByTestId("matrix-row-resize-0")).toBeNull();
     expect(screen.queryByTestId("matrix-cell-corner-dot-0-0-bottom-right")).toBeNull();
   });
 });
@@ -450,8 +469,8 @@ describe("MatrixGrid IME overlay editor", () => {
   });
 
   it("confirms the text editor on Ctrl+Enter and emits a below shortcut", () => {
-    const dispatchEventSpy = vi.spyOn(document, "dispatchEvent");
-    renderMatrixGrid();
+    const onInlineCommitRun = vi.fn();
+    renderMatrixGridWithGroups([], onInlineCommitRun);
 
     const TextEditor = getTextEditor(
       dataEditorState.props?.provideEditor?.({
@@ -459,7 +478,7 @@ describe("MatrixGrid IME overlay editor", () => {
         data: "",
         displayData: "",
         allowOverlay: true,
-        location: [0, 0],
+        location: [1, 0],
       }) as ProvideEditorCallbackResult<TextCell>,
     );
     const onFinishedEditing = vi.fn();
@@ -490,20 +509,29 @@ describe("MatrixGrid IME overlay editor", () => {
       expect.objectContaining({ data: "confirmed", displayData: "confirmed" }),
       undefined,
     );
-    expect(dispatchEventSpy).toHaveBeenCalledTimes(1);
-    const dispatched = dispatchEventSpy.mock.calls[0]?.[0] as CustomEvent<{
-      readonly direction: "below" | "right";
-      readonly prompt: string;
-    }>;
-    expect(dispatched.type).toBe("matrix-commit-run");
-    expect(dispatched.detail.direction).toBe("below");
-    expect(dispatched.detail.prompt).toBe("confirmed");
+    expect(onInlineCommitRun).not.toHaveBeenCalled();
+    dataEditorState.props?.onCellsEdited?.([
+      {
+        location: [0, 0],
+        value: {
+          kind: GridCellKind.Text,
+          data: "confirmed",
+          displayData: "confirmed",
+          allowOverlay: true,
+        },
+      },
+    ]);
+    expect(onInlineCommitRun).toHaveBeenCalledWith({
+      sourceRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+      prompt: "confirmed",
+      direction: "below",
+    });
     expect(event).toBe(false);
   });
 
   it("confirms the text editor on Ctrl+Shift+Enter and emits a right shortcut", () => {
-    const dispatchEventSpy = vi.spyOn(document, "dispatchEvent");
-    renderMatrixGrid();
+    const onInlineCommitRun = vi.fn();
+    renderMatrixGridWithGroups([], onInlineCommitRun);
 
     const TextEditor = getTextEditor(
       dataEditorState.props?.provideEditor?.({
@@ -511,7 +539,7 @@ describe("MatrixGrid IME overlay editor", () => {
         data: "",
         displayData: "",
         allowOverlay: true,
-        location: [0, 0],
+        location: [1, 0],
       }) as ProvideEditorCallbackResult<TextCell>,
     );
     const onFinishedEditing = vi.fn();
@@ -542,14 +570,23 @@ describe("MatrixGrid IME overlay editor", () => {
       expect.objectContaining({ data: "confirmed right", displayData: "confirmed right" }),
       undefined,
     );
-    expect(dispatchEventSpy).toHaveBeenCalledTimes(1);
-    const dispatched = dispatchEventSpy.mock.calls[0]?.[0] as CustomEvent<{
-      readonly direction: "below" | "right";
-      readonly prompt: string;
-    }>;
-    expect(dispatched.type).toBe("matrix-commit-run");
-    expect(dispatched.detail.direction).toBe("right");
-    expect(dispatched.detail.prompt).toBe("confirmed right");
+    expect(onInlineCommitRun).not.toHaveBeenCalled();
+    dataEditorState.props?.onCellsEdited?.([
+      {
+        location: [0, 0],
+        value: {
+          kind: GridCellKind.Text,
+          data: "confirmed right",
+          displayData: "confirmed right",
+          allowOverlay: true,
+        },
+      },
+    ]);
+    expect(onInlineCommitRun).toHaveBeenCalledWith({
+      sourceRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+      prompt: "confirmed right",
+      direction: "right",
+    });
   });
 
   it("does not commit or run on Ctrl+Alt+Enter", () => {
@@ -590,5 +627,220 @@ describe("MatrixGrid IME overlay editor", () => {
 
     expect(onFinishedEditing).not.toHaveBeenCalled();
     expect(dispatchEventSpy).not.toHaveBeenCalled();
+  });
+
+  it("flushes the inline request after the matching cell commit", () => {
+    const order: string[] = [];
+    const onCellEdited = vi.fn(() => order.push("commit"));
+    const onInlineCommitRun = vi.fn(() => order.push("run"));
+
+    render(
+      <MatrixGrid
+        document={createEmptyMatrixDocument({ withResearchTemplate: false })}
+        groups={[]}
+        selection={null}
+        editingGroupId={null}
+        groupLabelDraft=""
+        onCellClick={vi.fn()}
+        onCellEdited={onCellEdited}
+        onCellsEdited={vi.fn(() => order.push("commit"))}
+        onInlineCommitRun={onInlineCommitRun}
+        onGroupLabelDraftChange={vi.fn()}
+        onGroupLabelSave={vi.fn()}
+        onGroupLabelCancel={vi.fn()}
+        onSelectionChange={vi.fn()}
+      />,
+    );
+
+    const TextEditor = getTextEditor(
+      dataEditorState.props?.provideEditor?.({
+        kind: GridCellKind.Text,
+        data: "",
+        displayData: "",
+        allowOverlay: true,
+        location: [3, 10],
+      }) as ProvideEditorCallbackResult<TextCell>,
+    );
+    const onFinishedEditing = vi.fn();
+
+    render(
+      <TextEditor
+        isHighlighted={false}
+        onChange={vi.fn()}
+        onFinishedEditing={onFinishedEditing}
+        value={{
+          kind: GridCellKind.Text,
+          data: "",
+          displayData: "",
+          allowOverlay: true,
+        }}
+        target={{ x: 0, y: 0, width: 100, height: 32 }}
+        forceEditMode={false}
+        theme={{} as never}
+      />,
+    );
+
+    const editor = screen.getByLabelText("Matrix cell editor");
+    fireEvent.change(editor, { target: { value: "edited source" } });
+    fireEvent.keyDown(editor, { key: "Enter", ctrlKey: true });
+
+    expect(onFinishedEditing).toHaveBeenCalledTimes(1);
+    expect(onInlineCommitRun).not.toHaveBeenCalled();
+
+    dataEditorState.props?.onCellsEdited?.([
+      {
+        location: [2, 10],
+        value: {
+          kind: GridCellKind.Text,
+          data: "edited source",
+          displayData: "edited source",
+          allowOverlay: true,
+        },
+      },
+    ]);
+
+    expect(order).toEqual(["commit", "run"]);
+    expect(onInlineCommitRun).toHaveBeenCalledWith({
+      sourceRange: { startRow: 10, startCol: 2, endRow: 10, endCol: 2 },
+      prompt: "edited source",
+      direction: "below",
+    });
+  });
+
+  it("keeps a composing shortcut pending and flushes the final IME value once", () => {
+    const onInlineCommitRun = vi.fn();
+
+    render(
+      <MatrixGrid
+        document={createEmptyMatrixDocument({ withResearchTemplate: false })}
+        groups={[]}
+        selection={null}
+        editingGroupId={null}
+        groupLabelDraft=""
+        onCellClick={vi.fn()}
+        onCellEdited={vi.fn()}
+        onCellsEdited={vi.fn()}
+        onInlineCommitRun={onInlineCommitRun}
+        onGroupLabelDraftChange={vi.fn()}
+        onGroupLabelSave={vi.fn()}
+        onGroupLabelCancel={vi.fn()}
+        onSelectionChange={vi.fn()}
+      />,
+    );
+
+    const TextEditor = getTextEditor(
+      dataEditorState.props?.provideEditor?.({
+        kind: GridCellKind.Text,
+        data: "",
+        displayData: "",
+        allowOverlay: true,
+        location: [3, 10],
+      }) as ProvideEditorCallbackResult<TextCell>,
+    );
+    const onFinishedEditing = vi.fn();
+
+    render(
+      <TextEditor
+        isHighlighted={false}
+        onChange={vi.fn()}
+        onFinishedEditing={onFinishedEditing}
+        value={{
+          kind: GridCellKind.Text,
+          data: "",
+          displayData: "",
+          allowOverlay: true,
+        }}
+        target={{ x: 0, y: 0, width: 100, height: 32 }}
+        forceEditMode={false}
+        theme={{} as never}
+      />,
+    );
+
+    const editor = screen.getByLabelText("Matrix cell editor");
+    fireEvent.compositionStart(editor);
+    fireEvent.change(editor, { target: { value: "안녕하세요" } });
+    fireEvent.keyDown(editor, { key: "Enter", ctrlKey: true, isComposing: true });
+
+    expect(onFinishedEditing).not.toHaveBeenCalled();
+    expect(onInlineCommitRun).not.toHaveBeenCalled();
+
+    fireEvent.compositionEnd(editor, { data: "안녕하세요", target: { value: "안녕하세요" } });
+    expect(onFinishedEditing).toHaveBeenCalledTimes(1);
+    expect(onInlineCommitRun).not.toHaveBeenCalled();
+
+    dataEditorState.props?.onCellsEdited?.([
+      {
+        location: [2, 10],
+        value: {
+          kind: GridCellKind.Text,
+          data: "안녕하세요",
+          displayData: "안녕하세요",
+          allowOverlay: true,
+        },
+      },
+    ]);
+
+    expect(onInlineCommitRun).toHaveBeenCalledTimes(1);
+    expect(onInlineCommitRun).toHaveBeenCalledWith({
+      sourceRange: { startRow: 10, startCol: 2, endRow: 10, endCol: 2 },
+      prompt: "안녕하세요",
+      direction: "below",
+    });
+  });
+
+  it("does not defer a shortcut just because the IME keyCode is 229", () => {
+    const onInlineCommitRun = vi.fn();
+    renderMatrixGridWithGroups([], onInlineCommitRun);
+
+    const TextEditor = getTextEditor(
+      dataEditorState.props?.provideEditor?.({
+        kind: GridCellKind.Text,
+        data: "",
+        displayData: "",
+        allowOverlay: true,
+        location: [1, 0],
+      }) as ProvideEditorCallbackResult<TextCell>,
+    );
+    const onFinishedEditing = vi.fn();
+
+    render(
+      <TextEditor
+        isHighlighted={false}
+        onChange={vi.fn()}
+        onFinishedEditing={onFinishedEditing}
+        value={{
+          kind: GridCellKind.Text,
+          data: "",
+          displayData: "",
+          allowOverlay: true,
+        }}
+        target={{ x: 0, y: 0, width: 100, height: 32 }}
+        forceEditMode={false}
+        theme={{} as never}
+      />,
+    );
+
+    const editor = screen.getByLabelText("Matrix cell editor");
+    fireEvent.change(editor, { target: { value: "완료" } });
+    fireEvent.keyDown(editor, { key: "Enter", ctrlKey: true, keyCode: 229 });
+
+    expect(onFinishedEditing).toHaveBeenCalledTimes(1);
+    expect(onInlineCommitRun).not.toHaveBeenCalled();
+    dataEditorState.props?.onCellsEdited?.([
+      {
+        location: [0, 0],
+        value: {
+          kind: GridCellKind.Text,
+          data: "완료",
+          displayData: "완료",
+          allowOverlay: true,
+        },
+      },
+    ]);
+    expect(onInlineCommitRun).toHaveBeenCalledWith({
+      sourceRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+      prompt: "완료",
+      direction: "below",
+    });
   });
 });

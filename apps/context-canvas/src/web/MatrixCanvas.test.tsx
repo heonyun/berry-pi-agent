@@ -11,6 +11,7 @@ import {
   type MatrixHistorySnapshot,
 } from "../shared/domain.ts";
 import type { MatrixGridSelectionState } from "./MatrixGrid.tsx";
+import type { MatrixInlineCommitRunRequest } from "../shared/matrix-shortcut.ts";
 import { createHistoryEntry, loadMatrixHistory, saveMatrixHistory } from "./matrix-history.ts";
 import { MatrixCanvas } from "./MatrixCanvas.tsx";
 import { runMatrix } from "./run-matrix.ts";
@@ -42,6 +43,7 @@ vi.mock("./MatrixGrid.tsx", () => ({
     groups,
     onCellEdited,
     onCellsEdited,
+    onInlineCommitRun,
     onSelectionChange,
     onGroupLabelClick,
     onGroupLabelOffsetChange,
@@ -54,6 +56,7 @@ vi.mock("./MatrixGrid.tsx", () => ({
     onCellsEdited: (
       edits: readonly { readonly row: number; readonly col: number; readonly body: string }[],
     ) => void;
+    onInlineCommitRun: (request: MatrixInlineCommitRunRequest) => void;
     onSelectionChange: (selection: MatrixGridSelectionState | null) => void;
     onGroupLabelClick: (
       group: MatrixGroup,
@@ -79,6 +82,45 @@ vi.mock("./MatrixGrid.tsx", () => ({
       </button>
       <button type="button" onClick={() => onCellEdited(0, 0, "hello")}>
         edit text
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onCellEdited(0, 0, "fresh inline text");
+          onInlineCommitRun({
+            sourceRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+            prompt: "fresh inline text",
+            direction: "below",
+          });
+        }}
+      >
+        inline commit run A1
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onCellEdited(0, 0, "");
+          onInlineCommitRun({
+            sourceRange: { startRow: 0, startCol: 0, endRow: 0, endCol: 0 },
+            prompt: "",
+            direction: "below",
+          });
+        }}
+      >
+        inline blank run A1
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          onCellEdited(10, 2, "fresh inline C11 text");
+          onInlineCommitRun({
+            sourceRange: { startRow: 10, startCol: 2, endRow: 10, endCol: 2 },
+            prompt: "fresh inline C11 text",
+            direction: "below",
+          });
+        }}
+      >
+        inline commit run C11
       </button>
       <button type="button" onClick={() => onCellEdited(1, 1, "hello")}>
         edit B2 text
@@ -399,6 +441,93 @@ describe("MatrixCanvas edit undo/redo", () => {
 
     pressRedo(grid);
     expect(screen.getByTestId("cell-a1").textContent).toBe("hello");
+  });
+
+  it("uses the inline source range after commit even when selection drifted", async () => {
+    render(<MatrixCanvas />);
+    fireEvent.click(screen.getByText("pick B1:C2"));
+    fireEvent.click(screen.getByText("inline commit run A1"));
+
+    await screen.findByText(/Run applied:/);
+    const request = vi.mocked(runMatrix).mock.calls[0]?.[0];
+    expect(request?.prompt).toBe("fresh inline text");
+    expect(request?.targetRange).toEqual({
+      startRow: 1,
+      startCol: 0,
+      endRow: 1,
+      endCol: 0,
+    });
+    expect(screen.getByTestId("cell-a1").textContent).toBe("fresh inline text");
+  });
+
+  it("re-infers the target from a later inline source after an earlier inline run", async () => {
+    render(<MatrixCanvas />);
+
+    fireEvent.click(screen.getByText("inline commit run A1"));
+    await waitFor(() => expect(vi.mocked(runMatrix)).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByText("inline commit run C11"));
+    await waitFor(() => expect(vi.mocked(runMatrix)).toHaveBeenCalledTimes(2));
+
+    const secondRequest = vi.mocked(runMatrix).mock.calls[1]?.[0];
+    expect(secondRequest?.prompt).toBe("fresh inline C11 text");
+    expect(secondRequest?.targetRange).toEqual({
+      startRow: 11,
+      startCol: 2,
+      endRow: 11,
+      endCol: 2,
+    });
+  });
+
+  it("preserves an explicitly set target for an inline run", async () => {
+    render(<MatrixCanvas />);
+
+    fireEvent.click(screen.getByText("pick B1:C2"));
+    fireEvent.click(screen.getByTestId("matrix-set-target"));
+    fireEvent.click(screen.getByText("inline commit run A1"));
+
+    await waitFor(() => expect(vi.mocked(runMatrix)).toHaveBeenCalledTimes(1));
+    const request = vi.mocked(runMatrix).mock.calls[0]?.[0];
+    expect(request?.targetRange).toEqual({
+      startRow: 0,
+      startCol: 1,
+      endRow: 1,
+      endCol: 2,
+    });
+  });
+
+  it("re-infers an inline target after a normal run inferred from the selection", async () => {
+    vi.mocked(runMatrix).mockImplementation(defaultRunMatrixResponse);
+    render(<MatrixCanvas />);
+
+    fireEvent.click(screen.getByText("pick B1:C2"));
+    fireEvent.change(screen.getByTestId("matrix-composer-input"), {
+      target: { value: "summarize the selection" },
+    });
+    fireEvent.click(screen.getByTestId("matrix-run"));
+    await waitFor(() => expect(vi.mocked(runMatrix)).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByText("inline commit run C11"));
+    await waitFor(() => expect(vi.mocked(runMatrix)).toHaveBeenCalledTimes(2));
+
+    expect(vi.mocked(runMatrix).mock.calls[1]?.[0].targetRange).toEqual({
+      startRow: 11,
+      startCol: 2,
+      endRow: 11,
+      endCol: 2,
+    });
+  });
+
+  it("does not fall back to the composer prompt for a blank inline prompt", () => {
+    render(<MatrixCanvas />);
+    fireEvent.change(screen.getByTestId("matrix-composer-input"), {
+      target: { value: "stale composer prompt" },
+    });
+
+    fireEvent.click(screen.getByText("inline blank run A1"));
+
+    expect(screen.getByText("Enter a prompt before running")).toBeTruthy();
+    expect(runMatrix).not.toHaveBeenCalled();
   });
 
   it("treats a bulk edit as one undo entry", () => {

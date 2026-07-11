@@ -1,4 +1,11 @@
 import type { MatrixTargetDirection } from "./matrix-target-inference.ts";
+import type { RangeRefDTO } from "./domain.ts";
+
+export interface MatrixInlineCommitRunRequest {
+  readonly sourceRange: RangeRefDTO;
+  readonly prompt: string;
+  readonly direction: MatrixTargetDirection;
+}
 
 /** Keyboard probe for matrix Ctrl+Enter / Ctrl+Shift+Enter shortcuts. */
 export interface MatrixShortcutKeyProbe {

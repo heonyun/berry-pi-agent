@@ -610,6 +610,61 @@ test.describe("Feature: Matrix inferred target shortcuts", () => {
     });
   });
 
+  test("Scenario: Inline prompt stays authoritative over a stale composer prompt", async ({ page }) => {
+    const requests = await mockMatrixRun(page);
+    await fill2x2Matrix(page, { a1: "seed", b1: "q2", a2: "q3", b2: "q4" });
+    await page.getByTestId("matrix-composer-input").fill("stale composer prompt");
+    await focusMatrixCell(page, "A1");
+
+    await page.keyboard.press("F2");
+    const overlayInput = page.locator(".gdg-input");
+    await overlayInput.waitFor({ state: "visible" });
+    await overlayInput.fill("fresh inline prompt");
+    await overlayInput.press("Control+Enter");
+
+    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Run applied/i, {
+      timeout: 60000,
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.prompt).toBe("fresh inline prompt");
+    expect(requests[0]?.compiled.contextText).toContain("fresh inline prompt");
+  });
+
+  test("Scenario: Repeated inline shortcuts re-infer from the latest edited cell", async ({ page }) => {
+    const requests = await mockMatrixRun(page);
+    await fill2x2Matrix(page, { a1: "seed", b1: "right source", a2: "q3", b2: "q4" });
+
+    await focusMatrixCell(page, "A1");
+    await page.keyboard.press("F2");
+    const firstOverlay = page.locator(".gdg-input");
+    await firstOverlay.waitFor({ state: "visible" });
+    await firstOverlay.fill("first inline prompt");
+    await firstOverlay.press("Control+Enter");
+    await expect(page.getByTestId("matrix-status-bar")).toContainText(/Run applied/i, {
+      timeout: 60000,
+    });
+
+    await focusMatrixCell(page, "B1");
+    await page.keyboard.press("F2");
+    const secondOverlay = page.locator(".gdg-input");
+    await secondOverlay.waitFor({ state: "visible" });
+    await secondOverlay.fill("second inline prompt");
+    await secondOverlay.press("Control+Shift+Enter");
+
+    await expect
+      .poll(() => requests.length, { timeout: 60000 })
+      .toBe(2);
+    expect(requests[1]?.prompt).toBe("second inline prompt");
+    expect(requests[1]?.targetRange).toEqual({
+      startRow: 0,
+      startCol: 2,
+      endRow: 0,
+      endCol: 2,
+    });
+    expect(requests[1]?.compiled.contextRangeLabels).toContain("B1:B1 (B1:B1)");
+    await expect(page.getByTestId("target-range-chip")).toContainText("C1");
+  });
+
   test("Scenario: Repeated shortcut keydown does not run again", async ({ page }) => {
     const requests = await mockMatrixRun(page);
     await clickMatrixCell(page, "A1");

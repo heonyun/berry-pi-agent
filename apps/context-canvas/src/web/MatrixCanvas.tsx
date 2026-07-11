@@ -71,6 +71,7 @@ import {
   matrixUndoRedoShortcutAction,
   shouldHandleMatrixUndoRedoShortcut,
   shouldHandleMatrixShortcut,
+  type MatrixInlineCommitRunRequest,
 } from "../shared/matrix-shortcut.ts";
 import {
   resolveCellReferenceFormula,
@@ -110,12 +111,15 @@ interface RestoreSourceState {
   readonly selection: MatrixGridSelectionState | null;
   readonly contextChips: readonly ContextChip[];
   readonly targetRange: RangeRefDTO | null;
+  readonly targetRangeOrigin: MatrixTargetOrigin;
 }
 
-interface MatrixInlineEditShortcut {
+type MatrixTargetOrigin = "explicit" | "inferred-grid" | "inferred-inline" | null;
+
+interface MatrixShortcutRunRequest {
   readonly direction: MatrixTargetDirection;
-  readonly selectionRange: RangeRefDTO | null;
-  readonly selectionLabel?: string | null;
+  readonly sourceRange?: RangeRefDTO | null;
+  readonly sourceLabel?: string | null;
   readonly prompt?: string;
 }
 
@@ -151,6 +155,7 @@ export function MatrixCanvas(): ReactElement {
 
   const [contextChips, setContextChips] = useState<ContextChip[]>([]);
   const [targetRange, setTargetRange] = useState<RangeRefDTO | null>(null);
+  const targetRangeOriginRef = useRef<MatrixTargetOrigin>(null);
 
   const [detailCell, setDetailCell] = useState<DetailCellState | null>(null);
   const [detailFrontmatter, setDetailFrontmatter] = useState("");
@@ -207,6 +212,7 @@ export function MatrixCanvas(): ReactElement {
       setDocument(source.document);
       setSelection(source.selection);
       setContextChips([...source.contextChips]);
+      targetRangeOriginRef.current = source.targetRangeOrigin;
       setTargetRange(source.targetRange);
       setRestoredHistoryId(null);
       if (options.closeHistory !== false) {
@@ -724,6 +730,7 @@ export function MatrixCanvas(): ReactElement {
       setStatus("Select a range to set as target");
       return;
     }
+    targetRangeOriginRef.current = "explicit";
     setTargetRange(selectionRange);
     setStatus(`Target set: ${selectionLabel}`);
   }, [selectionLabel, selectionRange]);
@@ -967,6 +974,7 @@ export function MatrixCanvas(): ReactElement {
       return;
     }
     if (!targetRange) {
+      targetRangeOriginRef.current = "inferred-grid";
       setTargetRange(runTarget);
     }
     await runWithTarget(runTarget, contextChips, prompt.trim(), { trigger: "button" });
@@ -997,7 +1005,7 @@ export function MatrixCanvas(): ReactElement {
   );
 
   const runMatrixShortcut = useCallback(
-    (shortcut: MatrixInlineEditShortcut) => {
+    (shortcut: MatrixShortcutRunRequest) => {
       const trigger: MatrixRunTrigger =
         shortcut.direction === "right" ? "shortcut_right" : "shortcut_below";
       appendMatrixSessionEvent("shortcut", {
@@ -1008,19 +1016,28 @@ export function MatrixCanvas(): ReactElement {
       if (isRunning) {
         return;
       }
-      const trimmedPrompt = shortcut.prompt?.trim() || prompt.trim() || "";
+      const trimmedPrompt = shortcut.prompt !== undefined ? shortcut.prompt.trim() : prompt.trim();
       if (!trimmedPrompt) {
         setStatus("Enter a prompt before running");
         return;
       }
-      const activeSelectionRange = shortcut.selectionRange ?? selectionRange;
+      const activeSelectionRange = shortcut.sourceRange ?? selectionRange;
       const activeSelectionLabel =
-        shortcut.selectionLabel ??
-        selectionLabel ??
+        shortcut.sourceLabel ??
+        (shortcut.sourceRange
+          ? rangeLabelForSelection(docRef.current, shortcut.sourceRange)
+          : selectionLabel) ??
         (activeSelectionRange
           ? rangeLabelForSelection(docRef.current, activeSelectionRange)
           : null);
-      if (targetRange) {
+      // Inline edits carry the committed source cell explicitly. Never reuse a stale target
+      // from an earlier inline run; infer the next target from this source instead.
+      const isInlineShortcut = shortcut.sourceRange !== undefined && shortcut.sourceRange !== null;
+      const canReplaceStaleInlineTarget =
+        isInlineShortcut &&
+        (targetRangeOriginRef.current === "inferred-inline" ||
+          targetRangeOriginRef.current === "inferred-grid");
+      if (targetRange && !canReplaceStaleInlineTarget) {
         if (shortcut.direction === "right") {
           const errorMessage = "Target already set";
           setStatus(errorMessage);
@@ -1091,6 +1108,7 @@ export function MatrixCanvas(): ReactElement {
       if (nextContext.added) {
         setContextChips([...nextContext.chips]);
       }
+      targetRangeOriginRef.current = isInlineShortcut ? "inferred-inline" : "inferred-grid";
       setTargetRange(inferred.targetRange);
       void runWithTarget(inferred.targetRange, nextContext.chips, trimmedPrompt, { trigger });
     },
@@ -1111,31 +1129,21 @@ export function MatrixCanvas(): ReactElement {
     (direction: MatrixTargetDirection, promptOverride?: string) => {
       runMatrixShortcut({
         direction,
-        selectionRange,
-        selectionLabel,
         prompt: promptOverride ?? prompt,
       });
     },
-    [prompt, runMatrixShortcut, selectionLabel, selectionRange],
+    [prompt, runMatrixShortcut],
+  );
+  const handleInlineCommitRun = useCallback(
+    (request: MatrixInlineCommitRunRequest) => {
+      runMatrixShortcut(request);
+    },
+    [runMatrixShortcut],
   );
   const handleMatrixShortcutRunRef = useRef(handleMatrixShortcutRun);
   handleMatrixShortcutRunRef.current = handleMatrixShortcutRun;
-  const runMatrixShortcutRef = useRef(runMatrixShortcut);
-  runMatrixShortcutRef.current = runMatrixShortcut;
   const setStatusRef = useRef(setStatus);
   setStatusRef.current = setStatus;
-
-  useEffect(() => {
-    const onCommitRun = (event: Event) => {
-      const customEvent = event as CustomEvent<MatrixInlineEditShortcut>;
-      if (!customEvent.detail) {
-        return;
-      }
-      runMatrixShortcutRef.current(customEvent.detail);
-    };
-    window.document.addEventListener("matrix-commit-run", onCommitRun);
-    return () => window.document.removeEventListener("matrix-commit-run", onCommitRun);
-  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1301,6 +1309,7 @@ export function MatrixCanvas(): ReactElement {
         { id: nextChipId(), label: selectionLabel, range: selectionRange },
       ]);
     }
+    targetRangeOriginRef.current = "explicit";
     setTargetRange(selectionRange);
     setPrompt("Summarize the selected context into this target cell.");
     setStatus(`AI ready for ${selectionLabel} — review and Run`);
@@ -1324,12 +1333,13 @@ export function MatrixCanvas(): ReactElement {
       }
 
       if (!restoreSourceRef.current) {
-        restoreSourceRef.current = {
-          document: docRef.current,
-          selection,
-          contextChips,
-          targetRange,
-        };
+          restoreSourceRef.current = {
+            document: docRef.current,
+            selection,
+            contextChips,
+            targetRange,
+            targetRangeOrigin: targetRangeOriginRef.current,
+          };
       }
 
       const restoredDocument = createMatrixDocumentFromHistorySnapshot(entry.snapshot, docRef.current);
@@ -1371,6 +1381,7 @@ export function MatrixCanvas(): ReactElement {
           groupId: range.groupId,
         })),
       );
+      targetRangeOriginRef.current = "explicit";
       setTargetRange(entry.targetRange);
       setSelectedHistory(null);
       setStatus("Composer pre-filled from history — review and Run");
@@ -1513,6 +1524,7 @@ export function MatrixCanvas(): ReactElement {
               onCellClick={handleCellClick}
               onCellEdited={handleCellEdited}
               onCellsEdited={handleCellsEdited}
+              onInlineCommitRun={handleInlineCommitRun}
               onColumnHeaderClick={handleColumnHeaderClick}
               onColumnResize={handleColumnWidthChange}
               onRowResize={handleRowHeightChange}

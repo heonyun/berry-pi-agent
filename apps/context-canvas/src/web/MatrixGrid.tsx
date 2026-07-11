@@ -36,7 +36,12 @@ import {
   shouldClearMatrixEditOnTypeImeSeed,
 } from "../shared/matrix-ime.ts";
 import "@glideapps/glide-data-grid/dist/index.css";
-import { getColumnHeader, type MatrixDocument, type MatrixGroup } from "../shared/domain.ts";
+import {
+  getColumnHeader,
+  type MatrixDocument,
+  type MatrixGroup,
+  type RangeRefDTO,
+} from "../shared/domain.ts";
 import { getMatrixColumnWidth } from "../shared/matrix-column-width.ts";
 import { clampMatrixRowHeight, getMatrixRowHeight } from "../shared/matrix-row-height.ts";
 import {
@@ -53,6 +58,11 @@ import {
 import { ImeTextarea } from "./ImeTextarea.tsx";
 import { shouldSuppressInlineCommitRun } from "../shared/cell-reference-formula.ts";
 import { appendMatrixSessionEvent } from "./matrix-session-log.ts";
+import {
+  matrixShortcutDirection,
+  type MatrixInlineCommitRunRequest,
+} from "../shared/matrix-shortcut.ts";
+import type { MatrixTargetDirection } from "../shared/matrix-target-inference.ts";
 
 export type { MatrixGridSelectionState };
 
@@ -73,6 +83,7 @@ export interface MatrixGridProps {
   readonly onCellClick: (row: number, col: number) => void;
   readonly onCellEdited: (row: number, col: number, body: string) => void;
   readonly onCellsEdited: (edits: readonly MatrixCellEdit[]) => void;
+  readonly onInlineCommitRun: (request: MatrixInlineCommitRunRequest) => void;
   readonly onColumnHeaderClick?: (
     col: number,
     options: { readonly isDoubleClick: boolean },
@@ -145,6 +156,8 @@ interface MatrixVisibleRows {
 
 const ROW_RESIZE_HANDLE_WIDTH = 32;
 const MATRIX_HEADER_HEIGHT = 36;
+// Glide includes the clickable row marker in custom-editor locations.
+const MATRIX_GRID_ROW_MARKER_OFFSET = 1;
 const MATRIX_IME_EDITOR_STYLE: CSSProperties = {
   width: "100%",
   height: "100%",
@@ -160,7 +173,10 @@ const MATRIX_IME_EDITOR_STYLE: CSSProperties = {
   padding: "3px 8.5px",
 };
 
-type MatrixImeTextEditorProps = Parameters<ProvideEditorComponent<TextCell>>[0];
+type MatrixImeTextEditorProps = Parameters<ProvideEditorComponent<TextCell>>[0] & {
+  readonly location?: Item;
+  readonly onInlineCommitRequest: (request: MatrixInlineCommitRunRequest) => void;
+};
 
 function applyValidatedSelection(
   textarea: HTMLTextAreaElement | null,
@@ -181,9 +197,13 @@ const MatrixImeTextEditor = ({
   value,
   initialValue,
   forceEditMode,
+  location,
+  onInlineCommitRequest,
 }: MatrixImeTextEditorProps): ReactElement => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const finishedRef = useRef(false);
+  const isComposingRef = useRef(false);
+  const pendingShortcutDirectionRef = useRef<MatrixTargetDirection | null>(null);
   const hasFocusedRef = useRef(false);
   const originalCellDataRef = useRef(value.data);
   // INVARIANT: Glide mounts a fresh overlay per edit; consume the seed decision on first compositionstart.
@@ -245,6 +265,7 @@ const MatrixImeTextEditor = ({
 
   const handleCompositionStart = useCallback(
     (event: ReactCompositionEvent<HTMLTextAreaElement>) => {
+      isComposingRef.current = true;
       // INVARIANT: only clear Glide's edit-on-type seed, not intentional one-letter content (#133).
       if (
         shouldClearImeSeedRef.current &&
@@ -265,8 +286,79 @@ const MatrixImeTextEditor = ({
     [forceEditMode, handleLocalChange, initialValue],
   );
 
+  const commitInlineShortcut = useCallback(
+    (direction: MatrixTargetDirection, nextValue: string) => {
+      const [outerCol, row] = location ?? [-1, -1];
+      const col = outerCol - MATRIX_GRID_ROW_MARKER_OFFSET;
+      const sourceRange: RangeRefDTO = {
+        startRow: row,
+        startCol: col,
+        endRow: row,
+        endCol: col,
+      };
+      const document = matrixGridDocumentRef.current;
+      if (document && shouldSuppressInlineCommitRun(document, nextValue)) {
+        finishEditing(updateValue(nextValue));
+        return;
+      }
+      if (col < 0 || row < 0) {
+        finishEditing(updateValue(nextValue));
+        return;
+      }
+      appendMatrixSessionEvent("edit_commit", {
+        direction,
+        valueLen: nextValue.length,
+      });
+      onInlineCommitRequest({ sourceRange, prompt: nextValue, direction });
+      finishEditing(updateValue(nextValue));
+    },
+    [finishEditing, location, onInlineCommitRequest, updateValue],
+  );
+
+  const handleCompositionEnd = useCallback(
+    (event: ReactCompositionEvent<HTMLTextAreaElement>) => {
+      isComposingRef.current = false;
+      const direction = pendingShortcutDirectionRef.current;
+      if (!direction) {
+        return;
+      }
+      pendingShortcutDirectionRef.current = null;
+      commitInlineShortcut(direction, event.currentTarget.value);
+    },
+    [commitInlineShortcut],
+  );
+
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.repeat) {
+        return;
+      }
+      const direction = matrixShortcutDirection({
+        key: event.key,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        altKey: event.altKey,
+        shiftKey: event.shiftKey,
+        isComposing: event.nativeEvent.isComposing,
+      });
+      const isProcessShortcut =
+        event.key === "Process" && (event.ctrlKey || event.metaKey) && !event.altKey;
+      const shortcutDirection =
+        direction ?? (isProcessShortcut ? (event.shiftKey ? "right" : "below") : null);
+      if (shortcutDirection) {
+        // A Windows IME may leave keyCode=229 on the shortcut after composition has ended.
+        // Only defer while composition is actually active; otherwise Ctrl+Enter can remain pending forever.
+        if (isComposingRef.current || event.nativeEvent.isComposing === true) {
+          pendingShortcutDirectionRef.current = shortcutDirection;
+          // Preserve IME composition while preventing the document shortcut listener from running.
+          event.stopPropagation();
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        commitInlineShortcut(shortcutDirection, event.currentTarget.value);
+        return;
+      }
       if (
         shouldCancelMatrixEditOnTypeForIme({
           key: event.key,
@@ -276,36 +368,10 @@ const MatrixImeTextEditor = ({
       ) {
         return;
       }
-      if (event.repeat) {
-        return;
-      }
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
         finishEditing(undefined);
-        return;
-      }
-      if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.altKey) {
-        event.preventDefault();
-        event.stopPropagation();
-        const nextValue = event.currentTarget.value;
-        finishEditing(updateValue(nextValue));
-        const document = matrixGridDocumentRef.current;
-        if (document && shouldSuppressInlineCommitRun(document, nextValue)) {
-          return;
-        }
-        appendMatrixSessionEvent("edit_commit", {
-          direction: event.shiftKey ? "right" : "below",
-          valueLen: nextValue.length,
-        });
-        window.document.dispatchEvent(
-          new CustomEvent("matrix-commit-run", {
-            detail: {
-              direction: event.shiftKey ? "right" : "below",
-              prompt: nextValue,
-            },
-          }),
-        );
         return;
       }
       if (
@@ -322,7 +388,7 @@ const MatrixImeTextEditor = ({
         finishEditing(updateValue(event.currentTarget.value), [0, 1]);
       }
     },
-    [finishEditing, updateValue],
+    [commitInlineShortcut, finishEditing, updateValue],
   );
 
   return (
@@ -334,6 +400,7 @@ const MatrixImeTextEditor = ({
       value={value.data}
       style={MATRIX_IME_EDITOR_STYLE}
       onCompositionStart={handleCompositionStart}
+      onCompositionEnd={handleCompositionEnd}
       onKeyDown={handleKeyDown}
       onLocalChange={handleLocalChange}
       onValueChange={handleValueChange}
@@ -360,6 +427,7 @@ export function MatrixGrid({
   onCellClick,
   onCellEdited,
   onCellsEdited,
+  onInlineCommitRun,
   onColumnHeaderClick = () => {},
   onColumnResize = () => {},
   onRowResize = () => {},
@@ -386,6 +454,7 @@ export function MatrixGrid({
   const [groupLabelDrag, setGroupLabelDrag] = useState<GroupLabelDrag | null>(null);
   const groupLabelDragRef = useRef<GroupLabelDrag | null>(null);
   const pendingPositionUpdateRef = useRef<number | null>(null);
+  const pendingInlineCommitRunRef = useRef<MatrixInlineCommitRunRequest | null>(null);
   const suppressNextGroupLabelClick = useRef(false);
   const visibleRowsRef = useRef<MatrixVisibleRows>({
     x: 0,
@@ -450,6 +519,19 @@ export function MatrixGrid({
       return;
     }
     const containerBounds = container.getBoundingClientRect();
+    if (
+      !Number.isFinite(containerBounds.x) ||
+      !Number.isFinite(containerBounds.y) ||
+      !Number.isFinite(containerBounds.width) ||
+      !Number.isFinite(containerBounds.height) ||
+      containerBounds.width <= 0 ||
+      containerBounds.height <= 0
+    ) {
+      setGroupLabelPositions([]);
+      setRowResizeHandlePositions([]);
+      setCellCornerDotPositions([]);
+      return;
+    }
     const nextPositions: GroupLabelPosition[] = [];
     for (const group of groups) {
       const bounds = grid.getBounds(group.range.startCol, group.range.startRow);
@@ -804,13 +886,26 @@ export function MatrixGrid({
       if (row < 0 || col < 0 || row >= config.rows || col >= config.cols) {
         return;
       }
+      const pendingInlineCommitRun = pendingInlineCommitRunRef.current;
+      pendingInlineCommitRunRef.current = null;
       onCellEdited(row, col, newValue.data);
+      if (
+        pendingInlineCommitRun &&
+        pendingInlineCommitRun.sourceRange.startRow === row &&
+        pendingInlineCommitRun.sourceRange.startCol === col &&
+        pendingInlineCommitRun.sourceRange.endRow === row &&
+        pendingInlineCommitRun.sourceRange.endCol === col
+      ) {
+        onInlineCommitRun(pendingInlineCommitRun);
+      }
     },
-    [config.cols, config.rows, onCellEdited],
+    [config.cols, config.rows, onCellEdited, onInlineCommitRun],
   );
 
   const handleCellsEdited = useCallback(
     (items: readonly EditListItem[]) => {
+      const pendingInlineCommitRun = pendingInlineCommitRunRef.current;
+      pendingInlineCommitRunRef.current = null;
       const edits: MatrixCellEdit[] = [];
       for (const item of items) {
         if (item.value.kind !== GridCellKind.Text) {
@@ -823,9 +918,21 @@ export function MatrixGrid({
         edits.push({ row, col, body: item.value.data });
       }
       onCellsEdited(edits);
+      if (
+        pendingInlineCommitRun &&
+        edits.some(
+          (edit) =>
+            pendingInlineCommitRun.sourceRange.startRow === edit.row &&
+            pendingInlineCommitRun.sourceRange.startCol === edit.col &&
+            pendingInlineCommitRun.sourceRange.endRow === edit.row &&
+            pendingInlineCommitRun.sourceRange.endCol === edit.col,
+        )
+      ) {
+        onInlineCommitRun(pendingInlineCommitRun);
+      }
       return true;
     },
-    [config.cols, config.rows, onCellsEdited],
+    [config.cols, config.rows, onCellsEdited, onInlineCommitRun],
   );
 
   const handleHeaderClicked = useCallback(
@@ -846,17 +953,28 @@ export function MatrixGrid({
     [],
   );
 
+  const queueInlineCommitRun = useCallback((request: MatrixInlineCommitRunRequest) => {
+    pendingInlineCommitRunRef.current = request;
+  }, []);
+
   const provideEditor = useCallback<ProvideEditorCallback<TextCell>>((cell) => {
-    if (cell.kind !== GridCellKind.Text) {
+    if (cell.kind !== GridCellKind.Text || !cell.location) {
       return undefined;
     }
+    const location = cell.location;
     return {
       // CONTRACT: replacing Glide's GrowingEntry must preserve `.gdg-input`
       // so matrix shortcut guards still recognize an active overlay editor.
-      editor: MatrixImeTextEditor,
+      editor: (props) => (
+        <MatrixImeTextEditor
+          {...props}
+          location={location}
+          onInlineCommitRequest={queueInlineCommitRun}
+        />
+      ),
       disablePadding: cell.allowWrapping === true,
     };
-  }, []);
+  }, [queueInlineCommitRun]);
 
   const handleGridKeyDown = useCallback((event: GridKeyEventArgs) => {
     const native = event.rawEvent?.nativeEvent;
