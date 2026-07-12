@@ -127,6 +127,8 @@ export function MatrixComposer({
                   !isRunning
                 ) {
                   event.preventDefault();
+                  // INVARIANT: document capture owns inferred-target dispatch; prevent a duplicate composer run.
+                  event.stopPropagation();
                   onRun();
                 }
               }}
