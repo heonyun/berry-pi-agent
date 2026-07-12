@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { forwardRef, useImperativeHandle, useState } from "react";
 import {
   GridCellKind,
@@ -162,7 +162,8 @@ describe("MatrixGrid IME overlay editor", () => {
   });
 
   // RELATED: issue-133 — locks Glide edit-on-type IME seed behavior against one-letter cells.
-  it("clears a Latin edit-on-type seed when IME composition starts", () => {
+  it("hides a Latin edit-on-type seed before IME composition starts", () => {
+    vi.useFakeTimers();
     renderMatrixGrid();
 
     const TextEditor = getTextEditor(
@@ -195,21 +196,16 @@ describe("MatrixGrid IME overlay editor", () => {
     );
 
     const editor = screen.getByLabelText("Matrix cell editor") as HTMLTextAreaElement;
+    expect(editor.value).toBe("");
     fireEvent.compositionStart(editor);
+    act(() => vi.runOnlyPendingTimers());
 
     expect(editor.value).toBe("");
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ data: "", displayData: "" }));
-
-    fireEvent.change(editor, { target: { value: "a" } });
-    fireEvent.compositionStart(editor);
-
-    expect(editor.value).toBe("a");
-    expect(
-      onChange.mock.calls.filter(([cell]) => cell.data === "" && cell.displayData === ""),
-    ).toHaveLength(1);
+    expect(onChange).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
-  it("clears a Latin edit-on-type DOM seed when the source cell is empty", () => {
+  it("does not mutate an unexpected DOM value during compositionstart", () => {
     renderMatrixGrid();
 
     const TextEditor = getTextEditor(
@@ -245,8 +241,8 @@ describe("MatrixGrid IME overlay editor", () => {
     editor.value = "a";
     fireEvent.compositionStart(editor);
 
-    expect(editor.value).toBe("");
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ data: "", displayData: "" }));
+    expect(editor.value).toBe("a");
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it("keeps an edit-on-type seed cleared after the parent editor value updates", () => {

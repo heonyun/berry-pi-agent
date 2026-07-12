@@ -8,7 +8,6 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
-  type CompositionEvent as ReactCompositionEvent,
   type ReactElement,
   type PointerEvent as ReactPointerEvent,
 } from "react";
@@ -33,7 +32,6 @@ import {
 import {
   hasMatrixEditOnTypeImeSeed,
   shouldCancelMatrixEditOnTypeForIme,
-  shouldClearMatrixEditOnTypeImeSeed,
 } from "../shared/matrix-ime.ts";
 import "@glideapps/glide-data-grid/dist/index.css";
 import { getColumnHeader, type MatrixDocument, type MatrixGroup } from "../shared/domain.ts";
@@ -186,13 +184,9 @@ const MatrixImeTextEditor = ({
   const finishedRef = useRef(false);
   const hasFocusedRef = useRef(false);
   const originalCellDataRef = useRef(value.data);
-  // INVARIANT: Glide mounts a fresh overlay per edit; consume the seed decision on first compositionstart.
-  const shouldClearImeSeedRef = useRef(
-    hasMatrixEditOnTypeImeSeed({
-      forceEditMode,
-      initialValue,
-    }),
-  );
+  const deferredImeSeed = hasMatrixEditOnTypeImeSeed({ forceEditMode, initialValue })
+    ? initialValue
+    : undefined;
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -241,28 +235,6 @@ const MatrixImeTextEditor = ({
       finishEditing(updateValue(next));
     },
     [finishEditing, updateValue],
-  );
-
-  const handleCompositionStart = useCallback(
-    (event: ReactCompositionEvent<HTMLTextAreaElement>) => {
-      // INVARIANT: only clear Glide's edit-on-type seed, not intentional one-letter content (#133).
-      if (
-        shouldClearImeSeedRef.current &&
-        shouldClearMatrixEditOnTypeImeSeed({
-          forceEditMode,
-          initialValue,
-          currentValue: event.currentTarget.value,
-        })
-      ) {
-        shouldClearImeSeedRef.current = false;
-        event.currentTarget.value = "";
-        event.currentTarget.setSelectionRange(0, 0);
-        handleLocalChange("");
-        return;
-      }
-      shouldClearImeSeedRef.current = false;
-    },
-    [forceEditMode, handleLocalChange, initialValue],
   );
 
   const handleKeyDown = useCallback(
@@ -332,8 +304,8 @@ const MatrixImeTextEditor = ({
       className="matrix-grid-ime-editor gdg-input"
       disabled={value.readonly === true}
       value={value.data}
+      deferOnFocusValue={deferredImeSeed}
       style={MATRIX_IME_EDITOR_STYLE}
-      onCompositionStart={handleCompositionStart}
       onKeyDown={handleKeyDown}
       onLocalChange={handleLocalChange}
       onValueChange={handleValueChange}

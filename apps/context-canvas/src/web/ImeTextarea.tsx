@@ -22,6 +22,8 @@ export interface ImeTextareaProps
   value: string;
   /** Clears this exact starter value on focus without committing immediately. */
   clearOnFocusValue?: string;
+  /** Hides this edit-on-type seed for one task so native IME composition can claim the input. */
+  deferOnFocusValue?: string;
   /** Fires on every edit, including during IME composition (for reading latest draft). */
   onLocalChange?: (value: string) => void;
   /** Fires when a committed value should sync to persistent state. */
@@ -36,6 +38,7 @@ export interface ImeTextareaProps
 export const ImeTextarea = memo(forwardRef<HTMLTextAreaElement, ImeTextareaProps>(function ImeTextarea({
   value,
   clearOnFocusValue,
+  deferOnFocusValue,
   onLocalChange,
   onValueChange,
   onCommit,
@@ -51,6 +54,20 @@ export const ImeTextarea = memo(forwardRef<HTMLTextAreaElement, ImeTextareaProps
   const draftRef = useRef(value);
   const focusedRef = useRef(false);
   const blurDuringCompositionRef = useRef(false);
+  const deferredSeedTimerRef = useRef<number | null>(null);
+  const deferredSeedValueRef = useRef(deferOnFocusValue);
+
+  useEffect(() => {
+    deferredSeedValueRef.current = deferOnFocusValue;
+  }, [deferOnFocusValue]);
+
+  useEffect(() => {
+    return () => {
+      if (deferredSeedTimerRef.current !== null) {
+        window.clearTimeout(deferredSeedTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     draftRef.current = draft;
@@ -74,7 +91,17 @@ export const ImeTextarea = memo(forwardRef<HTMLTextAreaElement, ImeTextareaProps
   const handleChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) => {
       onChangeProp?.(event);
-      const next = event.target.value;
+      let next = event.target.value;
+      if (deferredSeedTimerRef.current !== null && !composingRef.current) {
+        window.clearTimeout(deferredSeedTimerRef.current);
+        deferredSeedTimerRef.current = null;
+        const seed = deferredSeedValueRef.current;
+        if (seed !== undefined && !next.startsWith(seed)) {
+          // CONTRACT: rapid ASCII typing can deliver the second character before
+          // the deferred seed task. Merge it instead of letting the timer erase it.
+          next = `${seed}${next}`;
+        }
+      }
       setDraft(next);
       draftRef.current = next;
       onLocalChange?.(next);
@@ -85,15 +112,13 @@ export const ImeTextarea = memo(forwardRef<HTMLTextAreaElement, ImeTextareaProps
   const handleCompositionStart = useCallback(
     (event: CompositionEvent<HTMLTextAreaElement>) => {
       composingRef.current = true;
+      if (deferredSeedTimerRef.current !== null) {
+        window.clearTimeout(deferredSeedTimerRef.current);
+        deferredSeedTimerRef.current = null;
+      }
       focusedRef.current = true;
       blurDuringCompositionRef.current = false;
       onCompositionStart?.(event);
-      // INVARIANT: parent IME guards may mutate the DOM value before composition locks prop sync.
-      if (event.currentTarget.value !== draftRef.current) {
-        const next = event.currentTarget.value;
-        setDraft(next);
-        draftRef.current = next;
-      }
     },
     [onCompositionStart],
   );
@@ -118,6 +143,15 @@ export const ImeTextarea = memo(forwardRef<HTMLTextAreaElement, ImeTextareaProps
     (event: FocusEvent<HTMLTextAreaElement>) => {
       onBlur?.(event);
       focusedRef.current = false;
+      if (deferredSeedTimerRef.current !== null) {
+        window.clearTimeout(deferredSeedTimerRef.current);
+        deferredSeedTimerRef.current = null;
+        const seed = deferredSeedValueRef.current;
+        if (!composingRef.current && seed !== undefined) {
+          setDraft(seed);
+          draftRef.current = seed;
+        }
+      }
       if (composingRef.current) {
         blurDuringCompositionRef.current = true;
         return;
@@ -131,6 +165,31 @@ export const ImeTextarea = memo(forwardRef<HTMLTextAreaElement, ImeTextareaProps
     (event: FocusEvent<HTMLTextAreaElement>) => {
       onFocus?.(event);
       focusedRef.current = true;
+      if (deferredSeedTimerRef.current !== null) {
+        window.clearTimeout(deferredSeedTimerRef.current);
+        deferredSeedTimerRef.current = null;
+      }
+      if (deferOnFocusValue !== undefined && draftRef.current === deferOnFocusValue) {
+        // INVARIANT: focus is the last application-owned boundary before native
+        // compositionstart. Hide Glide's physical-key seed here, then restore it
+        // only after the browser has had a task to start IME composition (#143).
+        event.currentTarget.value = "";
+        setDraft("");
+        draftRef.current = "";
+        deferredSeedTimerRef.current = window.setTimeout(() => {
+          deferredSeedTimerRef.current = null;
+          if (composingRef.current || !focusedRef.current) {
+            return;
+          }
+          const seed = deferredSeedValueRef.current;
+          if (seed === undefined) {
+            return;
+          }
+          setDraft(seed);
+          draftRef.current = seed;
+        }, 0);
+        return;
+      }
       if (clearOnFocusValue === undefined || draftRef.current !== clearOnFocusValue) {
         return;
       }
@@ -138,7 +197,7 @@ export const ImeTextarea = memo(forwardRef<HTMLTextAreaElement, ImeTextareaProps
       draftRef.current = "";
       onLocalChange?.("");
     },
-    [clearOnFocusValue, onFocus, onLocalChange],
+    [clearOnFocusValue, deferOnFocusValue, onFocus, onLocalChange],
   );
 
   return (
