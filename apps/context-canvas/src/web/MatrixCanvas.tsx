@@ -1014,7 +1014,10 @@ export function MatrixCanvas(): ReactElement {
       void runShortcutRequest(nextRequest);
     }
   }, [runShortcutRequest]);
-  shortcutQueueDrainRef.current = drainShortcutRuns;
+
+  useEffect(() => {
+    shortcutQueueDrainRef.current = drainShortcutRuns;
+  }, [drainShortcutRuns]);
 
   const dispatchShortcutRun = useCallback(
     (request: MatrixShortcutRunRequest) => {
