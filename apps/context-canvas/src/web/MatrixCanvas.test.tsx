@@ -375,6 +375,74 @@ describe("MatrixCanvas reference edit mode", () => {
   });
 });
 
+describe("MatrixCanvas consecutive shortcut runs", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    vi.mocked(runMatrix).mockImplementation(defaultRunMatrixResponse);
+  });
+
+  it("queues a second shortcut while the first matrix run is still processing", async () => {
+    let resolveFirst!: (response: Awaited<ReturnType<typeof runMatrix>>) => void;
+    const firstResponse = new Promise<Awaited<ReturnType<typeof runMatrix>>>((resolve) => {
+      resolveFirst = resolve;
+    });
+    vi.mocked(runMatrix)
+      .mockImplementationOnce(() => firstResponse)
+      .mockImplementation(defaultRunMatrixResponse);
+
+    render(<MatrixCanvas />);
+    fireEvent.click(screen.getByText("replay A1"));
+    const input = screen.getByTestId("matrix-composer-input");
+    fireEvent.change(input, { target: { value: "first prompt" } });
+    fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
+
+    await waitFor(() => expect(runMatrix).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByText("pick B1:C2"));
+    fireEvent.change(input, { target: { value: "second prompt" } });
+    fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
+
+    const firstRequest = vi.mocked(runMatrix).mock.calls[0]?.[0];
+    expect(firstRequest).toBeDefined();
+    resolveFirst(await defaultRunMatrixResponse(firstRequest!));
+
+    await waitFor(() => expect(runMatrix).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(runMatrix).mock.calls[1]?.[0].prompt).toBe("second prompt");
+    expect(vi.mocked(runMatrix).mock.calls[1]?.[0].targetRange).toEqual({
+      startRow: 2,
+      startCol: 1,
+      endRow: 3,
+      endCol: 2,
+    });
+  });
+
+  it("re-infers the target after a completed shortcut when the selection changes", async () => {
+    render(<MatrixCanvas />);
+    fireEvent.click(screen.getByText("replay A1"));
+    const input = screen.getByTestId("matrix-composer-input");
+    fireEvent.change(input, { target: { value: "first prompt" } });
+    fireEvent.keyDown(input, { key: "Enter", ctrlKey: true, shiftKey: true });
+
+    await waitFor(() => expect(runMatrix).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByText("pick B1:C2"));
+    fireEvent.change(input, { target: { value: "second prompt" } });
+    fireEvent.keyDown(input, { key: "Enter", ctrlKey: true, shiftKey: true });
+
+    await waitFor(() => expect(runMatrix).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(runMatrix).mock.calls[1]?.[0].targetRange).toEqual({
+      startRow: 0,
+      startCol: 3,
+      endRow: 1,
+      endCol: 4,
+    });
+  });
+});
+
 // RELATED: issue-135 — Matrix/Grid-only edit undo stack behavior.
 describe("MatrixCanvas edit undo/redo", () => {
   afterEach(() => {

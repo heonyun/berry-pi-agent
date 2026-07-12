@@ -110,6 +110,7 @@ interface RestoreSourceState {
   readonly selection: MatrixGridSelectionState | null;
   readonly contextChips: readonly ContextChip[];
   readonly targetRange: RangeRefDTO | null;
+  readonly targetRangeSource: MatrixTargetSource | null;
 }
 
 interface MatrixInlineEditShortcut {
@@ -117,6 +118,15 @@ interface MatrixInlineEditShortcut {
   readonly selectionRange: RangeRefDTO | null;
   readonly selectionLabel?: string | null;
   readonly prompt?: string;
+}
+
+type MatrixTargetSource = "explicit" | "inferred";
+
+interface MatrixShortcutRunRequest {
+  readonly targetRange: RangeRefDTO;
+  readonly contextChips: readonly ContextChip[];
+  readonly prompt: string;
+  readonly trigger: MatrixRunTrigger;
 }
 
 function rangeRefToSelection(range: RangeRefDTO): MatrixGridSelectionState {
@@ -151,6 +161,7 @@ export function MatrixCanvas(): ReactElement {
 
   const [contextChips, setContextChips] = useState<ContextChip[]>([]);
   const [targetRange, setTargetRange] = useState<RangeRefDTO | null>(null);
+  const [targetRangeSource, setTargetRangeSource] = useState<MatrixTargetSource | null>(null);
 
   const [detailCell, setDetailCell] = useState<DetailCellState | null>(null);
   const [detailFrontmatter, setDetailFrontmatter] = useState("");
@@ -177,6 +188,7 @@ export function MatrixCanvas(): ReactElement {
   const editHistoryRef = useRef(createMatrixEditHistoryState());
   const storedGroupLabelOffsetsRef = useRef(loadMatrixGroupLabelOffsets());
   const activeMatrixRunsRef = useRef(0);
+  const pendingShortcutRunsRef = useRef<MatrixShortcutRunRequest[]>([]);
 
   const groups = useMemo(() => visibleMatrixGroups(document), [document]);
 
@@ -208,6 +220,7 @@ export function MatrixCanvas(): ReactElement {
       setSelection(source.selection);
       setContextChips([...source.contextChips]);
       setTargetRange(source.targetRange);
+      setTargetRangeSource(source.targetRangeSource);
       setRestoredHistoryId(null);
       if (options.closeHistory !== false) {
         setSelectedHistory(null);
@@ -725,6 +738,7 @@ export function MatrixCanvas(): ReactElement {
       return;
     }
     setTargetRange(selectionRange);
+    setTargetRangeSource("explicit");
     setStatus(`Target set: ${selectionLabel}`);
   }, [selectionLabel, selectionRange]);
 
@@ -968,9 +982,35 @@ export function MatrixCanvas(): ReactElement {
     }
     if (!targetRange) {
       setTargetRange(runTarget);
+      setTargetRangeSource("explicit");
     }
     await runWithTarget(runTarget, contextChips, prompt.trim(), { trigger: "button" });
   }, [contextChips, prompt, runWithTarget, selectionRange, targetRange]);
+
+  const runShortcutRequest = useCallback(
+    async (request: MatrixShortcutRunRequest) => {
+      await runWithTarget(request.targetRange, request.contextChips, request.prompt, {
+        trigger: request.trigger,
+      });
+      const nextRequest = pendingShortcutRunsRef.current.shift();
+      if (nextRequest) {
+        void runShortcutRequest(nextRequest);
+      }
+    },
+    [runWithTarget],
+  );
+
+  const dispatchShortcutRun = useCallback(
+    (request: MatrixShortcutRunRequest) => {
+      if (activeMatrixRunsRef.current > 0) {
+        pendingShortcutRunsRef.current.push(request);
+        setStatus(`Queued matrix AI (${pendingShortcutRunsRef.current.length})`);
+        return;
+      }
+      void runShortcutRequest(request);
+    },
+    [runShortcutRequest],
+  );
 
   const contextChipsWithSelection = useCallback(
     (
@@ -1005,9 +1045,6 @@ export function MatrixCanvas(): ReactElement {
         trigger,
         source: shortcut.prompt !== undefined ? "inline-edit" : "grid",
       });
-      if (isRunning) {
-        return;
-      }
       const trimmedPrompt = shortcut.prompt?.trim() || prompt.trim() || "";
       if (!trimmedPrompt) {
         setStatus("Enter a prompt before running");
@@ -1020,7 +1057,7 @@ export function MatrixCanvas(): ReactElement {
         (activeSelectionRange
           ? rangeLabelForSelection(docRef.current, activeSelectionRange)
           : null);
-      if (targetRange) {
+      if (targetRange && targetRangeSource !== "inferred") {
         if (shortcut.direction === "right") {
           const errorMessage = "Target already set";
           setStatus(errorMessage);
@@ -1044,7 +1081,12 @@ export function MatrixCanvas(): ReactElement {
           appendMatrixSessionEvent("run_end", { outcome: "blocked", errorMessage, trigger });
           return;
         }
-        void runWithTarget(targetRange, contextChips, trimmedPrompt, { trigger });
+        dispatchShortcutRun({
+          targetRange,
+          contextChips,
+          prompt: trimmedPrompt,
+          trigger,
+        });
         return;
       }
       if (!activeSelectionRange || !activeSelectionLabel) {
@@ -1092,18 +1134,24 @@ export function MatrixCanvas(): ReactElement {
         setContextChips([...nextContext.chips]);
       }
       setTargetRange(inferred.targetRange);
-      void runWithTarget(inferred.targetRange, nextContext.chips, trimmedPrompt, { trigger });
+      setTargetRangeSource("inferred");
+      dispatchShortcutRun({
+        targetRange: inferred.targetRange,
+        contextChips: nextContext.chips,
+        prompt: trimmedPrompt,
+        trigger,
+      });
     },
     [
       contextChips,
       contextChipsWithSelection,
-      isRunning,
+      dispatchShortcutRun,
       prompt,
       recordRunAttemptHistory,
-      runWithTarget,
       selectionLabel,
       selectionRange,
       targetRange,
+      targetRangeSource,
     ],
   );
 
@@ -1302,6 +1350,7 @@ export function MatrixCanvas(): ReactElement {
       ]);
     }
     setTargetRange(selectionRange);
+    setTargetRangeSource("explicit");
     setPrompt("Summarize the selected context into this target cell.");
     setStatus(`AI ready for ${selectionLabel} — review and Run`);
   }, [contextChips, selectionLabel, selectionRange]);
@@ -1329,6 +1378,7 @@ export function MatrixCanvas(): ReactElement {
           selection,
           contextChips,
           targetRange,
+          targetRangeSource,
         };
       }
 
@@ -1341,7 +1391,7 @@ export function MatrixCanvas(): ReactElement {
       setRestoredHistoryId(entry.id);
       setStatus(`Restored history snapshot: ${entry.targetRangeLabel}`);
     },
-    [contextChips, restoreCurrentDocumentFromPreview, selection, targetRange],
+    [contextChips, restoreCurrentDocumentFromPreview, selection, targetRange, targetRangeSource],
   );
 
   const handleHistoryClose = useCallback(() => {
@@ -1372,6 +1422,7 @@ export function MatrixCanvas(): ReactElement {
         })),
       );
       setTargetRange(entry.targetRange);
+      setTargetRangeSource("explicit");
       setSelectedHistory(null);
       setStatus("Composer pre-filled from history — review and Run");
     },
