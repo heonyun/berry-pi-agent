@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MatrixComposer, type MatrixComposerProps } from "./MatrixComposer.tsx";
 
-function renderComposer(overrides: Partial<MatrixComposerProps> = {}, wrapperOnKeyDown?: () => void) {
+function renderComposer(overrides: Partial<MatrixComposerProps> = {}) {
   const props: MatrixComposerProps = {
     contextChips: [],
     targetLabel: null,
@@ -27,8 +27,7 @@ function renderComposer(overrides: Partial<MatrixComposerProps> = {}, wrapperOnK
     ...overrides,
   };
 
-  const composer = <MatrixComposer {...props} />;
-  render(wrapperOnKeyDown ? <div onKeyDown={wrapperOnKeyDown}>{composer}</div> : composer);
+  render(<MatrixComposer {...props} />);
   return props;
 }
 
@@ -69,18 +68,16 @@ describe("MatrixComposer", () => {
     expect(screen.getByRole("button", { name: "Send" })).toHaveProperty("disabled", false);
   });
 
-  // RELATED: issue-148 — guards the composer/document single-dispatch contract.
-  it("stops composer shortcut propagation before running", () => {
-    const parentKeyDown = vi.fn();
+  // RELATED: issue-148 — document capture owns inferred-target dispatch.
+  it("does not dispatch inferred-target shortcuts through the generic composer run callback", () => {
     const props = renderComposer({
       canRun: true,
       prompt: "answer",
-    }, parentKeyDown);
+    });
     const input = screen.getByTestId("matrix-composer-input");
 
     fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
 
-    expect(parentKeyDown).not.toHaveBeenCalled();
-    expect(props.onRun).toHaveBeenCalledOnce();
+    expect(props.onRun).not.toHaveBeenCalled();
   });
 });
