@@ -1005,7 +1005,10 @@ export function MatrixCanvas(): ReactElement {
     }
     const nextRequest = pendingShortcutRunsRef.current.shift();
     if (nextRequest) {
-      void runShortcutRequest(nextRequest);
+      void runShortcutRequest(nextRequest).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        setStatus(`Shortcut execution failed: ${message}`);
+      });
     }
   }, [runShortcutRequest]);
 
