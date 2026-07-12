@@ -77,6 +77,7 @@ describe("MatrixComposer", () => {
     const input = screen.getByTestId("matrix-composer-input");
 
     fireEvent.keyDown(input, { key: "Enter", ctrlKey: true });
+    fireEvent.keyDown(input, { key: "Enter", metaKey: true });
 
     expect(props.onRun).not.toHaveBeenCalled();
   });
