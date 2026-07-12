@@ -845,7 +845,7 @@ export function MatrixCanvas(): ReactElement {
     async (
       runTargetRange: RangeRefDTO,
       runContextChips: readonly ContextChip[],
-      runPrompt = prompt.trim(),
+      runPrompt: string,
       options?: { readonly trigger?: MatrixRunTrigger },
     ) => {
       const trimmedPrompt = runPrompt.trim();
@@ -970,7 +970,7 @@ export function MatrixCanvas(): ReactElement {
         finishMatrixRun();
       }
     },
-    [beginMatrixRun, dispatchRecorded, finishMatrixRun, prompt, recordRunAttemptHistory],
+    [beginMatrixRun, dispatchRecorded, finishMatrixRun, recordRunAttemptHistory],
   );
 
   const handleRun = useCallback(async () => {
@@ -1011,6 +1011,9 @@ export function MatrixCanvas(): ReactElement {
 
   useEffect(() => {
     shortcutQueueDrainRef.current = drainShortcutRuns;
+    return () => {
+      shortcutQueueDrainRef.current = null;
+    };
   }, [drainShortcutRuns]);
 
   const dispatchShortcutRun = useCallback(
