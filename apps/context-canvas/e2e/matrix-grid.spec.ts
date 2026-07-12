@@ -52,12 +52,15 @@ type MatrixRunRequest = {
   };
 };
 
-async function mockMatrixRun(page: Page): Promise<MatrixRunRequest[]> {
+async function mockMatrixRun(page: Page, responseDelayMs = 0): Promise<MatrixRunRequest[]> {
   const requests: MatrixRunRequest[] = [];
   await page.route("**/api/matrix-run", async (route) => {
     const request = route.request().postDataJSON() as MatrixRunRequest;
     requests.push(request);
     const { targetRange } = request;
+    if (responseDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, responseDelayMs));
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -352,7 +355,7 @@ test.describe("Feature: Matrix inferred target shortcuts", () => {
   test("Scenario: Ctrl+Enter runs AI below the selection after message input", async ({
     page,
   }) => {
-    const requests = await mockMatrixRun(page);
+    const requests = await mockMatrixRun(page, 100);
 
     await test.step("Given a 2x2 filled range A1:B2 is selected", async () => {
       await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
@@ -393,7 +396,7 @@ test.describe("Feature: Matrix inferred target shortcuts", () => {
   test("Scenario: Ctrl+Shift+Enter runs AI to the right after message input", async ({
     page,
   }) => {
-    const requests = await mockMatrixRun(page);
+    const requests = await mockMatrixRun(page, 100);
 
     await test.step("Given a 2x2 filled range A1:B2 is selected", async () => {
       await fill2x2Matrix(page, { a1: "q1", b1: "q2", a2: "q3", b2: "q4" });
@@ -407,7 +410,7 @@ test.describe("Feature: Matrix inferred target shortcuts", () => {
     });
 
     await test.step("When I press Ctrl+Shift+Enter", async () => {
-      await page.getByTestId("data-grid-canvas").focus();
+      await page.getByTestId("matrix-composer-input").focus();
       await page.keyboard.press("Control+Shift+Enter");
     });
 

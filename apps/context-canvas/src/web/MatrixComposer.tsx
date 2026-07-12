@@ -111,25 +111,13 @@ export function MatrixComposer({
           )}
 
           <div className="matrix-composer-prompt-row">
+            {/* INVARIANT: MatrixCanvas document capture owns inferred-target shortcut dispatch. */}
             <input
               className="matrix-composer-input nodrag nopan"
               type="text"
               placeholder="Ask AI about this selection or type a command..."
               value={prompt}
               onChange={(event) => onPromptChange(event.target.value)}
-              onKeyDown={(event) => {
-                if (
-                  event.key === "Enter" &&
-                  (event.ctrlKey || event.metaKey) &&
-                  !event.repeat &&
-                  !event.nativeEvent.isComposing &&
-                  canRun &&
-                  !isRunning
-                ) {
-                  event.preventDefault();
-                  onRun();
-                }
-              }}
               disabled={isRunning}
               data-testid="matrix-composer-input"
             />
