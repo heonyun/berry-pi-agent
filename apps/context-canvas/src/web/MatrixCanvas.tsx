@@ -992,15 +992,9 @@ export function MatrixCanvas(): ReactElement {
 
   const runShortcutRequest = useCallback(
     async (request: MatrixShortcutRunRequest) => {
-      try {
-        await runWithTarget(request.targetRange, request.contextChips, request.prompt, {
-          trigger: request.trigger,
-        });
-      } finally {
-        if (activeMatrixRunsRef.current === 0) {
-          shortcutQueueDrainRef.current?.();
-        }
-      }
+      await runWithTarget(request.targetRange, request.contextChips, request.prompt, {
+        trigger: request.trigger,
+      });
     },
     [runWithTarget],
   );
