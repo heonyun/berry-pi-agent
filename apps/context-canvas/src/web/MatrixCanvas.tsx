@@ -189,6 +189,7 @@ export function MatrixCanvas(): ReactElement {
   const storedGroupLabelOffsetsRef = useRef(loadMatrixGroupLabelOffsets());
   const activeMatrixRunsRef = useRef(0);
   const pendingShortcutRunsRef = useRef<MatrixShortcutRunRequest[]>([]);
+  const shortcutQueueDrainRef = useRef<(() => void) | null>(null);
 
   const groups = useMemo(() => visibleMatrixGroups(document), [document]);
 
@@ -371,6 +372,8 @@ export function MatrixCanvas(): ReactElement {
     activeMatrixRunsRef.current = Math.max(0, activeMatrixRunsRef.current - 1);
     if (activeMatrixRunsRef.current === 0) {
       setIsRunning(false);
+      // INVARIANT: every matrix run completion must wake pending shortcut work.
+      shortcutQueueDrainRef.current?.();
     }
   }, []);
 
@@ -989,27 +992,40 @@ export function MatrixCanvas(): ReactElement {
 
   const runShortcutRequest = useCallback(
     async (request: MatrixShortcutRunRequest) => {
-      await runWithTarget(request.targetRange, request.contextChips, request.prompt, {
-        trigger: request.trigger,
-      });
-      const nextRequest = pendingShortcutRunsRef.current.shift();
-      if (nextRequest) {
-        void runShortcutRequest(nextRequest);
+      try {
+        await runWithTarget(request.targetRange, request.contextChips, request.prompt, {
+          trigger: request.trigger,
+        });
+      } finally {
+        if (activeMatrixRunsRef.current === 0) {
+          shortcutQueueDrainRef.current?.();
+        }
       }
     },
     [runWithTarget],
   );
 
+  const drainShortcutRuns = useCallback(() => {
+    if (activeMatrixRunsRef.current > 0) {
+      return;
+    }
+    const nextRequest = pendingShortcutRunsRef.current.shift();
+    if (nextRequest) {
+      void runShortcutRequest(nextRequest);
+    }
+  }, [runShortcutRequest]);
+  shortcutQueueDrainRef.current = drainShortcutRuns;
+
   const dispatchShortcutRun = useCallback(
     (request: MatrixShortcutRunRequest) => {
+      pendingShortcutRunsRef.current.push(request);
       if (activeMatrixRunsRef.current > 0) {
-        pendingShortcutRunsRef.current.push(request);
         setStatus(`Queued matrix AI (${pendingShortcutRunsRef.current.length})`);
         return;
       }
-      void runShortcutRequest(request);
+      drainShortcutRuns();
     },
-    [runShortcutRequest],
+    [drainShortcutRuns],
   );
 
   const contextChipsWithSelection = useCallback(

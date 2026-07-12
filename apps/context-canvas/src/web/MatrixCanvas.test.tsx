@@ -441,6 +441,55 @@ describe("MatrixCanvas consecutive shortcut runs", () => {
       endCol: 4,
     });
   });
+
+  it("drains a shortcut queued behind a regular matrix run", async () => {
+    let resolveFirst!: (response: Awaited<ReturnType<typeof runMatrix>>) => void;
+    const firstResponse = new Promise<Awaited<ReturnType<typeof runMatrix>>>((resolve) => {
+      resolveFirst = resolve;
+    });
+    vi.mocked(runMatrix)
+      .mockImplementationOnce(() => firstResponse)
+      .mockImplementation(defaultRunMatrixResponse);
+
+    render(<MatrixCanvas />);
+    fireEvent.click(screen.getByText("replay A1"));
+    const input = screen.getByTestId("matrix-composer-input");
+    fireEvent.change(input, { target: { value: "button prompt" } });
+    fireEvent.click(screen.getByTestId("matrix-run"));
+
+    await waitFor(() => expect(runMatrix).toHaveBeenCalledTimes(1));
+
+    window.document.dispatchEvent(
+      new CustomEvent("matrix-commit-run", {
+        detail: {
+          direction: "below",
+          selectionRange: {
+            startRow: 0,
+            startCol: 0,
+            endRow: 0,
+            endCol: 0,
+            activeRow: 0,
+            activeCol: 0,
+          },
+          selectionLabel: "A1",
+          prompt: "shortcut prompt",
+        },
+      }),
+    );
+
+    const firstRequest = vi.mocked(runMatrix).mock.calls[0]?.[0];
+    expect(firstRequest).toBeDefined();
+    resolveFirst(await defaultRunMatrixResponse(firstRequest!));
+
+    await waitFor(() => expect(runMatrix).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(runMatrix).mock.calls[1]?.[0].prompt).toBe("shortcut prompt");
+    expect(vi.mocked(runMatrix).mock.calls[1]?.[0].targetRange).toEqual({
+      startRow: 0,
+      startCol: 0,
+      endRow: 0,
+      endCol: 0,
+    });
+  });
 });
 
 // RELATED: issue-135 — Matrix/Grid-only edit undo stack behavior.
