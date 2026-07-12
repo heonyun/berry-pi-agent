@@ -1022,9 +1022,14 @@ export function MatrixCanvas(): ReactElement {
     shortcutQueueDrainRef.current = drainShortcutRuns;
     return () => {
       shortcutQueueDrainRef.current = null;
-      pendingShortcutRunsRef.current = [];
     };
   }, [drainShortcutRuns]);
+
+  useEffect(() => {
+    return () => {
+      pendingShortcutRunsRef.current = [];
+    };
+  }, []);
 
   const dispatchShortcutRun = useCallback(
     (request: MatrixShortcutRunRequest) => {
